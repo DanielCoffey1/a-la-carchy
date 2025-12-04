@@ -19,7 +19,7 @@ A simple TUI (Terminal User Interface) debloater for Omarchy Linux.
 Just paste this command in your terminal and press Enter:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/DanielCoffey1/a-la-carchy/main/a-la-carchy.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/DanielCoffey1/a-la-carchy/master/a-la-carchy.sh)
 ```
 
 That's it! The script will:
@@ -32,7 +32,7 @@ That's it! The script will:
 If you prefer to download first:
 
 ```bash
-curl -O https://raw.githubusercontent.com/DanielCoffey1/a-la-carchy/main/a-la-carchy.sh
+curl -O https://raw.githubusercontent.com/DanielCoffey1/a-la-carchy/master/a-la-carchy.sh
 chmod +x a-la-carchy.sh
 ./a-la-carchy.sh
 ```
