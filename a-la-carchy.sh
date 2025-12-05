@@ -12,7 +12,8 @@ CHECKED='\033[38;5;10m'
 
 # Package mapping: "Display Name|package-name"
 declare -a PACKAGES=(
-    "1Password|1password"
+    "1Password|1password-beta"
+    "1Password CLI|1password-cli"
     "Aether|aether"
     "Alacritty|alacritty"
     "Calculator|gnome-calculator"

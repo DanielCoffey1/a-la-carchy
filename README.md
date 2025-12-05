@@ -2,6 +2,8 @@
 
 **Pick and choose what you want to remove, à la carte style!**
 
+![A La Carchy TUI](screenshots/A%20La%20Carchy.png)
+
 A simple TUI (Terminal User Interface) debloater for Omarchy Linux.
 
 ## Features
@@ -63,7 +65,7 @@ The script can remove the following preinstalled applications:
 - **Graphics**: Pinta, IMV Image Viewer
 - **Communication**: Signal, LocalSend
 - **Development**: Docker, Neovim, Alacritty, Ghostty
-- **Security**: 1Password
+- **Security**: 1Password, 1Password CLI
 - **Utilities**: Calculator, Document Viewer
 - **Other**: Aether
 
@@ -80,7 +82,8 @@ The script uses the following package name mappings:
 
 | Application | Package Name |
 |------------|--------------|
-| 1Password | 1password |
+| 1Password | 1password-beta |
+| 1Password CLI | 1password-cli |
 | Aether | aether |
 | Alacritty | alacritty |
 | Calculator | gnome-calculator |
