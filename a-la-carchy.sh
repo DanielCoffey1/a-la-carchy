@@ -42,6 +42,24 @@ declare -a PACKAGES=(
     "Xournal++|xournalpp"
 )
 
+# Webapp mapping: "Display Name|desktop-file-name"
+# These are installed via omarchy-webapp-install
+declare -a WEBAPPS=(
+    "HEY|HEY.desktop"
+    "Basecamp|Basecamp.desktop"
+    "WhatsApp|WhatsApp.desktop"
+    "Google Photos|Google Photos.desktop"
+    "Google Contacts|Google Contacts.desktop"
+    "Google Messages|Google Messages.desktop"
+    "ChatGPT|ChatGPT.desktop"
+    "YouTube|YouTube.desktop"
+    "GitHub|GitHub.desktop"
+    "X|X.desktop"
+    "Figma|Figma.desktop"
+    "Discord|Discord.desktop"
+    "Zoom|Zoom.desktop"
+)
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -59,17 +77,33 @@ else
     AUR_HELPER="sudo pacman"
 fi
 
-# Build list of installed packages
+# Build list of installed packages and webapps
 declare -a INSTALLED_PACKAGES=()
 declare -a INSTALLED_NAMES=()
+declare -a INSTALLED_TYPES=()  # "package" or "webapp"
 
+# Check for installed packages
 for pkg_entry in "${PACKAGES[@]}"; do
     IFS='|' read -r display_name package_name <<< "$pkg_entry"
     if pacman -Qi "$package_name" &> /dev/null 2>&1; then
         INSTALLED_PACKAGES+=("$package_name")
         INSTALLED_NAMES+=("$display_name")
+        INSTALLED_TYPES+=("package")
     fi
 done
+
+# Check for installed webapps
+WEBAPP_DIR="$HOME/.local/share/applications"
+if [ -d "$WEBAPP_DIR" ]; then
+    for webapp_entry in "${WEBAPPS[@]}"; do
+        IFS='|' read -r display_name desktop_file <<< "$webapp_entry"
+        if [ -f "$WEBAPP_DIR/$desktop_file" ]; then
+            INSTALLED_PACKAGES+=("$desktop_file")
+            INSTALLED_NAMES+=("$display_name (Web App)")
+            INSTALLED_TYPES+=("webapp")
+        fi
+    done
+fi
 
 # Check if any packages are installed
 if [ ${#INSTALLED_PACKAGES[@]} -eq 0 ]; then
@@ -278,19 +312,24 @@ done
 stty echo
 tput cnorm
 
-# Build list of selected packages
+# Build lists of selected packages and webapps
 declare -a SELECTED_PACKAGES=()
+declare -a SELECTED_WEBAPPS=()
 for ((i=0; i<${#INSTALLED_PACKAGES[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
-        SELECTED_PACKAGES+=("${INSTALLED_PACKAGES[$i]}")
+        if [ "${INSTALLED_TYPES[$i]}" = "package" ]; then
+            SELECTED_PACKAGES+=("${INSTALLED_PACKAGES[$i]}")
+        else
+            SELECTED_WEBAPPS+=("${INSTALLED_PACKAGES[$i]}")
+        fi
     fi
 done
 
-# Check if any packages were selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ]; then
+# Check if anything was selected
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ]; then
     clear
     echo
-    echo "No packages selected."
+    echo "Nothing selected."
     echo
     exit 0
 fi
@@ -303,13 +342,29 @@ echo -e "${BOLD}  Confirm Removal${RESET}"
 echo
 echo
 
-for pkg in "${SELECTED_PACKAGES[@]}"; do
-    echo "    ${DIM}•${RESET}  $pkg"
-done
+if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
+    echo -e "${DIM}  Packages:${RESET}"
+    for pkg in "${SELECTED_PACKAGES[@]}"; do
+        echo "    ${DIM}•${RESET}  $pkg"
+    done
+    echo
+fi
+
+if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
+    echo -e "${DIM}  Web Apps:${RESET}"
+    for webapp in "${SELECTED_WEBAPPS[@]}"; do
+        echo "    ${DIM}•${RESET}  $webapp"
+    done
+    echo
+fi
 
 echo
-echo
-echo -e "${DIM}  This will remove the packages and their dependencies.${RESET}"
+if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
+    echo -e "${DIM}  Packages will be removed with their dependencies.${RESET}"
+fi
+if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
+    echo -e "${DIM}  Web apps will be removed from ~/.local/share/applications.${RESET}"
+fi
 echo
 echo
 printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
@@ -322,36 +377,71 @@ if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
     exit 0
 fi
 
-# Remove packages
+# Remove items
 echo
-echo "  Removing packages..."
-echo
+REMOVAL_SUCCESS=true
 
-if [ "$AUR_HELPER" = "sudo pacman" ]; then
-    sudo pacman -Rns "${SELECTED_PACKAGES[@]}"
-else
-    $AUR_HELPER -Rns "${SELECTED_PACKAGES[@]}"
+# Remove packages
+if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
+    echo "  Removing packages..."
+    echo
+
+    if [ "$AUR_HELPER" = "sudo pacman" ]; then
+        sudo pacman -Rns "${SELECTED_PACKAGES[@]}"
+    else
+        $AUR_HELPER -Rns "${SELECTED_PACKAGES[@]}"
+    fi
+
+    if [ $? -ne 0 ]; then
+        REMOVAL_SUCCESS=false
+    fi
+    echo
+fi
+
+# Remove webapps
+if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
+    echo "  Removing web apps..."
+    echo
+
+    for webapp in "${SELECTED_WEBAPPS[@]}"; do
+        webapp_path="$WEBAPP_DIR/$webapp"
+        if [ -f "$webapp_path" ]; then
+            rm "$webapp_path"
+            if [ $? -eq 0 ]; then
+                echo "    ${DIM}•${RESET}  Removed $webapp"
+            else
+                echo "    ${DIM}✗${RESET}  Failed to remove $webapp"
+                REMOVAL_SUCCESS=false
+            fi
+        fi
+    done
+    echo
 fi
 
 # Check if removal was successful
-if [ $? -eq 0 ]; then
-    echo
+if [ "$REMOVAL_SUCCESS" = true ]; then
     echo
     echo -e "${CHECKED}  ✓  Complete${RESET}"
     echo
-    echo "  Packages removed successfully"
+    if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
+        echo "  Packages removed successfully"
+    fi
+    if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
+        echo "  Web apps removed successfully"
+    fi
     echo
     echo
-    echo -e "${DIM}  Optionally, clean your package cache:${RESET}"
-    echo "  $AUR_HELPER -Sc"
+    if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
+        echo -e "${DIM}  Optionally, clean your package cache:${RESET}"
+        echo "  $AUR_HELPER -Sc"
+    fi
     echo
     echo
 else
     echo
-    echo
     echo "  ✗  Failed"
     echo
-    echo "  Package removal encountered an error"
+    echo "  Removal encountered an error"
     echo
     echo
     exit 1
