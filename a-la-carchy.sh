@@ -259,17 +259,18 @@ stty -echo
 
 while true; do
     draw_interface
-    if ! handle_input; then
-        result=$?
-        if [ $result -eq 1 ]; then
-            break
-        elif [ $result -eq 2 ]; then
-            clear
-            echo
-            echo "Cancelled."
-            echo
-            exit 0
-        fi
+    handle_input
+    result=$?
+    if [ $result -eq 1 ]; then
+        # Enter pressed - continue to confirmation
+        break
+    elif [ $result -eq 2 ]; then
+        # Q pressed - quit
+        clear
+        echo
+        echo "Cancelled."
+        echo
+        exit 0
     fi
 done
 
