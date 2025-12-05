@@ -49,18 +49,18 @@ declare -a PACKAGES=(
 # Webapp mapping: "Display Name|desktop-file-name"
 # These are installed via omarchy-webapp-install
 declare -a WEBAPPS=(
-    "HEY|HEY.desktop"
     "Basecamp|Basecamp.desktop"
-    "WhatsApp|WhatsApp.desktop"
-    "Google Photos|Google Photos.desktop"
+    "ChatGPT|ChatGPT.desktop"
+    "Discord|Discord.desktop"
+    "Figma|Figma.desktop"
+    "GitHub|GitHub.desktop"
     "Google Contacts|Google Contacts.desktop"
     "Google Messages|Google Messages.desktop"
-    "ChatGPT|ChatGPT.desktop"
-    "YouTube|YouTube.desktop"
-    "GitHub|GitHub.desktop"
+    "Google Photos|Google Photos.desktop"
+    "HEY|HEY.desktop"
+    "WhatsApp|WhatsApp.desktop"
     "X|X.desktop"
-    "Figma|Figma.desktop"
-    "Discord|Discord.desktop"
+    "YouTube|YouTube.desktop"
     "Zoom|Zoom.desktop"
 )
 
