@@ -66,7 +66,7 @@ The script can remove the following preinstalled applications:
 - **Media**: Kdenlive, OBS Studio, MPV Media Player, Spotify
 - **Graphics**: Pinta, IMV Image Viewer
 - **Communication**: Signal, LocalSend
-- **Development**: Docker, Neovim, Alacritty, Ghostty
+- **Development**: Docker (Core Engine, Buildx, Compose, UFW Integration), LazyDocker, Neovim, Alacritty, Ghostty
 - **Security**: 1Password, 1Password CLI
 - **Utilities**: Calculator, Document Viewer
 - **Other**: Aether
@@ -99,11 +99,15 @@ The script uses the following package name mappings:
 | Alacritty | alacritty |
 | Calculator | gnome-calculator |
 | Chromium | chromium |
-| Docker | docker |
+| Docker (Core Engine) | docker |
+| Docker Buildx (Extended Build) | docker-buildx |
+| Docker Compose (Orchestration) | docker-compose |
+| Docker UFW (Firewall Integration) | ufw-docker |
 | Document Viewer | evince |
 | Ghostty | ghostty |
 | Image Viewer | imv |
 | Kdenlive | kdenlive |
+| LazyDocker (Docker TUI) | lazydocker |
 | LibreOffice | libreoffice-fresh |
 | LibreOffice Base | libreoffice-fresh-base |
 | LibreOffice Calc | libreoffice-fresh-calc |
