@@ -199,7 +199,7 @@ draw_interface() {
 # Function to handle key input
 handle_input() {
     local key
-    IFS= read -rsn1 key
+    IFS= read -rsn1 key < /dev/tty
 
     local term_height=$(tput lines)
     local MAX_VISIBLE=$((term_height - 12))
@@ -312,7 +312,7 @@ echo -e "${DIM}  This will remove the packages and their dependencies.${RESET}"
 echo
 echo
 printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-read -r
+read -r < /dev/tty
 
 if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
     echo
