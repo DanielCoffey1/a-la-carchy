@@ -120,8 +120,8 @@ draw_interface() {
 
     # Title - centered
     echo
-    local title1="▄▀█   █   ▄▀█   █▀▀ ▄▀█ █▀█ █▀▀ █ █ █▄█"
-    local title2="█▀█   █▄▄ █▀█   █▄▄ █▀█ █▀▄ █▄▄ █▀█  █"
+    local title1="▄▀█   █     ▄▀█   █▀▀ ▄▀█ █▀█ █▀▀ █ █ █▄█"
+    local title2="█▀█   █▄▄   █▀█   █▄▄ █▀█ █▀▄ █▄▄ █▀█  █ "
     echo -en "${BOLD}"
     center_text "$title1"
     center_text "$title2"
