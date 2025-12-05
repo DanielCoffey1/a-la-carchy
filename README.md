@@ -9,8 +9,8 @@ A simple TUI (Terminal User Interface) debloater for Omarchy Linux.
 ## Features
 
 - **Beautiful centered TUI** with smooth navigation
-- Interactive checklist of preinstalled packages
-- Only shows packages that are currently installed
+- Interactive checklist of preinstalled packages **and webapps**
+- Only shows packages and webapps that are currently installed
 - Works with `yay`, `paru`, or `pacman`
 - Safe removal with confirmation prompts
 - **No installation required** - just run the one-liner command!
@@ -57,6 +57,8 @@ chmod +x a-la-carchy.sh
 
 ## What Gets Removed
 
+### Packages
+
 The script can remove the following preinstalled applications:
 
 - **Browsers**: Chromium
@@ -68,6 +70,15 @@ The script can remove the following preinstalled applications:
 - **Security**: 1Password, 1Password CLI
 - **Utilities**: Calculator, Document Viewer
 - **Other**: Aether
+
+### Web Apps
+
+The script can also remove the following preinstalled Omarchy webapps:
+
+- **Communication**: HEY, Basecamp, WhatsApp, Discord, Zoom
+- **Google Services**: Google Photos, Google Contacts, Google Messages
+- **Productivity**: ChatGPT, Figma, GitHub
+- **Media**: YouTube, X
 
 ## Safety Features
 
@@ -110,6 +121,26 @@ The script uses the following package name mappings:
 | Spotify | spotify |
 | Typora | typora |
 | Xournal++ | xournalpp |
+
+### Web Apps
+
+The script can remove the following Omarchy webapps (stored as `.desktop` files in `~/.local/share/applications`):
+
+| Web App | Desktop File |
+|---------|--------------|
+| HEY | HEY.desktop |
+| Basecamp | Basecamp.desktop |
+| WhatsApp | WhatsApp.desktop |
+| Google Photos | Google Photos.desktop |
+| Google Contacts | Google Contacts.desktop |
+| Google Messages | Google Messages.desktop |
+| ChatGPT | ChatGPT.desktop |
+| YouTube | YouTube.desktop |
+| GitHub | GitHub.desktop |
+| X | X.desktop |
+| Figma | Figma.desktop |
+| Discord | Discord.desktop |
+| Zoom | Zoom.desktop |
 
 ## Troubleshooting
 
