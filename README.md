@@ -6,13 +6,14 @@ A simple TUI (Terminal User Interface) debloater for Omarchy Linux.
 
 ## Features
 
+- **Beautiful centered TUI** with smooth navigation
 - Interactive checklist of preinstalled packages
 - Only shows packages that are currently installed
 - Works with `yay`, `paru`, or `pacman`
 - Safe removal with confirmation prompts
 - **No installation required** - just run the one-liner command!
-- Auto-installs dependencies (`dialog`) if needed
-- Color-coded output for better visibility
+- No external dependencies needed
+- Clean, modern interface
 
 ## Quick Start (One-Liner)
 
@@ -23,8 +24,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/DanielCoffey1/a-la-carchy/ma
 ```
 
 That's it! The script will:
-1. Auto-install `dialog` if needed
-2. Show you an interactive checklist
+1. Show you a beautiful centered TUI
+2. Let you select packages to remove
 3. Remove selected packages safely
 
 ## Alternative: Download and Run
@@ -40,15 +41,16 @@ chmod +x a-la-carchy.sh
 ## Requirements
 
 - An AUR helper (`yay` or `paru`) recommended for full functionality
-- `dialog` will be auto-installed if not present
+- No external dependencies - works out of the box!
 
 ## How to Use
 
 1. Run the script using one of the methods above
 2. Use the interactive menu:
-   - Navigate with arrow keys
-   - Press `Space` to select/deselect packages
-   - Press `Enter` to confirm your selection
+   - **↑/↓** Navigate through applications
+   - **Space** Select/deselect packages
+   - **Enter** Continue with removal
+   - **Q** Quit
 3. Type `yes` when prompted to confirm removal
 
 ## What Gets Removed
@@ -57,8 +59,8 @@ The script can remove the following preinstalled applications:
 
 - **Browsers**: Chromium
 - **Productivity**: LibreOffice Suite, Obsidian, Typora, Xournal++
-- **Media**: Kdenlive, OBS Studio, VLC Media Player, Spotify
-- **Graphics**: Pinta, Image Viewer
+- **Media**: Kdenlive, OBS Studio, MPV Media Player, Spotify
+- **Graphics**: Pinta, IMV Image Viewer
 - **Communication**: Signal, LocalSend
 - **Development**: Docker, Neovim, Alacritty, Ghostty
 - **Security**: 1Password
@@ -86,11 +88,17 @@ The script uses the following package name mappings:
 | Docker | docker |
 | Document Viewer | evince |
 | Ghostty | ghostty |
-| Image Viewer | eog |
+| Image Viewer | imv |
 | Kdenlive | kdenlive |
-| LibreOffice | libreoffice-still |
+| LibreOffice | libreoffice-fresh |
+| LibreOffice Base | libreoffice-fresh-base |
+| LibreOffice Calc | libreoffice-fresh-calc |
+| LibreOffice Draw | libreoffice-fresh-draw |
+| LibreOffice Impress | libreoffice-fresh-impress |
+| LibreOffice Math | libreoffice-fresh-math |
+| LibreOffice Writer | libreoffice-fresh-writer |
 | LocalSend | localsend-bin |
-| Media Player | vlc |
+| Media Player | mpv |
 | Neovim | neovim |
 | OBS Studio | obs-studio |
 | Obsidian | obsidian |
@@ -101,12 +109,6 @@ The script uses the following package name mappings:
 | Xournal++ | xournalpp |
 
 ## Troubleshooting
-
-### "dialog is not installed"
-Install it with:
-```bash
-sudo pacman -S dialog
-```
 
 ### "No AUR helper detected"
 Install yay or paru:

@@ -3,61 +3,47 @@
 # A La Carchy - Omarchy Linux Debloater
 # Pick and choose what you want to remove, à la carte style!
 
-set -e
+# Clean, minimal color scheme
+RESET='\033[0m'
+BOLD='\033[1m'
+DIM='\033[2m'
+SELECTED_BG='\033[7m'
+CHECKED='\033[38;5;10m'
 
-# Color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Package mapping: "Display Name|package-name|description"
+# Package mapping: "Display Name|package-name"
 declare -a PACKAGES=(
-    "1Password|1password|Password manager"
-    "Aether|aether|P2P discussion platform"
-    "Alacritty|alacritty|GPU-accelerated terminal emulator"
-    "Calculator|gnome-calculator|Simple calculator application"
-    "Chromium|chromium|Open-source web browser"
-    "Docker|docker|Container platform"
-    "Document Viewer|evince|PDF and document viewer"
-    "Ghostty|ghostty|Terminal emulator"
-    "Image Viewer|imv|Lightweight image viewer"
-    "Kdenlive|kdenlive|Video editing software"
-    "LibreOffice|libreoffice-fresh|Office suite (complete)"
-    "LibreOffice Base|libreoffice-fresh-base|Database management"
-    "LibreOffice Calc|libreoffice-fresh-calc|Spreadsheet application"
-    "LibreOffice Draw|libreoffice-fresh-draw|Drawing application"
-    "LibreOffice Impress|libreoffice-fresh-impress|Presentation software"
-    "LibreOffice Math|libreoffice-fresh-math|Formula editor"
-    "LibreOffice Writer|libreoffice-fresh-writer|Word processor"
-    "LocalSend|localsend-bin|Local file sharing"
-    "Media Player|mpv|Minimal media player"
-    "Neovim|neovim|Hyperextensible Vim-based text editor"
-    "OBS Studio|obs-studio|Video recording and streaming"
-    "Obsidian|obsidian|Note-taking application"
-    "Pinta|pinta|Image editing program"
-    "Signal|signal-desktop|Private messaging application"
-    "Spotify|spotify|Music streaming service"
-    "Typora|typora|Markdown editor"
-    "Xournal++|xournalpp|Handwriting note-taking software"
+    "1Password|1password"
+    "Aether|aether"
+    "Alacritty|alacritty"
+    "Calculator|gnome-calculator"
+    "Chromium|chromium"
+    "Docker|docker"
+    "Document Viewer|evince"
+    "Ghostty|ghostty"
+    "Image Viewer|imv"
+    "Kdenlive|kdenlive"
+    "LibreOffice|libreoffice-fresh"
+    "LibreOffice Base|libreoffice-fresh-base"
+    "LibreOffice Calc|libreoffice-fresh-calc"
+    "LibreOffice Draw|libreoffice-fresh-draw"
+    "LibreOffice Impress|libreoffice-fresh-impress"
+    "LibreOffice Math|libreoffice-fresh-math"
+    "LibreOffice Writer|libreoffice-fresh-writer"
+    "LocalSend|localsend-bin"
+    "Media Player|mpv"
+    "Neovim|neovim"
+    "OBS Studio|obs-studio"
+    "Obsidian|obsidian"
+    "Pinta|pinta"
+    "Signal|signal-desktop"
+    "Spotify|spotify"
+    "Typora|typora"
+    "Xournal++|xournalpp"
 )
-
-# Check if dialog is installed, and install if needed
-if ! command -v dialog &> /dev/null; then
-    echo -e "${YELLOW}Dialog is not installed. Installing it now...${NC}"
-    if ! sudo pacman -S --noconfirm dialog; then
-        echo -e "${RED}Error: Failed to install dialog.${NC}"
-        echo "Please install it manually with: sudo pacman -S dialog"
-        exit 1
-    fi
-    echo -e "${GREEN}Dialog installed successfully!${NC}"
-    echo
-fi
 
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
-    echo -e "${RED}Error: Do not run this script as root!${NC}"
+    echo "Error: Do not run this script as root!"
     echo "The script will ask for sudo password when needed."
     exit 1
 fi
@@ -69,107 +55,302 @@ if command -v yay &> /dev/null; then
 elif command -v paru &> /dev/null; then
     AUR_HELPER="paru"
 else
-    echo -e "${YELLOW}Warning: No AUR helper (yay/paru) detected.${NC}"
-    echo "Will use pacman only (some packages may not be removable)."
     AUR_HELPER="sudo pacman"
 fi
 
-echo -e "${BLUE}Using package manager: ${AUR_HELPER}${NC}"
+# Build list of installed packages
+declare -a INSTALLED_PACKAGES=()
+declare -a INSTALLED_NAMES=()
 
-# Build dialog checklist options
-DIALOG_OPTIONS=()
-for i in "${!PACKAGES[@]}"; do
-    IFS='|' read -r display_name package_name description <<< "${PACKAGES[$i]}"
-    # Check if package is installed
-    if pacman -Qi "$package_name" &> /dev/null; then
-        DIALOG_OPTIONS+=("$package_name" "$display_name - $description" "OFF")
+for pkg_entry in "${PACKAGES[@]}"; do
+    IFS='|' read -r display_name package_name <<< "$pkg_entry"
+    if pacman -Qi "$package_name" &> /dev/null 2>&1; then
+        INSTALLED_PACKAGES+=("$package_name")
+        INSTALLED_NAMES+=("$display_name")
     fi
 done
 
 # Check if any packages are installed
-if [ ${#DIALOG_OPTIONS[@]} -eq 0 ]; then
-    dialog --title "A La Carchy" \
-           --msgbox "No preinstalled packages found!\n\nEither they are already removed or package names need to be updated." 10 60
+if [ ${#INSTALLED_PACKAGES[@]} -eq 0 ]; then
     clear
+    echo
+    echo "No preinstalled packages found."
+    echo
     exit 0
 fi
 
-# Show package selection dialog
-TEMP_FILE=$(mktemp)
-dialog --title "A La Carchy - Omarchy Debloater" \
-       --backtitle "Select packages to remove (Space to select, Enter to confirm)" \
-       --checklist "Choose packages to remove:" 25 80 15 \
-       "${DIALOG_OPTIONS[@]}" 2>"$TEMP_FILE"
+# Selection state
+declare -a SELECTED=()
+for ((i=0; i<${#INSTALLED_PACKAGES[@]}; i++)); do
+    SELECTED[$i]=0
+done
 
-# Check if user cancelled
-if [ $? -ne 0 ]; then
+CURSOR=0
+SCROLL_OFFSET=0
+
+# Helper function to center text
+center_text() {
+    local text="$1"
+    local term_width=$(tput cols)
+    local text_length=${#text}
+    local padding=$(( (term_width - text_length) / 2 ))
+    printf "%*s%s\n" $padding "" "$text"
+}
+
+# Function to draw the interface
+draw_interface() {
+    local term_height=$(tput lines)
+    local term_width=$(tput cols)
+
+    # Calculate max visible items
+    local MAX_VISIBLE=$((term_height - 12))
+    if [ $MAX_VISIBLE -lt 5 ]; then
+        MAX_VISIBLE=5
+    fi
+
+    # Calculate visible range
+    local visible_start=$SCROLL_OFFSET
+    local visible_end=$((SCROLL_OFFSET + MAX_VISIBLE))
+    if [ $visible_end -gt ${#INSTALLED_PACKAGES[@]} ]; then
+        visible_end=${#INSTALLED_PACKAGES[@]}
+    fi
+
+    # Clear and redraw everything (simpler, no glitches)
     clear
-    echo -e "${YELLOW}Operation cancelled.${NC}"
-    rm -f "$TEMP_FILE"
-    exit 0
-fi
 
-# Read selected packages
-SELECTED_PACKAGES=$(cat "$TEMP_FILE")
-rm -f "$TEMP_FILE"
+    # Title - centered
+    echo
+    local title1="▄▀█   █   ▄▀█   █▀▀ ▄▀█ █▀█ █▀▀ █ █ █▄█"
+    local title2="█▀█   █▄▄ █▀█   █▄▄ █▀█ █▀▄ █▄▄ █▀█  █"
+    echo -en "${BOLD}"
+    center_text "$title1"
+    center_text "$title2"
+    echo -en "${RESET}"
+    echo
+    echo -en "${DIM}"
+    center_text "Omarchy Linux Debloater"
+    echo -en "${RESET}"
+    echo
+    echo
+
+    # Calculate selection count
+    local selected_count=0
+    for ((i=0; i<${#INSTALLED_PACKAGES[@]}; i++)); do
+        if [ ${SELECTED[$i]} -eq 1 ]; then
+            ((selected_count++))
+        fi
+    done
+
+    # Show count if any selected - centered
+    if [ $selected_count -gt 0 ]; then
+        echo -en "${CHECKED}"
+        center_text "${selected_count} applications selected"
+        echo -en "${RESET}"
+    else
+        echo -en "${DIM}"
+        center_text "Select applications to remove"
+        echo -en "${RESET}"
+    fi
+    echo
+
+    # Draw package list - centered
+    # Find longest package name for proper centering
+    local max_name_len=0
+    for name in "${INSTALLED_NAMES[@]}"; do
+        local len=${#name}
+        if [ $len -gt $max_name_len ]; then
+            max_name_len=$len
+        fi
+    done
+
+    # Add space for checkbox
+    local item_width=$((max_name_len + 6))
+    local left_margin=$(( (term_width - item_width) / 2 ))
+
+    for ((i=visible_start; i<visible_end; i++)); do
+        local checkbox="[ ]"
+        local check_color=""
+        if [ ${SELECTED[$i]} -eq 1 ]; then
+            checkbox="[•]"
+            check_color="${CHECKED}"
+        fi
+
+        if [ $i -eq $CURSOR ]; then
+            # Highlighted line - centered with full width highlight
+            local item_text="${checkbox}  ${INSTALLED_NAMES[$i]}"
+            local padding_left=$(printf '%*s' $left_margin '')
+            local padding_right=$(printf '%*s' $((term_width - left_margin - item_width)) '')
+            printf "${padding_left}${SELECTED_BG}%-${item_width}s${RESET}${padding_right}\n" "$item_text"
+        else
+            # Normal line - centered
+            printf "%*s${DIM}${check_color}${checkbox}${RESET}  ${INSTALLED_NAMES[$i]}\n" $left_margin ""
+        fi
+    done
+
+    # Footer - centered
+    echo
+    local footer_row=$((term_height - 2))
+    tput cup $footer_row 0
+    echo -en "${DIM}"
+    center_text "↑/↓ Navigate  •  Space Select  •  Enter Continue  •  Q Quit"
+    echo -en "${RESET}"
+}
+
+# Function to handle key input
+handle_input() {
+    local key
+    IFS= read -rsn1 key
+
+    local term_height=$(tput lines)
+    local MAX_VISIBLE=$((term_height - 12))
+    if [ $MAX_VISIBLE -lt 5 ]; then
+        MAX_VISIBLE=5
+    fi
+
+    case "$key" in
+        $'\x1b')  # ESC sequence
+            read -rsn2 -t 0.1 key
+            case "$key" in
+                '[A')  # Up arrow
+                    if [ $CURSOR -gt 0 ]; then
+                        ((CURSOR--))
+                        if [ $CURSOR -lt $SCROLL_OFFSET ]; then
+                            ((SCROLL_OFFSET--))
+                        fi
+                    fi
+                    ;;
+                '[B')  # Down arrow
+                    if [ $CURSOR -lt $((${#INSTALLED_PACKAGES[@]} - 1)) ]; then
+                        ((CURSOR++))
+                        if [ $CURSOR -ge $((SCROLL_OFFSET + MAX_VISIBLE)) ]; then
+                            ((SCROLL_OFFSET++))
+                        fi
+                    fi
+                    ;;
+            esac
+            ;;
+        ' ')  # Space - toggle selection
+            if [ ${SELECTED[$CURSOR]} -eq 0 ]; then
+                SELECTED[$CURSOR]=1
+            else
+                SELECTED[$CURSOR]=0
+            fi
+            ;;
+        '')  # Enter - confirm
+            return 1
+            ;;
+        'q'|'Q')  # Quit
+            return 2
+            ;;
+    esac
+    return 0
+}
+
+# Main selection loop
+cleanup() {
+    tput cnorm
+    clear
+    stty sane
+}
+trap cleanup EXIT
+
+tput civis
+stty -echo
+
+while true; do
+    draw_interface
+    if ! handle_input; then
+        result=$?
+        if [ $result -eq 1 ]; then
+            break
+        elif [ $result -eq 2 ]; then
+            clear
+            echo
+            echo "Cancelled."
+            echo
+            exit 0
+        fi
+    fi
+done
+
+stty echo
+tput cnorm
+
+# Build list of selected packages
+declare -a SELECTED_PACKAGES=()
+for ((i=0; i<${#INSTALLED_PACKAGES[@]}; i++)); do
+    if [ ${SELECTED[$i]} -eq 1 ]; then
+        SELECTED_PACKAGES+=("${INSTALLED_PACKAGES[$i]}")
+    fi
+done
 
 # Check if any packages were selected
-if [ -z "$SELECTED_PACKAGES" ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ]; then
     clear
-    echo -e "${YELLOW}No packages selected. Nothing to do.${NC}"
+    echo
+    echo "No packages selected."
+    echo
     exit 0
 fi
 
-# Remove quotes and convert to array
-SELECTED_PACKAGES=$(echo "$SELECTED_PACKAGES" | tr -d '"')
-read -ra PKG_ARRAY <<< "$SELECTED_PACKAGES"
-
+# Confirmation screen
 clear
-echo -e "${BLUE}═══════════════════════════════════════════════${NC}"
-echo -e "${BLUE}       A La Carchy - Confirmation             ${NC}"
-echo -e "${BLUE}═══════════════════════════════════════════════${NC}"
 echo
-echo -e "${YELLOW}The following packages will be removed:${NC}"
 echo
-for pkg in "${PKG_ARRAY[@]}"; do
-    echo -e "  ${RED}✗${NC} $pkg"
+echo -e "${BOLD}  Confirm Removal${RESET}"
+echo
+echo
+
+for pkg in "${SELECTED_PACKAGES[@]}"; do
+    echo "    ${DIM}•${RESET}  $pkg"
 done
+
 echo
-echo -e "${RED}WARNING: This will remove the packages and their dependencies!${NC}"
-echo -e "${YELLOW}Make sure you have backups of any important data.${NC}"
 echo
-read -p "Do you want to continue? (yes/no): " -r
+echo -e "${DIM}  This will remove the packages and their dependencies.${RESET}"
 echo
+echo
+printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+read -r
 
 if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
-    echo -e "${YELLOW}Operation cancelled.${NC}"
+    echo
+    echo "  Cancelled."
+    echo
     exit 0
 fi
 
 # Remove packages
-echo -e "${BLUE}Starting package removal...${NC}"
+echo
+echo "  Removing packages..."
 echo
 
 if [ "$AUR_HELPER" = "sudo pacman" ]; then
-    sudo pacman -Rns "${PKG_ARRAY[@]}"
+    sudo pacman -Rns "${SELECTED_PACKAGES[@]}"
 else
-    $AUR_HELPER -Rns "${PKG_ARRAY[@]}"
+    $AUR_HELPER -Rns "${SELECTED_PACKAGES[@]}"
 fi
 
 # Check if removal was successful
 if [ $? -eq 0 ]; then
     echo
-    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}    Packages removed successfully! ✓         ${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
     echo
-    echo -e "${BLUE}You may want to run:${NC}"
-    echo -e "  ${AUR_HELPER} -Sc  ${YELLOW}# Clean package cache${NC}"
+    echo -e "${CHECKED}  ✓  Complete${RESET}"
+    echo
+    echo "  Packages removed successfully"
+    echo
+    echo
+    echo -e "${DIM}  Optionally, clean your package cache:${RESET}"
+    echo "  $AUR_HELPER -Sc"
+    echo
     echo
 else
     echo
-    echo -e "${RED}═══════════════════════════════════════════════${NC}"
-    echo -e "${RED}    Package removal failed!                   ${NC}"
-    echo -e "${RED}═══════════════════════════════════════════════${NC}"
+    echo
+    echo "  ✗  Failed"
+    echo
+    echo "  Package removal encountered an error"
+    echo
+    echo
     exit 1
 fi
