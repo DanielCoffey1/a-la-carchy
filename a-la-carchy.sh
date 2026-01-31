@@ -10,59 +10,45 @@ DIM='\033[2m'
 SELECTED_BG='\033[7m'
 CHECKED='\033[38;5;10m'
 
-# Package mapping: "Display Name|package-name"
-declare -a PACKAGES=(
-    "1Password|1password-beta"
-    "1Password CLI|1password-cli"
-    "Aether|aether"
-    "Alacritty|alacritty"
-    "Calculator|gnome-calculator"
-    "Chromium|chromium"
-    "Docker (Core Engine)|docker"
-    "Docker Buildx (Extended Build)|docker-buildx"
-    "Docker Compose (Orchestration)|docker-compose"
-    "Docker UFW (Firewall Integration)|ufw-docker"
-    "Document Viewer|evince"
-    "Ghostty|ghostty"
-    "Image Viewer|imv"
-    "Kdenlive|kdenlive"
-    "LazyDocker (Docker TUI)|lazydocker"
-    "LibreOffice|libreoffice-fresh"
-    "LibreOffice Base|libreoffice-fresh-base"
-    "LibreOffice Calc|libreoffice-fresh-calc"
-    "LibreOffice Draw|libreoffice-fresh-draw"
-    "LibreOffice Impress|libreoffice-fresh-impress"
-    "LibreOffice Math|libreoffice-fresh-math"
-    "LibreOffice Writer|libreoffice-fresh-writer"
-    "LocalSend|localsend-bin"
-    "Media Player|mpv"
-    "Neovim|neovim"
-    "OBS Studio|obs-studio"
-    "Obsidian|obsidian"
-    "Pinta|pinta"
-    "Signal|signal-desktop"
-    "Spotify|spotify"
-    "Typora|typora"
-    "Xournal++|xournalpp"
+# Default packages offered for removal
+# List from: https://github.com/basecamp/omarchy/blob/master/install/packages.sh
+DEFAULT_APPS=(
+    "1password-beta"
+    "1password-cli"
+    "kdenlive"
+    "libreoffice"
+    "localsend"
+    "obs-studio"
+    "obsidian"
+    "omarchy-chromium"
+    "signal-desktop"
+    "spotify"
+    "xournalpp"
+    "docker"
+    "docker-buildx"
+    "docker-compose"
 )
 
-# Webapp mapping: "Display Name|desktop-file-name"
-# These are installed via omarchy-webapp-install
-declare -a WEBAPPS=(
-    "Basecamp|Basecamp.desktop"
-    "ChatGPT|ChatGPT.desktop"
-    "Discord|Discord.desktop"
-    "Figma|Figma.desktop"
-    "GitHub|GitHub.desktop"
-    "Google Contacts|Google Contacts.desktop"
-    "Google Messages|Google Messages.desktop"
-    "Google Photos|Google Photos.desktop"
-    "HEY|HEY.desktop"
-    "WhatsApp|WhatsApp.desktop"
-    "X|X.desktop"
-    "YouTube|YouTube.desktop"
-    "Zoom|Zoom.desktop"
+# Default webapps offered for removal
+# List from: https://github.com/basecamp/omarchy/blob/master/install/packaging/webapps.sh
+DEFAULT_WEBAPPS=(
+    "HEY"
+    "Basecamp"
+    "WhatsApp"
+    "Google Photos"
+    "Google Contacts"
+    "Google Messages"
+    "ChatGPT"
+    "YouTube"
+    "GitHub"
+    "X"
+    "Figma"
+    "Discord"
+    "Zoom"
 )
+
+# Hyprland tiling config path
+TILING_CONF="$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf"
 
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
@@ -71,56 +57,221 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
-# Detect AUR helper
-AUR_HELPER=""
-if command -v yay &> /dev/null; then
-    AUR_HELPER="yay"
-elif command -v paru &> /dev/null; then
-    AUR_HELPER="paru"
-else
-    AUR_HELPER="sudo pacman"
+# Function to check if package is installed
+is_package_installed() {
+    pacman -Qi "$1" &>/dev/null
+}
+
+# Function to check if webapp is installed
+is_webapp_installed() {
+    [[ -f "$HOME/.local/share/applications/$1.desktop" ]]
+}
+
+# Function to rebind close window from SUPER+W to SUPER+Q
+rebind_close_window() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Rebind Close Window${RESET}"
+    echo
+    echo -e "  ${DIM}Changes SUPER+W (Omarchy default) to SUPER+Q for closing windows.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$TILING_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  tiling-v2.conf not found at $TILING_CONF"
+        echo
+        return 1
+    fi
+
+    # Check if already changed
+    if grep -q "SUPER, Q, Close window, killactive" "$TILING_CONF"; then
+        echo -e "  ${DIM}Already set to SUPER+Q. Nothing to do.${RESET}"
+        echo
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${TILING_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$TILING_CONF" "$backup_file"
+    echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
+
+    # Replace SUPER, W with SUPER, Q for killactive
+    sed -i 's/bindd = SUPER, W, Close window, killactive,/bindd = SUPER, Q, Close window, killactive,/' "$TILING_CONF"
+
+    echo -e "    ${CHECKED}✓${RESET}  Close window rebound to SUPER+Q"
+    echo
+    echo -e "  ${DIM}Reload Hyprland or log out/in to apply.${RESET}"
+    echo
+    echo
+}
+
+# Function to backup config directories
+backup_configs() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Backup Config${RESET}"
+    echo
+    echo -e "  ${DIM}Creates an archive of your Omarchy config directories and a restore script.${RESET}"
+    echo
+    echo
+
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local archive="$HOME/omarchy-backup-${timestamp}.tar.gz"
+    local restore_script="$HOME/restore-omarchy-config.sh"
+
+    # Directories to back up (relative to ~/.config)
+    local config_dirs=(
+        "hypr"
+        "waybar"
+        "mako"
+        "omarchy"
+        "walker"
+        "alacritty"
+        "kitty"
+        "ghostty"
+    )
+
+    # Check which dirs exist
+    local existing_dirs=()
+    for d in "${config_dirs[@]}"; do
+        if [[ -d "$HOME/.config/$d" ]]; then
+            existing_dirs+=(".config/$d")
+        fi
+    done
+
+    if [[ ${#existing_dirs[@]} -eq 0 ]]; then
+        echo -e "  ${DIM}✗${RESET}  No config directories found to back up."
+        echo
+        return 1
+    fi
+
+    echo -e "  ${DIM}Directories to back up:${RESET}"
+    for d in "${existing_dirs[@]}"; do
+        echo "    ${DIM}•${RESET}  ~/$d"
+    done
+    echo
+    echo
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        return 0
+    fi
+
+    echo
+
+    # Create archive (follow symlinks with -h)
+    if tar -czhf "$archive" -C "$HOME" "${existing_dirs[@]}" 2>/dev/null; then
+        echo -e "    ${CHECKED}✓${RESET}  Archive created: $archive"
+    else
+        echo -e "    ${DIM}✗${RESET}  Failed to create archive."
+        echo
+        return 1
+    fi
+
+    # Generate restore script
+    cat > "$restore_script" << 'RESTORE_EOF'
+#!/bin/bash
+# Omarchy Config Restore Script
+ARCHIVE="ARCHIVE_PLACEHOLDER"
+
+if [[ ! -f "$ARCHIVE" ]]; then
+    echo "Error: Archive not found: $ARCHIVE"
+    exit 1
 fi
 
+echo "This will restore Omarchy config files from:"
+echo "  $ARCHIVE"
+echo
+echo "Existing config files will be overwritten."
+echo
+printf "Continue? (yes/no) "
+read -r
+if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    echo "Cancelled."
+    exit 0
+fi
+
+echo
+if tar -xzhf "$ARCHIVE" -C "$HOME"; then
+    echo "Config restored successfully."
+    echo "Reload Hyprland or log out/in to apply changes."
+else
+    echo "Failed to restore config."
+    exit 1
+fi
+RESTORE_EOF
+
+    # Patch in the actual archive path
+    sed -i "s|ARCHIVE_PLACEHOLDER|$archive|" "$restore_script"
+    chmod +x "$restore_script"
+
+    echo -e "    ${CHECKED}✓${RESET}  Restore script: $restore_script"
+    echo
+    echo -e "  ${DIM}To restore later, run: bash ~/restore-omarchy-config.sh${RESET}"
+    echo
+    echo
+}
+
 # Build list of installed packages and webapps
-declare -a INSTALLED_PACKAGES=()
+declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
 declare -a INSTALLED_TYPES=()  # "package" or "webapp"
 
 # Check for installed packages
-for pkg_entry in "${PACKAGES[@]}"; do
-    IFS='|' read -r display_name package_name <<< "$pkg_entry"
-    if pacman -Qi "$package_name" &> /dev/null 2>&1; then
-        INSTALLED_PACKAGES+=("$package_name")
-        INSTALLED_NAMES+=("$display_name")
+for pkg in "${DEFAULT_APPS[@]}"; do
+    if is_package_installed "$pkg"; then
+        INSTALLED_ITEMS+=("$pkg")
+        INSTALLED_NAMES+=("$pkg")
         INSTALLED_TYPES+=("package")
     fi
 done
 
 # Check for installed webapps
-WEBAPP_DIR="$HOME/.local/share/applications"
-if [ -d "$WEBAPP_DIR" ]; then
-    for webapp_entry in "${WEBAPPS[@]}"; do
-        IFS='|' read -r display_name desktop_file <<< "$webapp_entry"
-        if [ -f "$WEBAPP_DIR/$desktop_file" ]; then
-            INSTALLED_PACKAGES+=("$desktop_file")
-            INSTALLED_NAMES+=("$display_name (Web App)")
-            INSTALLED_TYPES+=("webapp")
-        fi
-    done
-fi
+for webapp in "${DEFAULT_WEBAPPS[@]}"; do
+    if is_webapp_installed "$webapp"; then
+        INSTALLED_ITEMS+=("$webapp")
+        INSTALLED_NAMES+=("$webapp (Web App)")
+        INSTALLED_TYPES+=("webapp")
+    fi
+done
 
-# Check if any packages are installed
-if [ ${#INSTALLED_PACKAGES[@]} -eq 0 ]; then
-    clear
-    echo
-    echo "No preinstalled packages found."
-    echo
-    exit 0
+# Add the keybinding reset option at the end
+INSTALLED_ITEMS+=("__reset_keybinds__")
+INSTALLED_NAMES+=("-- Rebind close window to SUPER+Q --")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__backup_configs__")
+INSTALLED_NAMES+=("-- Backup config (creates restore script) --")
+INSTALLED_TYPES+=("action")
+
+# Check if only action options exist (no packages/webapps found)
+if [ ${#INSTALLED_ITEMS[@]} -le 2 ]; then
+    # Still show the UI so the user can access the keybind reset
+    :
 fi
 
 # Selection state
 declare -a SELECTED=()
-for ((i=0; i<${#INSTALLED_PACKAGES[@]}; i++)); do
+for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     SELECTED[$i]=0
 done
 
@@ -150,8 +301,8 @@ draw_interface() {
     # Calculate visible range
     local visible_start=$SCROLL_OFFSET
     local visible_end=$((SCROLL_OFFSET + MAX_VISIBLE))
-    if [ $visible_end -gt ${#INSTALLED_PACKAGES[@]} ]; then
-        visible_end=${#INSTALLED_PACKAGES[@]}
+    if [ $visible_end -gt ${#INSTALLED_ITEMS[@]} ]; then
+        visible_end=${#INSTALLED_ITEMS[@]}
     fi
 
     # Clear and redraw everything (simpler, no glitches)
@@ -174,7 +325,7 @@ draw_interface() {
 
     # Calculate selection count
     local selected_count=0
-    for ((i=0; i<${#INSTALLED_PACKAGES[@]}; i++)); do
+    for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
         if [ ${SELECTED[$i]} -eq 1 ]; then
             ((selected_count++))
         fi
@@ -259,7 +410,7 @@ handle_input() {
                     fi
                     ;;
                 '[B')  # Down arrow
-                    if [ $CURSOR -lt $((${#INSTALLED_PACKAGES[@]} - 1)) ]; then
+                    if [ $CURSOR -lt $((${#INSTALLED_ITEMS[@]} - 1)) ]; then
                         ((CURSOR++))
                         if [ $CURSOR -ge $((SCROLL_OFFSET + MAX_VISIBLE)) ]; then
                             ((SCROLL_OFFSET++))
@@ -316,25 +467,49 @@ done
 stty echo
 tput cnorm
 
-# Build lists of selected packages and webapps
+# Build lists of selected packages, webapps, and actions
 declare -a SELECTED_PACKAGES=()
 declare -a SELECTED_WEBAPPS=()
-for ((i=0; i<${#INSTALLED_PACKAGES[@]}; i++)); do
+RESET_KEYBINDS=false
+BACKUP_CONFIGS=false
+
+for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
-        if [ "${INSTALLED_TYPES[$i]}" = "package" ]; then
-            SELECTED_PACKAGES+=("${INSTALLED_PACKAGES[$i]}")
-        else
-            SELECTED_WEBAPPS+=("${INSTALLED_PACKAGES[$i]}")
-        fi
+        case "${INSTALLED_TYPES[$i]}" in
+            "package") SELECTED_PACKAGES+=("${INSTALLED_ITEMS[$i]}") ;;
+            "webapp")  SELECTED_WEBAPPS+=("${INSTALLED_ITEMS[$i]}") ;;
+            "action")
+                if [[ "${INSTALLED_ITEMS[$i]}" == "__reset_keybinds__" ]]; then
+                    RESET_KEYBINDS=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__backup_configs__" ]]; then
+                    BACKUP_CONFIGS=true
+                fi
+                ;;
+        esac
     fi
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ]; then
     clear
     echo
     echo "Nothing selected."
     echo
+    exit 0
+fi
+
+# Handle keybind reset (runs its own confirmation flow)
+if [ "$RESET_KEYBINDS" = true ]; then
+    rebind_close_window
+fi
+
+# Handle backup (runs its own confirmation flow)
+if [ "$BACKUP_CONFIGS" = true ]; then
+    backup_configs
+fi
+
+# If only action items were selected, we're done
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ]; then
     exit 0
 fi
 
@@ -347,7 +522,7 @@ echo
 echo
 
 if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
-    echo -e "${DIM}  Packages:${RESET}"
+    echo -e "${DIM}  Packages (${#SELECTED_PACKAGES[@]}):${RESET}"
     for pkg in "${SELECTED_PACKAGES[@]}"; do
         echo "    ${DIM}•${RESET}  $pkg"
     done
@@ -355,7 +530,7 @@ if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
 fi
 
 if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
-    echo -e "${DIM}  Web Apps:${RESET}"
+    echo -e "${DIM}  Web Apps (${#SELECTED_WEBAPPS[@]}):${RESET}"
     for webapp in "${SELECTED_WEBAPPS[@]}"; do
         echo "    ${DIM}•${RESET}  $webapp"
     done
@@ -367,7 +542,7 @@ if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
     echo -e "${DIM}  Packages will be removed with their dependencies.${RESET}"
 fi
 if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
-    echo -e "${DIM}  Web apps will be removed from ~/.local/share/applications.${RESET}"
+    echo -e "${DIM}  Web apps will be removed via omarchy-webapp-remove.${RESET}"
 fi
 echo
 echo
@@ -383,70 +558,92 @@ fi
 
 # Remove items
 echo
-REMOVAL_SUCCESS=true
+TOTAL_ATTEMPTED=0
+TOTAL_FAILED=0
 
-# Remove packages
+# Remove packages one by one
 if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
     echo "  Removing packages..."
     echo
 
-    if [ "$AUR_HELPER" = "sudo pacman" ]; then
-        sudo pacman -Rns "${SELECTED_PACKAGES[@]}"
-    else
-        $AUR_HELPER -Rns "${SELECTED_PACKAGES[@]}"
+    # Ensure we have sudo credentials before starting
+    if ! sudo -n true 2>/dev/null; then
+        echo -e "  ${DIM}Administrator privileges required for package removal${RESET}"
+        if ! sudo true; then
+            echo "  Failed to obtain sudo privileges"
+            exit 1
+        fi
+        echo
     fi
 
-    if [ $? -ne 0 ]; then
-        REMOVAL_SUCCESS=false
-    fi
-    echo
-fi
+    local_current=0
+    local_total=${#SELECTED_PACKAGES[@]}
 
-# Remove webapps
-if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
-    echo "  Removing web apps..."
-    echo
+    for pkg in "${SELECTED_PACKAGES[@]}"; do
+        ((local_current++))
+        ((TOTAL_ATTEMPTED++))
 
-    for webapp in "${SELECTED_WEBAPPS[@]}"; do
-        webapp_path="$WEBAPP_DIR/$webapp"
-        if [ -f "$webapp_path" ]; then
-            rm "$webapp_path"
-            if [ $? -eq 0 ]; then
-                echo "    ${DIM}•${RESET}  Removed $webapp"
-            else
-                echo "    ${DIM}✗${RESET}  Failed to remove $webapp"
-                REMOVAL_SUCCESS=false
-            fi
+        echo -e "  ${DIM}[$local_current/$local_total]${RESET} Removing $pkg..."
+
+        if sudo pacman -Rns --noconfirm "$pkg" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Removed: $pkg"
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed: $pkg (may have dependencies)"
+            ((TOTAL_FAILED++))
         fi
     done
     echo
 fi
 
-# Check if removal was successful
-if [ "$REMOVAL_SUCCESS" = true ]; then
+# Remove webapps one by one
+if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
+    echo "  Removing web apps..."
     echo
+
+    local_current=0
+    local_total=${#SELECTED_WEBAPPS[@]}
+
+    for webapp in "${SELECTED_WEBAPPS[@]}"; do
+        ((local_current++))
+        ((TOTAL_ATTEMPTED++))
+
+        echo -e "  ${DIM}[$local_current/$local_total]${RESET} Removing $webapp..."
+
+        if omarchy-webapp-remove "$webapp" >/dev/null 2>&1; then
+            echo -e "    ${CHECKED}✓${RESET}  Removed: $webapp"
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed: $webapp"
+            ((TOTAL_FAILED++))
+        fi
+    done
+    echo
+fi
+
+# Summary
+TOTAL_SUCCESS=$((TOTAL_ATTEMPTED - TOTAL_FAILED))
+
+echo
+if [ $TOTAL_FAILED -eq 0 ]; then
     echo -e "${CHECKED}  ✓  Complete${RESET}"
     echo
-    if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
-        echo "  Packages removed successfully"
-    fi
-    if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
-        echo "  Web apps removed successfully"
-    fi
+    echo "  All $TOTAL_ATTEMPTED item(s) removed successfully."
     echo
     echo
     if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
         echo -e "${DIM}  Optionally, clean your package cache:${RESET}"
-        echo "  $AUR_HELPER -Sc"
+        echo "  sudo pacman -Sc"
     fi
+elif [ $TOTAL_SUCCESS -gt 0 ]; then
+    echo -e "  ⚠  Partial Success"
     echo
-    echo
+    echo "  $TOTAL_SUCCESS of $TOTAL_ATTEMPTED item(s) removed."
+    echo "  $TOTAL_FAILED item(s) could not be removed (may have dependencies)."
 else
-    echo
     echo "  ✗  Failed"
     echo
-    echo "  Removal encountered an error"
-    echo
+    echo "  Could not remove any items. Check dependencies and permissions."
     echo
     exit 1
 fi
+echo
+echo

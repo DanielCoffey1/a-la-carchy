@@ -4,14 +4,15 @@
 
 ![A La Carchy TUI](screenshots/A%20La%20Carchy.png)
 
-A simple TUI (Terminal User Interface) debloater for Omarchy Linux.
+A simple TUI (Terminal User Interface) debloater and configuration tool for Omarchy Linux.
 
 ## Features
 
 - **Beautiful centered TUI** with smooth navigation
 - Interactive checklist of preinstalled packages **and webapps**
 - Only shows packages and webapps that are currently installed
-- Works with `yay`, `paru`, or `pacman`
+- **Rebind close window** from SUPER+W to SUPER+Q
+- **Backup & restore** config directories with a single selection
 - Safe removal with confirmation prompts
 - **No installation required** - just run the one-liner command!
 - No external dependencies needed
@@ -27,8 +28,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/DanielCoffey1/a-la-carchy/ma
 
 That's it! The script will:
 1. Show you a beautiful centered TUI
-2. Let you select packages to remove
-3. Remove selected packages safely
+2. Let you select packages/webapps to remove and actions to run
+3. Execute your selections safely with confirmation prompts
 
 ## Alternative: Download and Run
 
@@ -49,15 +50,15 @@ chmod +x a-la-carchy.sh
 
 1. Run the script using one of the methods above
 2. Use the interactive menu:
-   - **↑/↓** Navigate through applications
-   - **Space** Select/deselect packages
-   - **Enter** Continue with removal
+   - **↑/↓** Navigate through applications and actions
+   - **Space** Select/deselect items
+   - **Enter** Continue with selected actions
    - **Q** Quit
-3. Type `yes` when prompted to confirm removal
+3. Type `yes` when prompted to confirm
 
-## What Gets Removed
+## What It Does
 
-### Packages
+### Remove Packages
 
 The script can remove the following preinstalled applications:
 
@@ -71,7 +72,7 @@ The script can remove the following preinstalled applications:
 - **Utilities**: Calculator, Document Viewer
 - **Other**: Aether
 
-### Web Apps
+### Remove Web Apps
 
 The script can also remove the following preinstalled Omarchy webapps:
 
@@ -80,12 +81,39 @@ The script can also remove the following preinstalled Omarchy webapps:
 - **Productivity**: ChatGPT, Figma, GitHub
 - **Media**: YouTube, X
 
+### Rebind Close Window
+
+Changes the close window keybinding from SUPER+W (Omarchy default) to SUPER+Q. Creates a backup of the original config before making changes.
+
+### Backup Config
+
+Creates a timestamped archive (`~/omarchy-backup-YYYYMMDD_HHMMSS.tar.gz`) of your Omarchy configuration directories:
+
+- `~/.config/hypr/`
+- `~/.config/waybar/`
+- `~/.config/mako/`
+- `~/.config/omarchy/`
+- `~/.config/walker/`
+- `~/.config/alacritty/`
+- `~/.config/kitty/`
+- `~/.config/ghostty/`
+
+Also generates `~/restore-omarchy-config.sh` — a self-contained script that extracts the archive back into place. Symlinks are followed so the actual file content is preserved in the backup.
+
+To restore later:
+
+```bash
+bash ~/restore-omarchy-config.sh
+```
+
 ## Safety Features
 
 - Never run as root (uses sudo only when needed)
-- Confirmation prompt before removal
+- Confirmation prompt before every action
 - Shows exactly what will be removed
 - Uses `-Rns` flags to remove dependencies safely
+- Config backup follows symlinks to preserve actual file content
+- Restore script prompts for confirmation before overwriting
 
 ## Package Names
 
