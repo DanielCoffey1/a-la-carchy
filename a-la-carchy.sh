@@ -346,45 +346,63 @@ declare -a INSTALLED_NAMES=()
 declare -a INSTALLED_TYPES=()  # "package" or "webapp"
 
 # Check for installed packages
+declare -a pkg_items=()
 for pkg in "${DEFAULT_APPS[@]}"; do
     if is_package_installed "$pkg"; then
+        pkg_items+=("$pkg")
+    fi
+done
+
+if [ ${#pkg_items[@]} -gt 0 ]; then
+    INSTALLED_ITEMS+=("__header_apps__")
+    INSTALLED_NAMES+=("Apps")
+    INSTALLED_TYPES+=("header")
+    for pkg in "${pkg_items[@]}"; do
         INSTALLED_ITEMS+=("$pkg")
         INSTALLED_NAMES+=("$pkg")
         INSTALLED_TYPES+=("package")
-    fi
-done
+    done
+fi
 
 # Check for installed webapps
+declare -a webapp_items=()
 for webapp in "${DEFAULT_WEBAPPS[@]}"; do
     if is_webapp_installed "$webapp"; then
-        INSTALLED_ITEMS+=("$webapp")
-        INSTALLED_NAMES+=("$webapp (Web App)")
-        INSTALLED_TYPES+=("webapp")
+        webapp_items+=("$webapp")
     fi
 done
 
-# Add the keybinding reset option at the end
+if [ ${#webapp_items[@]} -gt 0 ]; then
+    INSTALLED_ITEMS+=("__header_webapps__")
+    INSTALLED_NAMES+=("Web Apps")
+    INSTALLED_TYPES+=("header")
+    for webapp in "${webapp_items[@]}"; do
+        INSTALLED_ITEMS+=("$webapp")
+        INSTALLED_NAMES+=("$webapp")
+        INSTALLED_TYPES+=("webapp")
+    done
+fi
+
+# Add tweaks section
+INSTALLED_ITEMS+=("__header_tweaks__")
+INSTALLED_NAMES+=("Tweaks")
+INSTALLED_TYPES+=("header")
+
 INSTALLED_ITEMS+=("__reset_keybinds__")
-INSTALLED_NAMES+=("-- Rebind close window to SUPER+Q --")
+INSTALLED_NAMES+=("Rebind close window to SUPER+Q")
 INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__backup_configs__")
-INSTALLED_NAMES+=("-- Backup config (creates restore script) --")
+INSTALLED_NAMES+=("Backup config (creates restore script)")
 INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__monitor_4k__")
-INSTALLED_NAMES+=("-- Set monitor scaling: 4K --")
+INSTALLED_NAMES+=("Set monitor scaling: 4K")
 INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__monitor_1080_1440__")
-INSTALLED_NAMES+=("-- Set monitor scaling: 1080p / 1440p --")
+INSTALLED_NAMES+=("Set monitor scaling: 1080p / 1440p")
 INSTALLED_TYPES+=("action")
-
-# Check if only action options exist (no packages/webapps found)
-if [ ${#INSTALLED_ITEMS[@]} -le 4 ]; then
-    # Still show the UI so the user can access the keybind reset
-    :
-fi
 
 # Selection state
 declare -a SELECTED=()
@@ -392,15 +410,30 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     SELECTED[$i]=0
 done
 
+# Start cursor on first selectable item (skip leading header)
 CURSOR=0
+for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
+    if [[ "${INSTALLED_TYPES[$i]}" != "header" ]]; then
+        CURSOR=$i
+        break
+    fi
+done
 SCROLL_OFFSET=0
 
-# Helper function to center text
+# Helper function to center text (truncates to fit terminal width)
 center_text() {
     local text="$1"
     local term_width=$(tput cols)
     local text_length=${#text}
+    # Truncate if text is wider than terminal
+    if [ $text_length -gt $term_width ]; then
+        text="${text:0:$term_width}"
+        text_length=$term_width
+    fi
     local padding=$(( (term_width - text_length) / 2 ))
+    if [ $padding -lt 0 ]; then
+        padding=0
+    fi
     printf "%*s%s\n" $padding "" "$text"
 }
 
@@ -409,36 +442,105 @@ draw_interface() {
     local term_height=$(tput lines)
     local term_width=$(tput cols)
 
+    # Determine layout mode based on terminal size
+    local show_ascii=0
+    local show_subtitle=0
+    local compact=0
+    if [ $term_width -ge 50 ] && [ $term_height -ge 20 ]; then
+        show_ascii=1
+    fi
+    if [ $term_height -ge 16 ]; then
+        show_subtitle=1
+    fi
+    if [ $term_height -lt 14 ]; then
+        compact=1
+    fi
+
+    # Calculate header lines used
+    local header_lines=2  # top blank + status line
+    if [ $show_ascii -eq 1 ]; then
+        header_lines=$((header_lines + 4))  # 2 art lines + blank + subtitle area
+    else
+        header_lines=$((header_lines + 2))  # bold title + blank
+    fi
+    if [ $show_subtitle -eq 1 ]; then
+        header_lines=$((header_lines + 2))  # subtitle + blank
+    fi
+    if [ $compact -eq 0 ]; then
+        header_lines=$((header_lines + 1))  # blank after status
+    fi
+    # footer takes 3 lines
+    local footer_lines=3
+
+    # Count section headers for extra line budget (each header adds a blank line)
+    local header_count=0
+    for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
+        if [[ "${INSTALLED_TYPES[$i]}" == "header" ]]; then
+            ((header_count++))
+        fi
+    done
+
     # Calculate max visible items
-    local MAX_VISIBLE=$((term_height - 12))
-    if [ $MAX_VISIBLE -lt 5 ]; then
-        MAX_VISIBLE=5
+    local MAX_VISIBLE=$((term_height - header_lines - footer_lines - header_count))
+    if [ $MAX_VISIBLE -lt 3 ]; then
+        MAX_VISIBLE=3
+    fi
+
+    # Clamp cursor and scroll offset to valid range
+    local total=${#INSTALLED_ITEMS[@]}
+    if [ $CURSOR -ge $total ]; then
+        CURSOR=$((total - 1))
+    fi
+    if [ $SCROLL_OFFSET -gt $((total - MAX_VISIBLE)) ]; then
+        SCROLL_OFFSET=$((total - MAX_VISIBLE))
+    fi
+    if [ $SCROLL_OFFSET -lt 0 ]; then
+        SCROLL_OFFSET=0
+    fi
+    if [ $CURSOR -lt $SCROLL_OFFSET ]; then
+        SCROLL_OFFSET=$CURSOR
+    fi
+    if [ $CURSOR -ge $((SCROLL_OFFSET + MAX_VISIBLE)) ]; then
+        SCROLL_OFFSET=$((CURSOR - MAX_VISIBLE + 1))
     fi
 
     # Calculate visible range
     local visible_start=$SCROLL_OFFSET
     local visible_end=$((SCROLL_OFFSET + MAX_VISIBLE))
-    if [ $visible_end -gt ${#INSTALLED_ITEMS[@]} ]; then
-        visible_end=${#INSTALLED_ITEMS[@]}
+    if [ $visible_end -gt $total ]; then
+        visible_end=$total
     fi
 
     # Clear and redraw everything (simpler, no glitches)
     clear
+    # Re-read terminal size after clear for most accurate dimensions
+    term_width=$(tput cols)
+    term_height=$(tput lines)
 
     # Title - centered
     echo
-    local title1=" ▄▀█   █   ▄▀█   █▀▀ ▄▀█ █▀█ █▀▀ █ █ █▄█"
-    local title2=" █▀█   █▄▄ █▀█   █▄▄ █▀█ █▀▄ █▄▄ █▀█  █"
-    echo -en "${BOLD}"
-    center_text "$title1"
-    center_text "$title2"
-    echo -en "${RESET}"
+    if [ $term_width -ge 44 ] && [ $show_ascii -eq 1 ]; then
+        local title1=" ▄▀█   █   ▄▀█   █▀▀ ▄▀█ █▀█ █▀▀ █ █ █▄█"
+        local title2=" █▀█   █▄▄ █▀█   █▄▄ █▀█ █▀▄ █▄▄ █▀█  █ "
+        echo -en "${BOLD}"
+        center_text "$title1"
+        center_text "$title2"
+        echo -en "${RESET}"
+    else
+        echo -en "${BOLD}"
+        center_text "A La Carchy"
+        echo -en "${RESET}"
+    fi
+    if [ $show_subtitle -eq 1 ]; then
+        echo
+        echo -en "${DIM}"
+        center_text "Omarchy Linux Debloater"
+        echo -en "${RESET}"
+    fi
     echo
-    echo -en "${DIM}"
-    center_text "Omarchy Linux Debloater"
-    echo -en "${RESET}"
-    echo
-    echo
+    if [ $compact -eq 0 ]; then
+        echo
+    fi
 
     # Calculate selection count
     local selected_count=0
@@ -458,7 +560,9 @@ draw_interface() {
         center_text "Select applications to remove"
         echo -en "${RESET}"
     fi
-    echo
+    if [ $compact -eq 0 ]; then
+        echo
+    fi
 
     # Draw package list - centered
     # Find longest package name for proper centering
@@ -472,9 +576,45 @@ draw_interface() {
 
     # Add space for checkbox
     local item_width=$((max_name_len + 6))
+    # Cap item_width to terminal width minus margins
+    local max_item_width=$((term_width - 4))
+    if [ $item_width -gt $max_item_width ]; then
+        item_width=$max_item_width
+    fi
     local left_margin=$(( (term_width - item_width) / 2 ))
+    if [ $left_margin -lt 0 ]; then
+        left_margin=0
+    fi
+
+    # Max display length for item names (item_width minus checkbox "[ ]  " = 5 chars)
+    local max_display_name=$((item_width - 6))
 
     for ((i=visible_start; i<visible_end; i++)); do
+        if [[ "${INSTALLED_TYPES[$i]}" == "header" ]]; then
+            # Section header - render as a divider line
+            local header_text="${INSTALLED_NAMES[$i]}"
+            local dash_total=$((item_width - ${#header_text} - 2))
+            if [ $dash_total -lt 2 ]; then
+                dash_total=2
+            fi
+            local dash_left=$((dash_total / 2))
+            local dash_right=$((dash_total - dash_left))
+            local left_dashes=$(printf '%*s' $dash_left '' | tr ' ' '─')
+            local right_dashes=$(printf '%*s' $dash_right '' | tr ' ' '─')
+            # Add blank line before header (except the very first item)
+            if [ $i -gt 0 ]; then
+                echo
+            fi
+            printf "%*s${DIM}${left_dashes} ${BOLD}%s${RESET}${DIM} ${right_dashes}${RESET}\n" $left_margin "" "$header_text"
+            continue
+        fi
+
+        # Truncate name if needed
+        local display_name="${INSTALLED_NAMES[$i]}"
+        if [ ${#display_name} -gt $max_display_name ] && [ $max_display_name -gt 1 ]; then
+            display_name="${display_name:0:$((max_display_name - 1))}…"
+        fi
+
         local checkbox="[ ]"
         local check_color=""
         if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -484,13 +624,17 @@ draw_interface() {
 
         if [ $i -eq $CURSOR ]; then
             # Highlighted line - centered with full width highlight
-            local item_text="${checkbox}  ${INSTALLED_NAMES[$i]}"
+            local item_text="${checkbox}  ${display_name}"
             local padding_left=$(printf '%*s' $left_margin '')
-            local padding_right=$(printf '%*s' $((term_width - left_margin - item_width)) '')
+            local pad_right=$((term_width - left_margin - item_width))
+            if [ $pad_right -lt 0 ]; then
+                pad_right=0
+            fi
+            local padding_right=$(printf '%*s' $pad_right '')
             printf "${padding_left}${SELECTED_BG}%-${item_width}s${RESET}${padding_right}\n" "$item_text"
         else
             # Normal line - centered
-            printf "%*s${DIM}${check_color}${checkbox}${RESET}  ${INSTALLED_NAMES[$i]}\n" $left_margin ""
+            printf "%*s${DIM}${check_color}${checkbox}${RESET}  ${display_name}\n" $left_margin ""
         fi
     done
 
@@ -506,12 +650,22 @@ draw_interface() {
 # Function to handle key input
 handle_input() {
     local key
-    IFS= read -rsn1 key < /dev/tty
+    # Use a timeout loop so SIGWINCH trap can redraw between attempts.
+    # read -t 1 returns 142 on timeout; loop until we get actual input.
+    while true; do
+        IFS= read -rsn1 -t 1 key < /dev/tty
+        local rs=$?
+        # 0 = got input, 1 = EOF/error — process the key
+        # >128 = signal or timeout — loop to let trap redraw
+        if [ $rs -le 1 ]; then
+            break
+        fi
+    done
 
     local term_height=$(tput lines)
-    local MAX_VISIBLE=$((term_height - 12))
-    if [ $MAX_VISIBLE -lt 5 ]; then
-        MAX_VISIBLE=5
+    local MAX_VISIBLE=$((term_height - 10))
+    if [ $MAX_VISIBLE -lt 3 ]; then
+        MAX_VISIBLE=3
     fi
 
     case "$key" in
@@ -519,28 +673,40 @@ handle_input() {
             read -rsn2 -t 0.1 key
             case "$key" in
                 '[A')  # Up arrow
-                    if [ $CURSOR -gt 0 ]; then
-                        ((CURSOR--))
-                        if [ $CURSOR -lt $SCROLL_OFFSET ]; then
-                            ((SCROLL_OFFSET--))
+                    local new_cursor=$CURSOR
+                    while [ $new_cursor -gt 0 ]; do
+                        ((new_cursor--))
+                        if [[ "${INSTALLED_TYPES[$new_cursor]}" != "header" ]]; then
+                            CURSOR=$new_cursor
+                            if [ $CURSOR -lt $SCROLL_OFFSET ]; then
+                                SCROLL_OFFSET=$CURSOR
+                            fi
+                            break
                         fi
-                    fi
+                    done
                     ;;
                 '[B')  # Down arrow
-                    if [ $CURSOR -lt $((${#INSTALLED_ITEMS[@]} - 1)) ]; then
-                        ((CURSOR++))
-                        if [ $CURSOR -ge $((SCROLL_OFFSET + MAX_VISIBLE)) ]; then
-                            ((SCROLL_OFFSET++))
+                    local new_cursor=$CURSOR
+                    while [ $new_cursor -lt $((${#INSTALLED_ITEMS[@]} - 1)) ]; do
+                        ((new_cursor++))
+                        if [[ "${INSTALLED_TYPES[$new_cursor]}" != "header" ]]; then
+                            CURSOR=$new_cursor
+                            if [ $CURSOR -ge $((SCROLL_OFFSET + MAX_VISIBLE)) ]; then
+                                ((SCROLL_OFFSET++))
+                            fi
+                            break
                         fi
-                    fi
+                    done
                     ;;
             esac
             ;;
-        ' ')  # Space - toggle selection
-            if [ ${SELECTED[$CURSOR]} -eq 0 ]; then
-                SELECTED[$CURSOR]=1
-            else
-                SELECTED[$CURSOR]=0
+        ' ')  # Space - toggle selection (skip headers)
+            if [[ "${INSTALLED_TYPES[$CURSOR]}" != "header" ]]; then
+                if [ ${SELECTED[$CURSOR]} -eq 0 ]; then
+                    SELECTED[$CURSOR]=1
+                else
+                    SELECTED[$CURSOR]=0
+                fi
             fi
             ;;
         '')  # Enter - confirm
@@ -560,6 +726,7 @@ cleanup() {
     stty sane
 }
 trap cleanup EXIT
+trap 'draw_interface' WINCH
 
 tput civis
 stty -echo
