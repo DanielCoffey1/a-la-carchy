@@ -20,7 +20,7 @@ DEFAULT_APPS=(
     "docker-compose"
     "gnome-calculator"
     "kdenlive"
-    "libreoffice"
+    "libreoffice-fresh"
     "localsend"
     "obs-studio"
     "obsidian"
