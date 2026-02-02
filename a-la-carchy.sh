@@ -599,8 +599,8 @@ draw_interface() {
             fi
             local dash_left=$((dash_total / 2))
             local dash_right=$((dash_total - dash_left))
-            local left_dashes=$(printf '%*s' $dash_left '' | tr ' ' '─')
-            local right_dashes=$(printf '%*s' $dash_right '' | tr ' ' '─')
+            local left_dashes=$(printf '%*s' $dash_left '' | tr ' ' '-')
+            local right_dashes=$(printf '%*s' $dash_right '' | tr ' ' '-')
             # Add blank line before header (except the very first item)
             if [ $i -gt 0 ]; then
                 echo
