@@ -15,6 +15,9 @@ CHECKED='\033[38;5;10m'
 DEFAULT_APPS=(
     "1password-beta"
     "1password-cli"
+    "docker"
+    "docker-buildx"
+    "docker-compose"
     "kdenlive"
     "libreoffice"
     "localsend"
@@ -24,28 +27,28 @@ DEFAULT_APPS=(
     "signal-desktop"
     "spotify"
     "xournalpp"
-    "docker"
-    "docker-buildx"
-    "docker-compose"
 )
 
 # Default webapps offered for removal
 # List from: https://github.com/basecamp/omarchy/blob/master/install/packaging/webapps.sh
 DEFAULT_WEBAPPS=(
-    "HEY"
     "Basecamp"
-    "WhatsApp"
-    "Google Photos"
+    "ChatGPT"
+    "Discord"
+    "Figma"
+    "GitHub"
     "Google Contacts"
     "Google Messages"
-    "ChatGPT"
-    "YouTube"
-    "GitHub"
+    "Google Photos"
+    "HEY"
+    "WhatsApp"
     "X"
-    "Figma"
-    "Discord"
+    "YouTube"
     "Zoom"
 )
+
+# Summary log for tracking completed actions
+declare -a SUMMARY_LOG=()
 
 # Hyprland tiling config path
 TILING_CONF="$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf"
@@ -87,6 +90,7 @@ rebind_close_window() {
     if [[ ! -f "$TILING_CONF" ]]; then
         echo -e "  ${DIM}✗${RESET}  tiling-v2.conf not found at $TILING_CONF"
         echo
+        SUMMARY_LOG+=("✗  Rebind close window -- failed (config not found)")
         return 1
     fi
 
@@ -94,6 +98,7 @@ rebind_close_window() {
     if grep -q "SUPER, Q, Close window, killactive" "$TILING_CONF"; then
         echo -e "  ${DIM}Already set to SUPER+Q. Nothing to do.${RESET}"
         echo
+        SUMMARY_LOG+=("--  Rebind close window -- already set")
         return 0
     fi
 
@@ -104,6 +109,7 @@ rebind_close_window() {
         echo
         echo "  Cancelled."
         echo
+        SUMMARY_LOG+=("--  Rebind close window -- cancelled")
         return 0
     fi
 
@@ -118,6 +124,7 @@ rebind_close_window() {
     sed -i 's/bindd = SUPER, W, Close window, killactive,/bindd = SUPER, Q, Close window, killactive,/' "$TILING_CONF"
 
     echo -e "    ${CHECKED}✓${RESET}  Close window rebound to SUPER+Q"
+    SUMMARY_LOG+=("✓  Rebind close window to SUPER+Q")
     echo
     echo -e "  ${DIM}Reload Hyprland or log out/in to apply.${RESET}"
     echo
@@ -162,6 +169,7 @@ backup_configs() {
     if [[ ${#existing_dirs[@]} -eq 0 ]]; then
         echo -e "  ${DIM}✗${RESET}  No config directories found to back up."
         echo
+        SUMMARY_LOG+=("✗  Backup config -- failed (no config dirs found)")
         return 1
     fi
 
@@ -179,6 +187,7 @@ backup_configs() {
         echo
         echo "  Cancelled."
         echo
+        SUMMARY_LOG+=("--  Backup config -- cancelled")
         return 0
     fi
 
@@ -190,6 +199,7 @@ backup_configs() {
     else
         echo -e "    ${DIM}✗${RESET}  Failed to create archive."
         echo
+        SUMMARY_LOG+=("✗  Backup config -- failed (archive creation error)")
         return 1
     fi
 
@@ -235,6 +245,7 @@ RESTORE_EOF
     echo -e "  ${DIM}To restore later, run: bash ~/restore-omarchy-config.sh${RESET}"
     echo
     echo
+    SUMMARY_LOG+=("✓  Backup config created")
 }
 
 # Function to set monitor scaling to 4K
@@ -252,6 +263,7 @@ set_monitor_4k() {
     if [[ ! -f "$MONITORS_CONF" ]]; then
         echo -e "  ${DIM}✗${RESET}  monitors.conf not found at $MONITORS_CONF"
         echo
+        SUMMARY_LOG+=("✗  Monitor scaling 4K -- failed (config not found)")
         return 1
     fi
 
@@ -262,6 +274,7 @@ set_monitor_4k() {
         echo
         echo "  Cancelled."
         echo
+        SUMMARY_LOG+=("--  Monitor scaling 4K -- cancelled")
         return 0
     fi
 
@@ -284,6 +297,7 @@ monitor=,preferred,auto,1.666667
 EOF
 
     echo -e "    ${CHECKED}✓${RESET}  Monitor scaling set to 4K"
+    SUMMARY_LOG+=("✓  Monitor scaling set to 4K")
     echo
     echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
     echo
@@ -305,6 +319,7 @@ set_monitor_1080_1440() {
     if [[ ! -f "$MONITORS_CONF" ]]; then
         echo -e "  ${DIM}✗${RESET}  monitors.conf not found at $MONITORS_CONF"
         echo
+        SUMMARY_LOG+=("✗  Monitor scaling 1080p/1440p -- failed (config not found)")
         return 1
     fi
 
@@ -315,6 +330,7 @@ set_monitor_1080_1440() {
         echo
         echo "  Cancelled."
         echo
+        SUMMARY_LOG+=("--  Monitor scaling 1080p/1440p -- cancelled")
         return 0
     fi
 
@@ -337,6 +353,7 @@ monitor=,preferred,auto,1
 EOF
 
     echo -e "    ${CHECKED}✓${RESET}  Monitor scaling set to 1080p/1440p"
+    SUMMARY_LOG+=("✓  Monitor scaling set to 1080p/1440p")
     echo
     echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
     echo
@@ -356,12 +373,14 @@ bind_shutdown() {
     if [[ ! -f "$BINDINGS_CONF" ]]; then
         echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
         echo
+        SUMMARY_LOG+=("✗  Bind shutdown -- failed (config not found)")
         return 1
     fi
 
     if grep -q "SUPER ALT, S, Shutdown" "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
         echo
+        SUMMARY_LOG+=("--  Bind shutdown -- already set")
         return 0
     fi
 
@@ -372,6 +391,7 @@ bind_shutdown() {
         echo
         echo "  Cancelled."
         echo
+        SUMMARY_LOG+=("--  Bind shutdown -- cancelled")
         return 0
     fi
 
@@ -385,6 +405,7 @@ bind_shutdown() {
     echo "bindd = SUPER ALT, S, Shutdown, exec, systemctl poweroff" >> "$BINDINGS_CONF"
 
     echo -e "  ${DIM}✓${RESET}  Bound SUPER+ALT+S to shutdown"
+    SUMMARY_LOG+=("✓  Bound shutdown to SUPER+ALT+S")
     echo
 }
 
@@ -401,12 +422,14 @@ bind_restart() {
     if [[ ! -f "$BINDINGS_CONF" ]]; then
         echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
         echo
+        SUMMARY_LOG+=("✗  Bind restart -- failed (config not found)")
         return 1
     fi
 
     if grep -q "SUPER ALT, R, Restart" "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
         echo
+        SUMMARY_LOG+=("--  Bind restart -- already set")
         return 0
     fi
 
@@ -417,6 +440,7 @@ bind_restart() {
         echo
         echo "  Cancelled."
         echo
+        SUMMARY_LOG+=("--  Bind restart -- cancelled")
         return 0
     fi
 
@@ -430,6 +454,103 @@ bind_restart() {
     echo "bindd = SUPER ALT, R, Restart, exec, systemctl reboot" >> "$BINDINGS_CONF"
 
     echo -e "  ${DIM}✓${RESET}  Bound SUPER+ALT+R to restart"
+    SUMMARY_LOG+=("✓  Bound restart to SUPER+ALT+R")
+    echo
+}
+
+unbind_shutdown() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Unbind Shutdown (SUPER+ALT+S)${RESET}"
+    echo
+    echo -e "  ${DIM}Removes the shutdown keybinding from bindings.conf.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Unbind shutdown -- failed (config not found)")
+        return 1
+    fi
+
+    if ! grep -q "SUPER ALT, S, Shutdown" "$BINDINGS_CONF"; then
+        echo -e "  ${DIM}Not bound. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Unbind shutdown -- not bound")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Unbind shutdown -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    sed -i '/SUPER ALT, S, Shutdown/d' "$BINDINGS_CONF"
+
+    echo -e "  ${DIM}✓${RESET}  Unbound SUPER+ALT+S (shutdown)"
+    SUMMARY_LOG+=("✓  Unbound shutdown (SUPER+ALT+S)")
+    echo
+}
+
+unbind_restart() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Unbind Restart (SUPER+ALT+R)${RESET}"
+    echo
+    echo -e "  ${DIM}Removes the restart keybinding from bindings.conf.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Unbind restart -- failed (config not found)")
+        return 1
+    fi
+
+    if ! grep -q "SUPER ALT, R, Restart" "$BINDINGS_CONF"; then
+        echo -e "  ${DIM}Not bound. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Unbind restart -- not bound")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Unbind restart -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    sed -i '/SUPER ALT, R, Restart/d' "$BINDINGS_CONF"
+
+    echo -e "  ${DIM}✓${RESET}  Unbound SUPER+ALT+R (restart)"
+    SUMMARY_LOG+=("✓  Unbound restart (SUPER+ALT+R)")
     echo
 }
 
@@ -503,6 +624,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__bind_restart__")
 INSTALLED_NAMES+=("Bind restart to SUPER+ALT+R")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__unbind_shutdown__")
+INSTALLED_NAMES+=("Unbind shutdown (SUPER+ALT+S)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__unbind_restart__")
+INSTALLED_NAMES+=("Unbind restart (SUPER+ALT+R)")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -861,6 +990,8 @@ MONITOR_4K=false
 MONITOR_1080_1440=false
 BIND_SHUTDOWN=false
 BIND_RESTART=false
+UNBIND_SHUTDOWN=false
+UNBIND_RESTART=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -880,6 +1011,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     BIND_SHUTDOWN=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__bind_restart__" ]]; then
                     BIND_RESTART=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__unbind_shutdown__" ]]; then
+                    UNBIND_SHUTDOWN=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__unbind_restart__" ]]; then
+                    UNBIND_RESTART=true
                 fi
                 ;;
         esac
@@ -887,7 +1022,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -922,8 +1057,27 @@ if [ "$BIND_RESTART" = true ]; then
     bind_restart
 fi
 
-# If only action items were selected, we're done
+if [ "$UNBIND_SHUTDOWN" = true ]; then
+    unbind_shutdown
+fi
+
+if [ "$UNBIND_RESTART" = true ]; then
+    unbind_restart
+fi
+
+# If only action items were selected, show summary and exit
 if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ]; then
+    trap - EXIT
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Summary${RESET}"
+    echo
+    for entry in "${SUMMARY_LOG[@]}"; do
+        echo -e "  $entry"
+    done
+    echo
+    echo
     exit 0
 fi
 
@@ -1001,8 +1155,10 @@ if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
 
         if sudo pacman -Rns --noconfirm "$pkg" 2>/dev/null; then
             echo -e "    ${CHECKED}✓${RESET}  Removed: $pkg"
+            SUMMARY_LOG+=("✓  Removed package: $pkg")
         else
             echo -e "    ${DIM}✗${RESET}  Failed: $pkg (may have dependencies)"
+            SUMMARY_LOG+=("✗  Failed to remove package: $pkg")
             ((TOTAL_FAILED++))
         fi
     done
@@ -1025,8 +1181,10 @@ if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
 
         if omarchy-webapp-remove "$webapp" >/dev/null 2>&1; then
             echo -e "    ${CHECKED}✓${RESET}  Removed: $webapp"
+            SUMMARY_LOG+=("✓  Removed web app: $webapp")
         else
             echo -e "    ${DIM}✗${RESET}  Failed: $webapp"
+            SUMMARY_LOG+=("✗  Failed to remove web app: $webapp")
             ((TOTAL_FAILED++))
         fi
     done
@@ -1036,28 +1194,29 @@ fi
 # Summary
 TOTAL_SUCCESS=$((TOTAL_ATTEMPTED - TOTAL_FAILED))
 
+trap - EXIT
+clear
+echo
+echo
+echo -e "${BOLD}  Summary${RESET}"
+echo
+
+for entry in "${SUMMARY_LOG[@]}"; do
+    echo -e "  $entry"
+done
+
 echo
 if [ $TOTAL_FAILED -eq 0 ]; then
-    echo -e "${CHECKED}  ✓  Complete${RESET}"
-    echo
-    echo "  All $TOTAL_ATTEMPTED item(s) removed successfully."
-    echo
-    echo
+    echo -e "  ${CHECKED}All $TOTAL_ATTEMPTED item(s) removed successfully.${RESET}"
     if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
-        echo -e "${DIM}  Optionally, clean your package cache:${RESET}"
+        echo
+        echo -e "  ${DIM}Optionally, clean your package cache:${RESET}"
         echo "  sudo pacman -Sc"
     fi
 elif [ $TOTAL_SUCCESS -gt 0 ]; then
-    echo -e "  ⚠  Partial Success"
-    echo
-    echo "  $TOTAL_SUCCESS of $TOTAL_ATTEMPTED item(s) removed."
-    echo "  $TOTAL_FAILED item(s) could not be removed (may have dependencies)."
+    echo -e "  ⚠  $TOTAL_SUCCESS of $TOTAL_ATTEMPTED item(s) removed. $TOTAL_FAILED failed."
 else
-    echo "  ✗  Failed"
-    echo
-    echo "  Could not remove any items. Check dependencies and permissions."
-    echo
-    exit 1
+    echo -e "  ✗  Could not remove any items. Check dependencies and permissions."
 fi
 echo
 echo
