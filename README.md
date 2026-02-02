@@ -12,6 +12,7 @@ A simple TUI (Terminal User Interface) debloater and configuration tool for Omar
 - Interactive checklist of preinstalled packages **and webapps**
 - Only shows packages and webapps that are currently installed
 - **Rebind close window** from SUPER+W to SUPER+Q
+- **Bind shutdown/restart** keybindings (SUPER+ALT+S / SUPER+ALT+R)
 - **Monitor scaling** options for 4K and 1080p/1440p displays
 - **Backup & restore** config directories with a single selection
 - Safe removal with confirmation prompts
@@ -85,6 +86,15 @@ The script can also remove the following preinstalled Omarchy webapps:
 ### Rebind Close Window
 
 Changes the close window keybinding from SUPER+W (Omarchy default) to SUPER+Q. Creates a backup of the original config before making changes.
+
+### Shutdown & Restart Keybindings
+
+Adds keybindings to `~/.config/hypr/bindings.conf` for powering off or restarting the system:
+
+- **SUPER+ALT+S** — Shutdown (`systemctl poweroff`)
+- **SUPER+ALT+R** — Restart (`systemctl reboot`)
+
+A timestamped backup of `bindings.conf` is created before any changes are applied. Skips if the binding already exists.
 
 ### Monitor Scaling
 

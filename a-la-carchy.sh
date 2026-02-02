@@ -53,6 +53,9 @@ TILING_CONF="$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf"
 # Hyprland monitors config path
 MONITORS_CONF="$HOME/.config/hypr/monitors.conf"
 
+# Hyprland bindings config path
+BINDINGS_CONF="$HOME/.config/hypr/bindings.conf"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -340,6 +343,96 @@ EOF
     echo
 }
 
+bind_shutdown() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Bind Shutdown to SUPER+ALT+S${RESET}"
+    echo
+    echo -e "  ${DIM}Adds a keybinding to shutdown the system with SUPER+ALT+S.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo
+        return 1
+    fi
+
+    if grep -q "SUPER ALT, S, Shutdown" "$BINDINGS_CONF"; then
+        echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
+        echo
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    echo "" >> "$BINDINGS_CONF"
+    echo "bindd = SUPER ALT, S, Shutdown, exec, systemctl poweroff" >> "$BINDINGS_CONF"
+
+    echo -e "  ${DIM}✓${RESET}  Bound SUPER+ALT+S to shutdown"
+    echo
+}
+
+bind_restart() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Bind Restart to SUPER+ALT+R${RESET}"
+    echo
+    echo -e "  ${DIM}Adds a keybinding to restart the system with SUPER+ALT+R.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo
+        return 1
+    fi
+
+    if grep -q "SUPER ALT, R, Restart" "$BINDINGS_CONF"; then
+        echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
+        echo
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    echo "" >> "$BINDINGS_CONF"
+    echo "bindd = SUPER ALT, R, Restart, exec, systemctl reboot" >> "$BINDINGS_CONF"
+
+    echo -e "  ${DIM}✓${RESET}  Bound SUPER+ALT+R to restart"
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -402,6 +495,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__monitor_1080_1440__")
 INSTALLED_NAMES+=("Set monitor scaling: 1080p / 1440p")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__bind_shutdown__")
+INSTALLED_NAMES+=("Bind shutdown to SUPER+ALT+S")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__bind_restart__")
+INSTALLED_NAMES+=("Bind restart to SUPER+ALT+R")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -758,6 +859,8 @@ RESET_KEYBINDS=false
 BACKUP_CONFIGS=false
 MONITOR_4K=false
 MONITOR_1080_1440=false
+BIND_SHUTDOWN=false
+BIND_RESTART=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -773,6 +876,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     MONITOR_4K=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__monitor_1080_1440__" ]]; then
                     MONITOR_1080_1440=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__bind_shutdown__" ]]; then
+                    BIND_SHUTDOWN=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__bind_restart__" ]]; then
+                    BIND_RESTART=true
                 fi
                 ;;
         esac
@@ -780,7 +887,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -805,6 +912,14 @@ fi
 
 if [ "$MONITOR_1080_1440" = true ]; then
     set_monitor_1080_1440
+fi
+
+if [ "$BIND_SHUTDOWN" = true ]; then
+    bind_shutdown
+fi
+
+if [ "$BIND_RESTART" = true ]; then
+    bind_restart
 fi
 
 # If only action items were selected, we're done
