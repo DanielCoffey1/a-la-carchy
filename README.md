@@ -12,9 +12,10 @@ A simple TUI (Terminal User Interface) debloater and configuration tool for Omar
 - Interactive checklist of preinstalled packages **and webapps**
 - Only shows packages and webapps that are currently installed
 - **Rebind close window** from SUPER+W to SUPER+Q
-- **Bind shutdown/restart** keybindings (SUPER+ALT+S / SUPER+ALT+R)
+- **Bind/unbind shutdown/restart** keybindings (SUPER+ALT+S / SUPER+ALT+R)
 - **Monitor scaling** options for 4K and 1080p/1440p displays
 - **Backup & restore** config directories with a single selection
+- **Summary screen** after all actions complete
 - Safe removal with confirmation prompts
 - **No installation required** - just run the one-liner command!
 - No external dependencies needed
@@ -64,24 +65,23 @@ chmod +x a-la-carchy.sh
 
 The script can remove the following preinstalled applications:
 
-- **Browsers**: Chromium
+- **Browsers**: Chromium (omarchy-chromium)
 - **Productivity**: LibreOffice Suite, Obsidian, Typora, Xournal++
-- **Media**: Kdenlive, OBS Studio, MPV Media Player, Spotify
-- **Graphics**: Pinta, IMV Image Viewer
+- **Media**: Kdenlive, OBS Studio, Spotify
+- **Graphics**: Pinta
 - **Communication**: Signal, LocalSend
-- **Development**: Docker (Core Engine, Buildx, Compose, UFW Integration), LazyDocker, Neovim, Alacritty, Ghostty
+- **Development**: Docker (Core Engine, Buildx, Compose)
 - **Security**: 1Password, 1Password CLI
-- **Utilities**: Calculator, Document Viewer
-- **Other**: Aether
+- **Utilities**: Calculator (gnome-calculator)
 
 ### Remove Web Apps
 
 The script can also remove the following preinstalled Omarchy webapps:
 
-- **Communication**: HEY, Basecamp, WhatsApp, Discord, Zoom
-- **Google Services**: Google Photos, Google Contacts, Google Messages
-- **Productivity**: ChatGPT, Figma, GitHub
-- **Media**: YouTube, X
+- **Communication**: Discord, HEY, WhatsApp, Zoom
+- **Google Services**: Google Contacts, Google Maps, Google Messages, Google Photos
+- **Productivity**: Basecamp, ChatGPT, Figma, Fizzy, GitHub
+- **Media**: X, YouTube
 
 ### Rebind Close Window
 
@@ -89,12 +89,14 @@ Changes the close window keybinding from SUPER+W (Omarchy default) to SUPER+Q. C
 
 ### Shutdown & Restart Keybindings
 
-Adds keybindings to `~/.config/hypr/bindings.conf` for powering off or restarting the system:
+Adds or removes keybindings in `~/.config/hypr/bindings.conf` for powering off or restarting the system:
 
-- **SUPER+ALT+S** — Shutdown (`systemctl poweroff`)
-- **SUPER+ALT+R** — Restart (`systemctl reboot`)
+- **Bind SUPER+ALT+S** — Shutdown (`systemctl poweroff`)
+- **Bind SUPER+ALT+R** — Restart (`systemctl reboot`)
+- **Unbind SUPER+ALT+S** — Remove shutdown keybinding
+- **Unbind SUPER+ALT+R** — Remove restart keybinding
 
-A timestamped backup of `bindings.conf` is created before any changes are applied. Skips if the binding already exists.
+A timestamped backup of `bindings.conf` is created before any changes are applied. Skips if the binding already exists (or doesn't exist for unbind).
 
 ### Monitor Scaling
 
@@ -143,29 +145,14 @@ The script uses the following package name mappings:
 |------------|--------------|
 | 1Password | 1password-beta |
 | 1Password CLI | 1password-cli |
-| Aether | aether |
-| Alacritty | alacritty |
 | Calculator | gnome-calculator |
-| Chromium | chromium |
+| Chromium | omarchy-chromium |
 | Docker (Core Engine) | docker |
-| Docker Buildx (Extended Build) | docker-buildx |
-| Docker Compose (Orchestration) | docker-compose |
-| Docker UFW (Firewall Integration) | ufw-docker |
-| Document Viewer | evince |
-| Ghostty | ghostty |
-| Image Viewer | imv |
+| Docker Buildx | docker-buildx |
+| Docker Compose | docker-compose |
 | Kdenlive | kdenlive |
-| LazyDocker (Docker TUI) | lazydocker |
 | LibreOffice | libreoffice-fresh |
-| LibreOffice Base | libreoffice-fresh-base |
-| LibreOffice Calc | libreoffice-fresh-calc |
-| LibreOffice Draw | libreoffice-fresh-draw |
-| LibreOffice Impress | libreoffice-fresh-impress |
-| LibreOffice Math | libreoffice-fresh-math |
-| LibreOffice Writer | libreoffice-fresh-writer |
-| LocalSend | localsend-bin |
-| Media Player | mpv |
-| Neovim | neovim |
+| LocalSend | localsend |
 | OBS Studio | obs-studio |
 | Obsidian | obsidian |
 | Pinta | pinta |
@@ -180,18 +167,20 @@ The script can remove the following Omarchy webapps (stored as `.desktop` files 
 
 | Web App | Desktop File |
 |---------|--------------|
-| HEY | HEY.desktop |
 | Basecamp | Basecamp.desktop |
-| WhatsApp | WhatsApp.desktop |
-| Google Photos | Google Photos.desktop |
-| Google Contacts | Google Contacts.desktop |
-| Google Messages | Google Messages.desktop |
 | ChatGPT | ChatGPT.desktop |
-| YouTube | YouTube.desktop |
-| GitHub | GitHub.desktop |
-| X | X.desktop |
-| Figma | Figma.desktop |
 | Discord | Discord.desktop |
+| Figma | Figma.desktop |
+| Fizzy | Fizzy.desktop |
+| GitHub | GitHub.desktop |
+| Google Contacts | Google Contacts.desktop |
+| Google Maps | Google Maps.desktop |
+| Google Messages | Google Messages.desktop |
+| Google Photos | Google Photos.desktop |
+| HEY | HEY.desktop |
+| WhatsApp | WhatsApp.desktop |
+| X | X.desktop |
+| YouTube | YouTube.desktop |
 | Zoom | Zoom.desktop |
 
 ## Troubleshooting
