@@ -50,6 +50,9 @@ DEFAULT_WEBAPPS=(
 # Hyprland tiling config path
 TILING_CONF="$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf"
 
+# Hyprland monitors config path
+MONITORS_CONF="$HOME/.config/hypr/monitors.conf"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -231,6 +234,112 @@ RESTORE_EOF
     echo
 }
 
+# Function to set monitor scaling to 4K
+set_monitor_4k() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Set Monitor Scaling: 4K${RESET}"
+    echo
+    echo -e "  ${DIM}Configures monitor scaling optimized for 4K displays.${RESET}"
+    echo -e "  ${DIM}Sets GDK_SCALE=1.75 and monitor scale to 1.666667.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$MONITORS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  monitors.conf not found at $MONITORS_CONF"
+        echo
+        return 1
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${MONITORS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$MONITORS_CONF" "$backup_file"
+    echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
+
+    # Write new config
+    cat > "$MONITORS_CONF" << 'EOF'
+# See https://wiki.hyprland.org/Configuring/Monitors/
+# List current monitors and resolutions possible: hyprctl monitors
+# Format: monitor = [port], resolution, position, scale
+
+# Optimized for 27" or 32" 4K monitors
+env = GDK_SCALE,1.75
+monitor=,preferred,auto,1.666667
+EOF
+
+    echo -e "    ${CHECKED}✓${RESET}  Monitor scaling set to 4K"
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+    echo
+}
+
+# Function to set monitor scaling to 1080p/1440p
+set_monitor_1080_1440() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Set Monitor Scaling: 1080p / 1440p${RESET}"
+    echo
+    echo -e "  ${DIM}Configures monitor scaling for 1080p or 1440p displays.${RESET}"
+    echo -e "  ${DIM}Sets GDK_SCALE=1 and monitor scale to 1 (no scaling).${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$MONITORS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  monitors.conf not found at $MONITORS_CONF"
+        echo
+        return 1
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${MONITORS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$MONITORS_CONF" "$backup_file"
+    echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
+
+    # Write new config
+    cat > "$MONITORS_CONF" << 'EOF'
+# See https://wiki.hyprland.org/Configuring/Monitors/
+# List current monitors and resolutions possible: hyprctl monitors
+# Format: monitor = [port], resolution, position, scale
+
+# Straight 1x setup for 1080p or 1440p displays
+env = GDK_SCALE,1
+monitor=,preferred,auto,1
+EOF
+
+    echo -e "    ${CHECKED}✓${RESET}  Monitor scaling set to 1080p/1440p"
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -263,8 +372,16 @@ INSTALLED_ITEMS+=("__backup_configs__")
 INSTALLED_NAMES+=("-- Backup config (creates restore script) --")
 INSTALLED_TYPES+=("action")
 
+INSTALLED_ITEMS+=("__monitor_4k__")
+INSTALLED_NAMES+=("-- Set monitor scaling: 4K --")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__monitor_1080_1440__")
+INSTALLED_NAMES+=("-- Set monitor scaling: 1080p / 1440p --")
+INSTALLED_TYPES+=("action")
+
 # Check if only action options exist (no packages/webapps found)
-if [ ${#INSTALLED_ITEMS[@]} -le 2 ]; then
+if [ ${#INSTALLED_ITEMS[@]} -le 4 ]; then
     # Still show the UI so the user can access the keybind reset
     :
 fi
@@ -472,6 +589,8 @@ declare -a SELECTED_PACKAGES=()
 declare -a SELECTED_WEBAPPS=()
 RESET_KEYBINDS=false
 BACKUP_CONFIGS=false
+MONITOR_4K=false
+MONITOR_1080_1440=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -483,6 +602,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     RESET_KEYBINDS=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__backup_configs__" ]]; then
                     BACKUP_CONFIGS=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__monitor_4k__" ]]; then
+                    MONITOR_4K=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__monitor_1080_1440__" ]]; then
+                    MONITOR_1080_1440=true
                 fi
                 ;;
         esac
@@ -490,7 +613,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -506,6 +629,15 @@ fi
 # Handle backup (runs its own confirmation flow)
 if [ "$BACKUP_CONFIGS" = true ]; then
     backup_configs
+fi
+
+# Handle monitor scaling (runs its own confirmation flow)
+if [ "$MONITOR_4K" = true ]; then
+    set_monitor_4k
+fi
+
+if [ "$MONITOR_1080_1440" = true ]; then
+    set_monitor_1080_1440
 fi
 
 # If only action items were selected, we're done
