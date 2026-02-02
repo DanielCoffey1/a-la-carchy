@@ -12,6 +12,7 @@ A simple TUI (Terminal User Interface) debloater and configuration tool for Omar
 - Interactive checklist of preinstalled packages **and webapps**
 - Only shows packages and webapps that are currently installed
 - **Rebind close window** from SUPER+W to SUPER+Q
+- **Monitor scaling** options for 4K and 1080p/1440p displays
 - **Backup & restore** config directories with a single selection
 - Safe removal with confirmation prompts
 - **No installation required** - just run the one-liner command!
@@ -84,6 +85,15 @@ The script can also remove the following preinstalled Omarchy webapps:
 ### Rebind Close Window
 
 Changes the close window keybinding from SUPER+W (Omarchy default) to SUPER+Q. Creates a backup of the original config before making changes.
+
+### Monitor Scaling
+
+Configures `~/.config/hypr/monitors.conf` for your display resolution. Two options are available:
+
+- **4K** — Sets `GDK_SCALE=1.75` with 1.666667 Hyprland scaling
+- **1080p/1440p** — Sets `GDK_SCALE=1` with no scaling
+
+A timestamped backup of `monitors.conf` is created before any changes are applied.
 
 ### Backup Config
 
