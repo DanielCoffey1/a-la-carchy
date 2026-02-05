@@ -1188,6 +1188,102 @@ disable_fingerprint() {
     echo
 }
 
+enable_fido2() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Enable FIDO2 Authentication${RESET}"
+    echo
+    echo -e "  ${DIM}Sets up FIDO2 security key for sudo authentication.${RESET}"
+    echo -e "  ${DIM}Works for: sudo and polkit prompts (not lock screen).${RESET}"
+    echo
+    echo -e "  ${DIM}Note: Requires a FIDO2 device (YubiKey, etc) plugged in.${RESET}"
+    echo
+    echo
+
+    # Check if already enabled (pam-u2f installed)
+    if pacman -Qi pam-u2f &>/dev/null; then
+        echo -e "  ${DIM}FIDO2 authentication already set up.${RESET}"
+        echo -e "  ${DIM}To re-register, disable first then enable again.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable FIDO2 -- already enabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Enable FIDO2 -- cancelled")
+        return 0
+    fi
+
+    echo
+    echo -e "  ${DIM}Running omarchy-setup-fido2...${RESET}"
+    echo
+
+    # Run the setup script
+    if omarchy-setup-fido2; then
+        echo
+        echo -e "  ${CHECKED}✓${RESET}  FIDO2 authentication enabled"
+        SUMMARY_LOG+=("✓  Enabled FIDO2 authentication")
+    else
+        echo
+        echo -e "  ${DIM}FIDO2 setup failed or was cancelled.${RESET}"
+        SUMMARY_LOG+=("--  Enable FIDO2 -- failed or cancelled")
+    fi
+    echo
+}
+
+disable_fido2() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable FIDO2 Authentication${RESET}"
+    echo
+    echo -e "  ${DIM}Removes FIDO2 authentication and uninstalls packages.${RESET}"
+    echo
+    echo
+
+    # Check if FIDO2 is enabled
+    if ! pacman -Qi pam-u2f &>/dev/null; then
+        echo -e "  ${DIM}FIDO2 authentication not set up. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Disable FIDO2 -- not enabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Disable FIDO2 -- cancelled")
+        return 0
+    fi
+
+    echo
+    echo -e "  ${DIM}Running omarchy-setup-fido2 --remove...${RESET}"
+    echo
+
+    # Run the remove script
+    if omarchy-setup-fido2 --remove; then
+        echo
+        echo -e "  ${CHECKED}✓${RESET}  FIDO2 authentication disabled"
+        SUMMARY_LOG+=("✓  Disabled FIDO2 authentication")
+    else
+        echo
+        echo -e "  ${DIM}FIDO2 removal failed.${RESET}"
+        SUMMARY_LOG+=("--  Disable FIDO2 -- failed")
+    fi
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1314,6 +1410,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__disable_fingerprint__")
 INSTALLED_NAMES+=("Disable fingerprint authentication")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__enable_fido2__")
+INSTALLED_NAMES+=("Enable FIDO2 authentication (sudo only)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__disable_fido2__")
+INSTALLED_NAMES+=("Disable FIDO2 authentication")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -1686,6 +1790,8 @@ ENABLE_HIBERNATION=false
 DISABLE_HIBERNATION=false
 ENABLE_FINGERPRINT=false
 DISABLE_FINGERPRINT=false
+ENABLE_FIDO2=false
+DISABLE_FIDO2=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1733,6 +1839,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     ENABLE_FINGERPRINT=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_fingerprint__" ]]; then
                     DISABLE_FINGERPRINT=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_fido2__" ]]; then
+                    ENABLE_FIDO2=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_fido2__" ]]; then
+                    DISABLE_FIDO2=true
                 fi
                 ;;
         esac
@@ -1740,7 +1850,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -1829,6 +1939,14 @@ fi
 
 if [ "$DISABLE_FINGERPRINT" = true ]; then
     disable_fingerprint
+fi
+
+if [ "$ENABLE_FIDO2" = true ]; then
+    enable_fido2
+fi
+
+if [ "$DISABLE_FIDO2" = true ]; then
+    disable_fido2
 fi
 
 # If only action items were selected, show summary and exit
