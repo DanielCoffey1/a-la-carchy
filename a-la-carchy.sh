@@ -64,6 +64,12 @@ MONITORS_CONF="$HOME/.config/hypr/monitors.conf"
 # Hyprland bindings config path
 BINDINGS_CONF="$HOME/.config/hypr/bindings.conf"
 
+# XCompose config path
+XCOMPOSE_CONF="$HOME/.XCompose"
+
+# Hyprland input config path
+INPUT_CONF="$HOME/.config/hypr/input.conf"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -656,6 +662,136 @@ unbind_theme_menu() {
     echo
 }
 
+restore_capslock() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Restore Caps Lock Key${RESET}"
+    echo
+    echo -e "  ${DIM}Returns Caps Lock to normal behavior (typing in CAPITALS).${RESET}"
+    echo -e "  ${DIM}Moves compose key to Right Alt, so shortcuts still work:${RESET}"
+    echo -e "  ${DIM}  • Right Alt + Space + Space → em dash (—)${RESET}"
+    echo -e "  ${DIM}  • Right Alt + Space + n → your name${RESET}"
+    echo -e "  ${DIM}  • Right Alt + Space + e → your email${RESET}"
+    echo -e "  ${DIM}  • Right Alt + m + s → 😄 (and all other emojis)${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$INPUT_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  input.conf not found at $INPUT_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Restore Caps Lock -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already using ralt
+    if grep -q "kb_options = compose:ralt" "$INPUT_CONF"; then
+        echo -e "  ${DIM}Caps Lock already restored. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Restore Caps Lock -- already set")
+        return 0
+    fi
+
+    # Check if compose:caps exists
+    if ! grep -q "kb_options = compose:caps" "$INPUT_CONF"; then
+        echo -e "  ${DIM}compose:caps not found in config. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Restore Caps Lock -- compose:caps not found")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Restore Caps Lock -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${INPUT_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$INPUT_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Replace compose:caps with compose:ralt
+    sed -i 's/kb_options = compose:caps/kb_options = compose:ralt/' "$INPUT_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Caps Lock restored (compose moved to Right Alt)"
+    SUMMARY_LOG+=("✓  Restored Caps Lock (compose on Right Alt)")
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
+use_capslock_compose() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Use Caps Lock for Compose${RESET}"
+    echo
+    echo -e "  ${DIM}Returns to Omarchy default: Caps Lock as compose key.${RESET}"
+    echo -e "  ${DIM}  • Caps Lock + Space + Space → em dash (—)${RESET}"
+    echo -e "  ${DIM}  • Caps Lock + m + s → 😄 (emojis)${RESET}"
+    echo -e "  ${DIM}  • No Caps Lock for CAPITALS${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$INPUT_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  input.conf not found at $INPUT_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Use Caps Lock compose -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already using caps
+    if grep -q "kb_options = compose:caps" "$INPUT_CONF"; then
+        echo -e "  ${DIM}Already using Caps Lock for compose. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Use Caps Lock compose -- already set")
+        return 0
+    fi
+
+    # Check if compose:ralt exists
+    if ! grep -q "kb_options = compose:ralt" "$INPUT_CONF"; then
+        echo -e "  ${DIM}compose:ralt not found in config. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Use Caps Lock compose -- compose:ralt not found")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Use Caps Lock compose -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${INPUT_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$INPUT_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Replace compose:ralt with compose:caps
+    sed -i 's/kb_options = compose:ralt/kb_options = compose:caps/' "$INPUT_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Caps Lock now used for compose (Omarchy default)"
+    SUMMARY_LOG+=("✓  Caps Lock used for compose")
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -742,6 +878,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__unbind_theme_menu__")
 INSTALLED_NAMES+=("Unbind theme menu (ALT+T)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__restore_capslock__")
+INSTALLED_NAMES+=("Restore Caps Lock (move compose to Right Alt)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__use_capslock_compose__")
+INSTALLED_NAMES+=("Use Caps Lock for compose (Omarchy default)")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -1104,6 +1248,8 @@ UNBIND_SHUTDOWN=false
 UNBIND_RESTART=false
 BIND_THEME_MENU=false
 UNBIND_THEME_MENU=false
+RESTORE_CAPSLOCK=false
+USE_CAPSLOCK_COMPOSE=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1131,6 +1277,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     BIND_THEME_MENU=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__unbind_theme_menu__" ]]; then
                     UNBIND_THEME_MENU=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__restore_capslock__" ]]; then
+                    RESTORE_CAPSLOCK=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__use_capslock_compose__" ]]; then
+                    USE_CAPSLOCK_COMPOSE=true
                 fi
                 ;;
         esac
@@ -1138,7 +1288,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -1187,6 +1337,14 @@ fi
 
 if [ "$UNBIND_THEME_MENU" = true ]; then
     unbind_theme_menu
+fi
+
+if [ "$RESTORE_CAPSLOCK" = true ]; then
+    restore_capslock
+fi
+
+if [ "$USE_CAPSLOCK_COMPOSE" = true ]; then
+    use_capslock_compose
 fi
 
 # If only action items were selected, show summary and exit
