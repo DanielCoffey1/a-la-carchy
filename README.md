@@ -9,11 +9,9 @@ A simple TUI (Terminal User Interface) debloater and configuration tool for Omar
 ## Features
 
 - **Beautiful centered TUI** with smooth navigation
-- Interactive checklist of preinstalled packages **and webapps**
+- Interactive checklist of preinstalled packages and webapps
 - Only shows packages and webapps that are currently installed
-- **Rebind close window** from SUPER+W to SUPER+Q
-- **Bind/unbind shutdown/restart** keybindings (SUPER+ALT+S / SUPER+ALT+R)
-- **Monitor scaling** options for 4K and 1080p/1440p displays
+- **40+ configuration tweaks** for keybindings, display, and system settings
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
 - Safe removal with confirmation prompts
@@ -83,29 +81,76 @@ The script can also remove the following preinstalled Omarchy webapps:
 - **Productivity**: Basecamp, ChatGPT, Figma, Fizzy, GitHub
 - **Media**: X, YouTube
 
-### Rebind Close Window
+### Configuration Tweaks
 
-Changes the close window keybinding from SUPER+W (Omarchy default) to SUPER+Q. Creates a backup of the original config before making changes.
+#### Keybinding Management
 
-### Shutdown & Restart Keybindings
+| Tweak | Description |
+|-------|-------------|
+| Rebind close window | Changes SUPER+W to SUPER+Q |
+| Bind/Unbind shutdown | SUPER+ALT+S for `systemctl poweroff` |
+| Bind/Unbind restart | SUPER+ALT+R for `systemctl reboot` |
+| Bind/Unbind theme menu | ALT+T for Omarchy theme selector |
+| Swap Alt and Super keys | macOS-like modifier key layout |
+| Restore Alt/Super keys | Return to default modifier layout |
 
-Adds or removes keybindings in `~/.config/hypr/bindings.conf` for powering off or restarting the system:
+#### Keyboard & Input
 
-- **Bind SUPER+ALT+S** — Shutdown (`systemctl poweroff`)
-- **Bind SUPER+ALT+R** — Restart (`systemctl reboot`)
-- **Unbind SUPER+ALT+S** — Remove shutdown keybinding
-- **Unbind SUPER+ALT+R** — Remove restart keybinding
+| Tweak | Description |
+|-------|-------------|
+| Restore Caps Lock | Moves compose key to Right Alt, restores Caps Lock |
+| Use Caps Lock for compose | Omarchy default - Caps Lock becomes compose key |
 
-A timestamped backup of `bindings.conf` is created before any changes are applied. Skips if the binding already exists (or doesn't exist for unbind).
+**Compose key combinations** (when using Caps Lock as compose):
+- `Caps Lock + Space + Space` → em dash (—)
+- `Caps Lock + m + s` → emoji picker
+- `Caps Lock + Space + n` → custom name
+- `Caps Lock + Space + e` → custom email
 
-### Monitor Scaling
+#### Monitor & Display
 
-Configures `~/.config/hypr/monitors.conf` for your display resolution. Two options are available:
+| Tweak | Description |
+|-------|-------------|
+| Set monitor scaling for 4K | GDK_SCALE=1.75, Hyprland scale 1.666667 |
+| Set monitor scaling for 1080p/1440p | GDK_SCALE=1, no scaling |
 
-- **4K** — Sets `GDK_SCALE=1.75` with 1.666667 Hyprland scaling
-- **1080p/1440p** — Sets `GDK_SCALE=1` with no scaling
+#### Window Management
 
-A timestamped backup of `monitors.conf` is created before any changes are applied.
+| Tweak | Description |
+|-------|-------------|
+| Enable rounded corners | Adds rounded corners to windows |
+| Disable rounded corners | Square window corners |
+| Remove window gaps | Maximize screen real estate |
+| Restore window gaps | Return to default window spacing |
+
+#### Visual Customization
+
+| Tweak | Description |
+|-------|-------------|
+| Show all tray icons | All system tray icons always visible |
+| Hide tray icons | Use expander for cleaner bar |
+| Enable 12-hour clock | Clock displays with AM/PM |
+| Disable 12-hour clock | 24-hour format |
+
+#### Media Organization
+
+| Tweak | Description |
+|-------|-------------|
+| Enable media directories | Screenshots → `~/Pictures/Screenshots`, Recordings → `~/Videos/Screencasts` |
+| Disable media directories | Use default `~/Pictures` and `~/Videos` |
+
+#### System Features
+
+| Tweak | Description |
+|-------|-------------|
+| Enable suspend | Show suspend option in system menu |
+| Disable suspend | Hide suspend from system menu |
+| Enable hibernation | Creates swap subvolume matching RAM size |
+| Disable hibernation | Removes hibernation support |
+| Enable fingerprint auth | Set up fingerprint for sudo/login |
+| Disable fingerprint auth | Remove fingerprint authentication |
+| Enable FIDO2 auth | Set up security keys (YubiKey, etc.) |
+| Disable FIDO2 auth | Remove security key authentication |
 
 ### Backup Config
 
@@ -134,8 +179,10 @@ bash ~/restore-omarchy-config.sh
 - Confirmation prompt before every action
 - Shows exactly what will be removed
 - Uses `-Rns` flags to remove dependencies safely
+- Timestamped backups created before modifying any config file
 - Config backup follows symlinks to preserve actual file content
 - Restore script prompts for confirmation before overwriting
+- Idempotent operations - skips actions already applied
 
 ## Package Names
 
@@ -182,6 +229,20 @@ The script can remove the following Omarchy webapps (stored as `.desktop` files 
 | X | X.desktop |
 | YouTube | YouTube.desktop |
 | Zoom | Zoom.desktop |
+
+## Configuration Files Modified
+
+The script modifies the following Omarchy configuration files (with automatic backups):
+
+| File | Purpose |
+|------|---------|
+| `~/.config/hypr/monitors.conf` | Monitor scaling |
+| `~/.config/hypr/bindings.conf` | Keybindings |
+| `~/.config/hypr/looknfeel.conf` | Rounded corners, window gaps |
+| `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping |
+| `~/.config/waybar/config.jsonc` | Clock format, tray icons |
+| `~/.config/uwsm/default` | Screenshot/recording directories |
+| `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
 
 ## Troubleshooting
 
