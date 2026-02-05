@@ -73,6 +73,9 @@ INPUT_CONF="$HOME/.config/hypr/input.conf"
 # Suspend state file path
 SUSPEND_STATE="$HOME/.local/state/omarchy/toggles/suspend-on"
 
+# Waybar config path
+WAYBAR_CONF="$HOME/.config/waybar/config.jsonc"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -1284,6 +1287,129 @@ disable_fido2() {
     echo
 }
 
+show_all_tray_icons() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Show All Tray Icons${RESET}"
+    echo
+    echo -e "  ${DIM}Reveals all system tray icons (Dropbox, 1Password, Steam, etc).${RESET}"
+    echo -e "  ${DIM}Icons will always be visible instead of hidden under an expander.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Show all tray icons -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already showing all icons (look for "tray", in modules-right, not the group definition)
+    # The group definition has "group/tray-expander": (with colon), modules-right has "group/tray-expander", (with comma)
+    if ! grep -q '"group/tray-expander",' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Tray icons already visible (or tray-expander not in modules).${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Show all tray icons -- already set or not applicable")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Show all tray icons -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Replace group/tray-expander with tray (only the one with comma, not the group definition with colon)
+    sed -i 's/"group\/tray-expander",/"tray",/' "$WAYBAR_CONF"
+
+    # Restart waybar to apply
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  All tray icons now visible"
+    SUMMARY_LOG+=("✓  Showing all tray icons")
+    echo
+}
+
+hide_tray_icons() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Hide Tray Icons (Use Expander)${RESET}"
+    echo
+    echo -e "  ${DIM}Hides tray icons under an expander (Omarchy default).${RESET}"
+    echo -e "  ${DIM}Click the expander icon to reveal tray icons when needed.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Hide tray icons -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already using expander (with comma = in modules-right, not the group definition with colon)
+    if grep -q '"group/tray-expander",' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Already using tray expander. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Hide tray icons -- already set")
+        return 0
+    fi
+
+    # Check if "tray", exists in modules-right (indicates it was changed from expander)
+    if ! grep -q '"tray",' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}tray not found in modules-right. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Hide tray icons -- tray not found")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Hide tray icons -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Replace tray with group/tray-expander (only in modules-right context)
+    sed -i 's/"tray",/"group\/tray-expander",/' "$WAYBAR_CONF"
+
+    # Restart waybar to apply
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Tray icons now hidden under expander"
+    SUMMARY_LOG+=("✓  Hiding tray icons (using expander)")
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1418,6 +1544,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__disable_fido2__")
 INSTALLED_NAMES+=("Disable FIDO2 authentication")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__show_all_tray_icons__")
+INSTALLED_NAMES+=("Show all tray icons (always visible)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__hide_tray_icons__")
+INSTALLED_NAMES+=("Hide tray icons (use expander)")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -1792,6 +1926,8 @@ ENABLE_FINGERPRINT=false
 DISABLE_FINGERPRINT=false
 ENABLE_FIDO2=false
 DISABLE_FIDO2=false
+SHOW_ALL_TRAY_ICONS=false
+HIDE_TRAY_ICONS=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1843,6 +1979,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     ENABLE_FIDO2=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_fido2__" ]]; then
                     DISABLE_FIDO2=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__show_all_tray_icons__" ]]; then
+                    SHOW_ALL_TRAY_ICONS=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__hide_tray_icons__" ]]; then
+                    HIDE_TRAY_ICONS=true
                 fi
                 ;;
         esac
@@ -1850,7 +1990,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -1947,6 +2087,14 @@ fi
 
 if [ "$DISABLE_FIDO2" = true ]; then
     disable_fido2
+fi
+
+if [ "$SHOW_ALL_TRAY_ICONS" = true ]; then
+    show_all_tray_icons
+fi
+
+if [ "$HIDE_TRAY_ICONS" = true ]; then
+    hide_tray_icons
 fi
 
 # If only action items were selected, show summary and exit
