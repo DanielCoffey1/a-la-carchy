@@ -1527,6 +1527,125 @@ disable_rounded_corners() {
     echo
 }
 
+remove_window_gaps() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Remove Window Gaps${RESET}"
+    echo
+    echo -e "  ${DIM}Removes all gaps between windows and borders.${RESET}"
+    echo -e "  ${DIM}Maximizes screen space - great for laptops.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$LOOKNFEEL_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  looknfeel.conf not found at $LOOKNFEEL_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Remove window gaps -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already enabled (uncommented gaps_in line)
+    if grep -q "^[[:space:]]*gaps_in = 0" "$LOOKNFEEL_CONF"; then
+        echo -e "  ${DIM}Window gaps already removed. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Remove window gaps -- already removed")
+        return 0
+    fi
+
+    # Check if commented gaps lines exist
+    if ! grep -q "^[[:space:]]*#[[:space:]]*gaps_in = 0" "$LOOKNFEEL_CONF"; then
+        echo -e "  ${DIM}gaps settings not found in config. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Remove window gaps -- settings not found")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Remove window gaps -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${LOOKNFEEL_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$LOOKNFEEL_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Uncomment the gaps and border lines
+    sed -i 's/^[[:space:]]*#[[:space:]]*\(gaps_in = 0\)/    \1/' "$LOOKNFEEL_CONF"
+    sed -i 's/^[[:space:]]*#[[:space:]]*\(gaps_out = 0\)/    \1/' "$LOOKNFEEL_CONF"
+    sed -i 's/^[[:space:]]*#[[:space:]]*\(border_size = 0\)/    \1/' "$LOOKNFEEL_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Window gaps removed"
+    SUMMARY_LOG+=("✓  Removed window gaps")
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
+restore_window_gaps() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Restore Window Gaps${RESET}"
+    echo
+    echo -e "  ${DIM}Restores gaps between windows and borders (Omarchy default).${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$LOOKNFEEL_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  looknfeel.conf not found at $LOOKNFEEL_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Restore window gaps -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if gaps are removed (uncommented)
+    if ! grep -q "^[[:space:]]*gaps_in = 0" "$LOOKNFEEL_CONF"; then
+        echo -e "  ${DIM}Window gaps already restored. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Restore window gaps -- already restored")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Restore window gaps -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${LOOKNFEEL_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$LOOKNFEEL_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Comment out the gaps and border lines
+    sed -i 's/^[[:space:]]*\(gaps_in = 0\)/    # \1/' "$LOOKNFEEL_CONF"
+    sed -i 's/^[[:space:]]*\(gaps_out = 0\)/    # \1/' "$LOOKNFEEL_CONF"
+    sed -i 's/^[[:space:]]*\(border_size = 0\)/    # \1/' "$LOOKNFEEL_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Window gaps restored"
+    SUMMARY_LOG+=("✓  Restored window gaps")
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1677,6 +1796,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__disable_rounded_corners__")
 INSTALLED_NAMES+=("Disable rounded window corners")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__remove_window_gaps__")
+INSTALLED_NAMES+=("Remove window gaps (maximize space)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__restore_window_gaps__")
+INSTALLED_NAMES+=("Restore window gaps (Omarchy default)")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -2055,6 +2182,8 @@ SHOW_ALL_TRAY_ICONS=false
 HIDE_TRAY_ICONS=false
 ENABLE_ROUNDED_CORNERS=false
 DISABLE_ROUNDED_CORNERS=false
+REMOVE_WINDOW_GAPS=false
+RESTORE_WINDOW_GAPS=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -2114,6 +2243,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     ENABLE_ROUNDED_CORNERS=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_rounded_corners__" ]]; then
                     DISABLE_ROUNDED_CORNERS=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__remove_window_gaps__" ]]; then
+                    REMOVE_WINDOW_GAPS=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__restore_window_gaps__" ]]; then
+                    RESTORE_WINDOW_GAPS=true
                 fi
                 ;;
         esac
@@ -2121,7 +2254,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ] && [ "$ENABLE_ROUNDED_CORNERS" = false ] && [ "$DISABLE_ROUNDED_CORNERS" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ] && [ "$ENABLE_ROUNDED_CORNERS" = false ] && [ "$DISABLE_ROUNDED_CORNERS" = false ] && [ "$REMOVE_WINDOW_GAPS" = false ] && [ "$RESTORE_WINDOW_GAPS" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -2234,6 +2367,14 @@ fi
 
 if [ "$DISABLE_ROUNDED_CORNERS" = true ]; then
     disable_rounded_corners
+fi
+
+if [ "$REMOVE_WINDOW_GAPS" = true ]; then
+    remove_window_gaps
+fi
+
+if [ "$RESTORE_WINDOW_GAPS" = true ]; then
+    restore_window_gaps
 fi
 
 # If only action items were selected, show summary and exit
