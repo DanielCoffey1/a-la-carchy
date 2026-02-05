@@ -792,6 +792,127 @@ use_capslock_compose() {
     echo
 }
 
+swap_alt_super() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Swap Alt and Super Keys${RESET}"
+    echo
+    echo -e "  ${DIM}Makes Alt behave as Super and Super behave as Alt.${RESET}"
+    echo -e "  ${DIM}Useful for macOS-like shortcuts (Alt+Q to close, etc).${RESET}"
+    echo
+    echo -e "  ${DIM}After this tweak:${RESET}"
+    echo -e "  ${DIM}  • Alt + Return → Terminal (was Super + Return)${RESET}"
+    echo -e "  ${DIM}  • Alt + Q → Close window (was Super + Q)${RESET}"
+    echo -e "  ${DIM}  • Alt + Space → App launcher (was Super + Space)${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$INPUT_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  input.conf not found at $INPUT_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Swap Alt/Super -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already swapped
+    if grep -q "altwin:swap_alt_win" "$INPUT_CONF"; then
+        echo -e "  ${DIM}Alt and Super already swapped. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Swap Alt/Super -- already swapped")
+        return 0
+    fi
+
+    # Check if kb_options line exists
+    if ! grep -q "kb_options = " "$INPUT_CONF"; then
+        echo -e "  ${DIM}kb_options not found in config. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Swap Alt/Super -- kb_options not found")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Swap Alt/Super -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${INPUT_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$INPUT_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Append altwin:swap_alt_win to kb_options (handles both compose:caps and compose:ralt)
+    sed -i 's/\(kb_options = [^#]*\)/\1,altwin:swap_alt_win/' "$INPUT_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Alt and Super keys swapped"
+    SUMMARY_LOG+=("✓  Swapped Alt and Super keys")
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
+restore_alt_super() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Restore Alt and Super Keys${RESET}"
+    echo
+    echo -e "  ${DIM}Returns Alt and Super to their normal behavior.${RESET}"
+    echo -e "  ${DIM}Super key will be used for window management (Omarchy default).${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$INPUT_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  input.conf not found at $INPUT_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Restore Alt/Super -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if swap is active
+    if ! grep -q "altwin:swap_alt_win" "$INPUT_CONF"; then
+        echo -e "  ${DIM}Alt and Super not swapped. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Restore Alt/Super -- not swapped")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Restore Alt/Super -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${INPUT_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$INPUT_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Remove altwin:swap_alt_win from kb_options
+    sed -i 's/,altwin:swap_alt_win//' "$INPUT_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Alt and Super keys restored to normal"
+    SUMMARY_LOG+=("✓  Restored Alt and Super keys")
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -886,6 +1007,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__use_capslock_compose__")
 INSTALLED_NAMES+=("Use Caps Lock for compose (Omarchy default)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__swap_alt_super__")
+INSTALLED_NAMES+=("Swap Alt and Super keys (macOS-like)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__restore_alt_super__")
+INSTALLED_NAMES+=("Restore Alt and Super keys (Omarchy default)")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -1250,6 +1379,8 @@ BIND_THEME_MENU=false
 UNBIND_THEME_MENU=false
 RESTORE_CAPSLOCK=false
 USE_CAPSLOCK_COMPOSE=false
+SWAP_ALT_SUPER=false
+RESTORE_ALT_SUPER=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1281,6 +1412,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     RESTORE_CAPSLOCK=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__use_capslock_compose__" ]]; then
                     USE_CAPSLOCK_COMPOSE=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__swap_alt_super__" ]]; then
+                    SWAP_ALT_SUPER=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__restore_alt_super__" ]]; then
+                    RESTORE_ALT_SUPER=true
                 fi
                 ;;
         esac
@@ -1288,7 +1423,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -1345,6 +1480,14 @@ fi
 
 if [ "$USE_CAPSLOCK_COMPOSE" = true ]; then
     use_capslock_compose
+fi
+
+if [ "$SWAP_ALT_SUPER" = true ]; then
+    swap_alt_super
+fi
+
+if [ "$RESTORE_ALT_SUPER" = true ]; then
+    restore_alt_super
 fi
 
 # If only action items were selected, show summary and exit
