@@ -154,6 +154,61 @@ rebind_close_window() {
     echo
 }
 
+# Function to restore close window to SUPER+W (Omarchy default)
+restore_close_window() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Restore Close Window${RESET}"
+    echo
+    echo -e "  ${DIM}Restores SUPER+W (Omarchy default) for closing windows.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$TILING_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  tiling-v2.conf not found at $TILING_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Restore close window -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already set to SUPER+W
+    if grep -q "SUPER, W, Close window, killactive" "$TILING_CONF"; then
+        echo -e "  ${DIM}Already set to SUPER+W. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Restore close window -- already set")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Restore close window -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${TILING_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$TILING_CONF" "$backup_file"
+    echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
+
+    # Replace SUPER, Q with SUPER, W for killactive
+    sed -i 's/bindd = SUPER, Q, Close window, killactive,/bindd = SUPER, W, Close window, killactive,/' "$TILING_CONF"
+
+    echo -e "    ${CHECKED}✓${RESET}  Close window restored to SUPER+W"
+    SUMMARY_LOG+=("✓  Restore close window to SUPER+W")
+    echo
+    echo -e "  ${DIM}Reload Hyprland or log out/in to apply.${RESET}"
+    echo
+    echo
+}
+
 # Function to backup config directories
 backup_configs() {
     clear
@@ -2477,11 +2532,13 @@ for webapp in "${INSTALLED_WEBAPPS[@]}"; do
 done
 
 # Convert toggle selections to action flags
-# close_window: 1=SUPER+Q (rebind), 2=SUPER+W (default, no action)
+# close_window: 1=SUPER+Q (rebind), 2=SUPER+W (restore default)
 RESET_KEYBINDS=false
-if [ "${TOGGLE_SELECTIONS[close_window]:-0}" -eq 1 ]; then
-    RESET_KEYBINDS=true
-fi
+RESTORE_KEYBINDS=false
+case "${TOGGLE_SELECTIONS[close_window]:-0}" in
+    1) RESET_KEYBINDS=true ;;
+    2) RESTORE_KEYBINDS=true ;;
+esac
 
 # shutdown: 1=Bind, 2=Unbind
 BIND_SHUTDOWN=false
@@ -2632,6 +2689,11 @@ fi
 # Handle keybind reset (runs its own confirmation flow)
 if [ "$RESET_KEYBINDS" = true ]; then
     rebind_close_window
+fi
+
+# Handle keybind restore (runs its own confirmation flow)
+if [ "$RESTORE_KEYBINDS" = true ]; then
+    restore_close_window
 fi
 
 # Handle backup (runs its own confirmation flow)
