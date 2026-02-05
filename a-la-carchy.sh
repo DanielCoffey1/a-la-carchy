@@ -559,6 +559,103 @@ unbind_restart() {
     echo
 }
 
+bind_theme_menu() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Bind Theme Menu to ALT+T${RESET}"
+    echo
+    echo -e "  ${DIM}Adds a keybinding to open the theme menu with ALT+T.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Bind theme menu -- failed (config not found)")
+        return 1
+    fi
+
+    if grep -q "ALT, T, Theme menu" "$BINDINGS_CONF"; then
+        echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Bind theme menu -- already set")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Bind theme menu -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    echo "" >> "$BINDINGS_CONF"
+    echo "bindd = ALT, T, Theme menu, exec, omarchy-launch-walker -m menus:omarchythemes --width 800 --minheight 400" >> "$BINDINGS_CONF"
+
+    echo -e "  ${DIM}✓${RESET}  Bound ALT+T to theme menu"
+    SUMMARY_LOG+=("✓  Bound theme menu to ALT+T")
+    echo
+}
+
+unbind_theme_menu() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Unbind Theme Menu (ALT+T)${RESET}"
+    echo
+    echo -e "  ${DIM}Removes the theme menu keybinding from bindings.conf.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Unbind theme menu -- failed (config not found)")
+        return 1
+    fi
+
+    if ! grep -q "ALT, T, Theme menu" "$BINDINGS_CONF"; then
+        echo -e "  ${DIM}Not bound. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Unbind theme menu -- not bound")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Unbind theme menu -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    sed -i '/ALT, T, Theme menu/d' "$BINDINGS_CONF"
+
+    echo -e "  ${DIM}✓${RESET}  Unbound ALT+T (theme menu)"
+    SUMMARY_LOG+=("✓  Unbound theme menu (ALT+T)")
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -637,6 +734,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__unbind_restart__")
 INSTALLED_NAMES+=("Unbind restart (SUPER+ALT+R)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__bind_theme_menu__")
+INSTALLED_NAMES+=("Bind theme menu to ALT+T")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__unbind_theme_menu__")
+INSTALLED_NAMES+=("Unbind theme menu (ALT+T)")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -997,6 +1102,8 @@ BIND_SHUTDOWN=false
 BIND_RESTART=false
 UNBIND_SHUTDOWN=false
 UNBIND_RESTART=false
+BIND_THEME_MENU=false
+UNBIND_THEME_MENU=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1020,6 +1127,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     UNBIND_SHUTDOWN=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__unbind_restart__" ]]; then
                     UNBIND_RESTART=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__bind_theme_menu__" ]]; then
+                    BIND_THEME_MENU=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__unbind_theme_menu__" ]]; then
+                    UNBIND_THEME_MENU=true
                 fi
                 ;;
         esac
@@ -1027,7 +1138,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -1068,6 +1179,14 @@ fi
 
 if [ "$UNBIND_RESTART" = true ]; then
     unbind_restart
+fi
+
+if [ "$BIND_THEME_MENU" = true ]; then
+    bind_theme_menu
+fi
+
+if [ "$UNBIND_THEME_MENU" = true ]; then
+    unbind_theme_menu
 fi
 
 # If only action items were selected, show summary and exit
