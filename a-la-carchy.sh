@@ -996,6 +996,102 @@ disable_suspend() {
     echo
 }
 
+enable_hibernation() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Enable Hibernation${RESET}"
+    echo
+    echo -e "  ${DIM}Creates a swap subvolume on your boot drive sized to match your RAM.${RESET}"
+    echo -e "  ${DIM}Adds Hibernate option to system menu and enables suspend-to-hibernate.${RESET}"
+    echo
+    echo -e "  ${DIM}Note: Requires free space equal to your RAM (e.g., 32GB RAM = 32GB space).${RESET}"
+    echo
+    echo
+
+    # Check if already enabled
+    if omarchy-hibernation-available 2>/dev/null; then
+        echo -e "  ${DIM}Hibernation already enabled. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable hibernation -- already enabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Enable hibernation -- cancelled")
+        return 0
+    fi
+
+    echo
+    echo -e "  ${DIM}Running omarchy-hibernation-setup...${RESET}"
+    echo
+
+    # Run the setup script (it has its own confirmation via gum)
+    if omarchy-hibernation-setup; then
+        echo
+        echo -e "  ${CHECKED}✓${RESET}  Hibernation enabled"
+        SUMMARY_LOG+=("✓  Enabled hibernation")
+    else
+        echo
+        echo -e "  ${DIM}Hibernation setup was cancelled or failed.${RESET}"
+        SUMMARY_LOG+=("--  Enable hibernation -- cancelled or failed")
+    fi
+    echo
+}
+
+disable_hibernation() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable Hibernation${RESET}"
+    echo
+    echo -e "  ${DIM}Removes the swap subvolume and hibernation configuration.${RESET}"
+    echo -e "  ${DIM}Frees up disk space equal to your RAM size.${RESET}"
+    echo
+    echo
+
+    # Check if hibernation is enabled
+    if ! omarchy-hibernation-available 2>/dev/null; then
+        echo -e "  ${DIM}Hibernation not enabled. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Disable hibernation -- not enabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Disable hibernation -- cancelled")
+        return 0
+    fi
+
+    echo
+    echo -e "  ${DIM}Running omarchy-hibernation-remove...${RESET}"
+    echo
+
+    # Run the remove script (it has its own confirmation via gum)
+    if omarchy-hibernation-remove; then
+        echo
+        echo -e "  ${CHECKED}✓${RESET}  Hibernation disabled"
+        SUMMARY_LOG+=("✓  Disabled hibernation")
+    else
+        echo
+        echo -e "  ${DIM}Hibernation removal was cancelled or failed.${RESET}"
+        SUMMARY_LOG+=("--  Disable hibernation -- cancelled or failed")
+    fi
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1106,6 +1202,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__disable_suspend__")
 INSTALLED_NAMES+=("Disable suspend in system menu")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__enable_hibernation__")
+INSTALLED_NAMES+=("Enable hibernation (uses RAM-sized disk space)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__disable_hibernation__")
+INSTALLED_NAMES+=("Disable hibernation (frees disk space)")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -1474,6 +1578,8 @@ SWAP_ALT_SUPER=false
 RESTORE_ALT_SUPER=false
 ENABLE_SUSPEND=false
 DISABLE_SUSPEND=false
+ENABLE_HIBERNATION=false
+DISABLE_HIBERNATION=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1513,6 +1619,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     ENABLE_SUSPEND=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_suspend__" ]]; then
                     DISABLE_SUSPEND=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_hibernation__" ]]; then
+                    ENABLE_HIBERNATION=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_hibernation__" ]]; then
+                    DISABLE_HIBERNATION=true
                 fi
                 ;;
         esac
@@ -1520,7 +1630,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -1593,6 +1703,14 @@ fi
 
 if [ "$DISABLE_SUSPEND" = true ]; then
     disable_suspend
+fi
+
+if [ "$ENABLE_HIBERNATION" = true ]; then
+    enable_hibernation
+fi
+
+if [ "$DISABLE_HIBERNATION" = true ]; then
+    disable_hibernation
 fi
 
 # If only action items were selected, show summary and exit
