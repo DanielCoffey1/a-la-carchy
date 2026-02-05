@@ -1092,6 +1092,102 @@ disable_hibernation() {
     echo
 }
 
+enable_fingerprint() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Enable Fingerprint Authentication${RESET}"
+    echo
+    echo -e "  ${DIM}Sets up fingerprint scanner for authentication.${RESET}"
+    echo -e "  ${DIM}Works for: sudo, polkit prompts, and lock screen.${RESET}"
+    echo
+    echo -e "  ${DIM}Note: Requires a fingerprint sensor and you'll need to enroll your finger.${RESET}"
+    echo
+    echo
+
+    # Check if already enabled (fprintd installed)
+    if pacman -Qi fprintd &>/dev/null; then
+        echo -e "  ${DIM}Fingerprint authentication already set up.${RESET}"
+        echo -e "  ${DIM}To re-enroll, disable first then enable again.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable fingerprint -- already enabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Enable fingerprint -- cancelled")
+        return 0
+    fi
+
+    echo
+    echo -e "  ${DIM}Running omarchy-setup-fingerprint...${RESET}"
+    echo
+
+    # Run the setup script
+    if omarchy-setup-fingerprint; then
+        echo
+        echo -e "  ${CHECKED}✓${RESET}  Fingerprint authentication enabled"
+        SUMMARY_LOG+=("✓  Enabled fingerprint authentication")
+    else
+        echo
+        echo -e "  ${DIM}Fingerprint setup failed or was cancelled.${RESET}"
+        SUMMARY_LOG+=("--  Enable fingerprint -- failed or cancelled")
+    fi
+    echo
+}
+
+disable_fingerprint() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable Fingerprint Authentication${RESET}"
+    echo
+    echo -e "  ${DIM}Removes fingerprint authentication and uninstalls packages.${RESET}"
+    echo
+    echo
+
+    # Check if fingerprint is enabled
+    if ! pacman -Qi fprintd &>/dev/null; then
+        echo -e "  ${DIM}Fingerprint authentication not set up. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Disable fingerprint -- not enabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Disable fingerprint -- cancelled")
+        return 0
+    fi
+
+    echo
+    echo -e "  ${DIM}Running omarchy-setup-fingerprint --remove...${RESET}"
+    echo
+
+    # Run the remove script
+    if omarchy-setup-fingerprint --remove; then
+        echo
+        echo -e "  ${CHECKED}✓${RESET}  Fingerprint authentication disabled"
+        SUMMARY_LOG+=("✓  Disabled fingerprint authentication")
+    else
+        echo
+        echo -e "  ${DIM}Fingerprint removal failed.${RESET}"
+        SUMMARY_LOG+=("--  Disable fingerprint -- failed")
+    fi
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1210,6 +1306,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__disable_hibernation__")
 INSTALLED_NAMES+=("Disable hibernation (frees disk space)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__enable_fingerprint__")
+INSTALLED_NAMES+=("Enable fingerprint authentication")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__disable_fingerprint__")
+INSTALLED_NAMES+=("Disable fingerprint authentication")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -1580,6 +1684,8 @@ ENABLE_SUSPEND=false
 DISABLE_SUSPEND=false
 ENABLE_HIBERNATION=false
 DISABLE_HIBERNATION=false
+ENABLE_FINGERPRINT=false
+DISABLE_FINGERPRINT=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1623,6 +1729,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     ENABLE_HIBERNATION=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_hibernation__" ]]; then
                     DISABLE_HIBERNATION=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_fingerprint__" ]]; then
+                    ENABLE_FINGERPRINT=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_fingerprint__" ]]; then
+                    DISABLE_FINGERPRINT=true
                 fi
                 ;;
         esac
@@ -1630,7 +1740,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -1711,6 +1821,14 @@ fi
 
 if [ "$DISABLE_HIBERNATION" = true ]; then
     disable_hibernation
+fi
+
+if [ "$ENABLE_FINGERPRINT" = true ]; then
+    enable_fingerprint
+fi
+
+if [ "$DISABLE_FINGERPRINT" = true ]; then
+    disable_fingerprint
 fi
 
 # If only action items were selected, show summary and exit
