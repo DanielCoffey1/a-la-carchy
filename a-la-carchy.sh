@@ -76,6 +76,9 @@ SUSPEND_STATE="$HOME/.local/state/omarchy/toggles/suspend-on"
 # Waybar config path
 WAYBAR_CONF="$HOME/.config/waybar/config.jsonc"
 
+# Hyprland looknfeel config path
+LOOKNFEEL_CONF="$HOME/.config/hypr/looknfeel.conf"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -1410,6 +1413,120 @@ hide_tray_icons() {
     echo
 }
 
+enable_rounded_corners() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Enable Rounded Window Corners${RESET}"
+    echo
+    echo -e "  ${DIM}Adds rounded corners to all windows (rounding = 8).${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$LOOKNFEEL_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  looknfeel.conf not found at $LOOKNFEEL_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Enable rounded corners -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already enabled (uncommented rounding line)
+    if grep -q "^[[:space:]]*rounding = " "$LOOKNFEEL_CONF"; then
+        echo -e "  ${DIM}Rounded corners already enabled. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable rounded corners -- already enabled")
+        return 0
+    fi
+
+    # Check if commented rounding line exists
+    if ! grep -q "^[[:space:]]*#[[:space:]]*rounding = " "$LOOKNFEEL_CONF"; then
+        echo -e "  ${DIM}rounding setting not found in config. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable rounded corners -- setting not found")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Enable rounded corners -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${LOOKNFEEL_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$LOOKNFEEL_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Uncomment the rounding line
+    sed -i 's/^[[:space:]]*#[[:space:]]*\(rounding = .*\)/    \1/' "$LOOKNFEEL_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Rounded window corners enabled"
+    SUMMARY_LOG+=("✓  Enabled rounded window corners")
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
+disable_rounded_corners() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable Rounded Window Corners${RESET}"
+    echo
+    echo -e "  ${DIM}Returns to sharp/square window corners (Omarchy default).${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$LOOKNFEEL_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  looknfeel.conf not found at $LOOKNFEEL_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Disable rounded corners -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if rounding is enabled (uncommented)
+    if ! grep -q "^[[:space:]]*rounding = " "$LOOKNFEEL_CONF"; then
+        echo -e "  ${DIM}Rounded corners already disabled. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Disable rounded corners -- already disabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Disable rounded corners -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${LOOKNFEEL_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$LOOKNFEEL_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Comment out the rounding line
+    sed -i 's/^[[:space:]]*\(rounding = .*\)/    # \1/' "$LOOKNFEEL_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Rounded window corners disabled"
+    SUMMARY_LOG+=("✓  Disabled rounded window corners")
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1552,6 +1669,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__hide_tray_icons__")
 INSTALLED_NAMES+=("Hide tray icons (use expander)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__enable_rounded_corners__")
+INSTALLED_NAMES+=("Enable rounded window corners")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__disable_rounded_corners__")
+INSTALLED_NAMES+=("Disable rounded window corners")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -1928,6 +2053,8 @@ ENABLE_FIDO2=false
 DISABLE_FIDO2=false
 SHOW_ALL_TRAY_ICONS=false
 HIDE_TRAY_ICONS=false
+ENABLE_ROUNDED_CORNERS=false
+DISABLE_ROUNDED_CORNERS=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1983,6 +2110,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     SHOW_ALL_TRAY_ICONS=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__hide_tray_icons__" ]]; then
                     HIDE_TRAY_ICONS=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_rounded_corners__" ]]; then
+                    ENABLE_ROUNDED_CORNERS=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_rounded_corners__" ]]; then
+                    DISABLE_ROUNDED_CORNERS=true
                 fi
                 ;;
         esac
@@ -1990,7 +2121,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ] && [ "$ENABLE_ROUNDED_CORNERS" = false ] && [ "$DISABLE_ROUNDED_CORNERS" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -2095,6 +2226,14 @@ fi
 
 if [ "$HIDE_TRAY_ICONS" = true ]; then
     hide_tray_icons
+fi
+
+if [ "$ENABLE_ROUNDED_CORNERS" = true ]; then
+    enable_rounded_corners
+fi
+
+if [ "$DISABLE_ROUNDED_CORNERS" = true ]; then
+    disable_rounded_corners
 fi
 
 # If only action items were selected, show summary and exit
