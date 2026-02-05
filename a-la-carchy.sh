@@ -1899,485 +1899,457 @@ disable_media_directories() {
     echo
 }
 
-# Build list of installed packages and webapps
-declare -a INSTALLED_ITEMS=()
-declare -a INSTALLED_NAMES=()
-declare -a INSTALLED_TYPES=()  # "package" or "webapp"
+# =============================================================================
+# TWO-PANEL TUI DATA STRUCTURES
+# =============================================================================
 
-# Check for installed packages
-declare -a pkg_items=()
+# Categories for left panel (lines starting with "---" are section headers)
+declare -a CATEGORIES=(
+    "--- Uninstall ---"
+    "  Apps"
+    "  Web Apps"
+    "--- Tweaks ---"
+    "  Keybindings"
+    "  Display"
+    "  System"
+    "  Appearance"
+    "  Keyboard"
+    "  Utilities"
+)
+
+# Check if a category index is a section header
+is_section_header() {
+    [[ "${CATEGORIES[$1]}" == ---* ]]
+}
+
+# Build installed packages list
+declare -a INSTALLED_PACKAGES=()
 for pkg in "${DEFAULT_APPS[@]}"; do
     if is_package_installed "$pkg"; then
-        pkg_items+=("$pkg")
+        INSTALLED_PACKAGES+=("$pkg")
     fi
 done
 
-if [ ${#pkg_items[@]} -gt 0 ]; then
-    INSTALLED_ITEMS+=("__header_apps__")
-    INSTALLED_NAMES+=("Apps")
-    INSTALLED_TYPES+=("header")
-    for pkg in "${pkg_items[@]}"; do
-        INSTALLED_ITEMS+=("$pkg")
-        INSTALLED_NAMES+=("$pkg")
-        INSTALLED_TYPES+=("package")
-    done
-fi
-
-# Check for installed webapps
-declare -a webapp_items=()
+# Build installed webapps list
+declare -a INSTALLED_WEBAPPS=()
 for webapp in "${DEFAULT_WEBAPPS[@]}"; do
     if is_webapp_installed "$webapp"; then
-        webapp_items+=("$webapp")
+        INSTALLED_WEBAPPS+=("$webapp")
     fi
 done
 
-if [ ${#webapp_items[@]} -gt 0 ]; then
-    INSTALLED_ITEMS+=("__header_webapps__")
-    INSTALLED_NAMES+=("Web Apps")
-    INSTALLED_TYPES+=("header")
-    for webapp in "${webapp_items[@]}"; do
-        INSTALLED_ITEMS+=("$webapp")
-        INSTALLED_NAMES+=("$webapp")
-        INSTALLED_TYPES+=("webapp")
-    done
-fi
+# Toggle pairs: each entry is "item_id|display_name|option1|option2|type"
+# type: "toggle" for enable/disable pairs, "radio" for mutually exclusive options
+# Format: "id|name|opt1|opt2|type|description"
+declare -a KEYBINDINGS_ITEMS=(
+    "close_window|Close window|SUPER+Q|SUPER+W|radio|Choose which key combo closes the active window"
+    "shutdown|Shutdown|Bind|Unbind|toggle|Bind SUPER+ALT+S to shutdown the system"
+    "restart|Restart|Bind|Unbind|toggle|Bind SUPER+ALT+R to restart the system"
+    "theme_menu|Theme menu|Bind|Unbind|toggle|Bind ALT+T to open the theme selector"
+)
 
-# Add tweaks section
-INSTALLED_ITEMS+=("__header_tweaks__")
-INSTALLED_NAMES+=("Tweaks")
-INSTALLED_TYPES+=("header")
+declare -a DISPLAY_ITEMS=(
+    "monitor_scale|Monitor scale|4K|1080p/1440p|radio|Set monitor scaling for your resolution"
+)
 
-INSTALLED_ITEMS+=("__reset_keybinds__")
-INSTALLED_NAMES+=("Rebind close window to SUPER+Q")
-INSTALLED_TYPES+=("action")
+declare -a SYSTEM_ITEMS=(
+    "suspend|Suspend|Enable|Disable|toggle|Allow system to suspend/sleep when idle"
+    "hibernation|Hibernation|Enable|Disable|toggle|Allow system to hibernate to disk"
+    "fingerprint|Fingerprint|Enable|Disable|toggle|Enable fingerprint authentication for login"
+    "fido2|FIDO2|Enable|Disable|toggle|Enable FIDO2 security key authentication"
+)
 
-INSTALLED_ITEMS+=("__backup_configs__")
-INSTALLED_NAMES+=("Backup config (creates restore script)")
-INSTALLED_TYPES+=("action")
+declare -a APPEARANCE_ITEMS=(
+    "rounded_corners|Rounded corners|Enable|Disable|toggle|Enable or disable rounded window corners"
+    "window_gaps|Window gaps|Remove|Restore|toggle|Remove or restore gaps between tiled windows"
+    "tray_icons|Tray icons|Show all|Hide|toggle|Show all system tray icons or hide extras"
+    "clock_format|Clock format|12h|24h|radio|Set waybar clock to 12-hour or 24-hour format"
+    "media_dirs|Media dirs|Enable|Disable|toggle|Organize screenshots and recordings into subdirs"
+)
 
-INSTALLED_ITEMS+=("__monitor_4k__")
-INSTALLED_NAMES+=("Set monitor scaling: 4K")
-INSTALLED_TYPES+=("action")
+declare -a KEYBOARD_ITEMS=(
+    "caps_lock|Caps Lock|Normal|Compose|radio|Use Caps Lock normally or as Compose key"
+    "alt_super|Alt/Super|Swap|Normal|radio|Swap Alt and Super keys (useful for Mac keyboards)"
+)
 
-INSTALLED_ITEMS+=("__monitor_1080_1440__")
-INSTALLED_NAMES+=("Set monitor scaling: 1080p / 1440p")
-INSTALLED_TYPES+=("action")
+declare -a UTILITIES_ITEMS=(
+    "backup_config|Backup config|[Select]||action|Create a backup of your Omarchy configuration"
+)
 
-INSTALLED_ITEMS+=("__bind_shutdown__")
-INSTALLED_NAMES+=("Bind shutdown to SUPER+ALT+S")
-INSTALLED_TYPES+=("action")
+# Descriptions for packages (shown when highlighted)
+declare -A PKG_DESCRIPTIONS=(
+    ["1password-beta"]="Password manager (beta version)"
+    ["1password-cli"]="1Password command-line tool"
+    ["docker"]="Container runtime for running isolated apps"
+    ["docker-buildx"]="Docker CLI plugin for extended builds"
+    ["docker-compose"]="Multi-container Docker orchestration"
+    ["gnome-calculator"]="GNOME desktop calculator app"
+    ["kdenlive"]="Professional video editing software"
+    ["libreoffice-fresh"]="Full office suite (docs, sheets, slides)"
+    ["localsend"]="Share files to nearby devices over WiFi"
+    ["obs-studio"]="Screen recording and streaming software"
+    ["obsidian"]="Markdown-based note-taking app"
+    ["omarchy-chromium"]="Chromium web browser"
+    ["pinta"]="Simple image editing program"
+    ["signal-desktop"]="Encrypted messaging app"
+    ["spotify"]="Music streaming service"
+    ["typora"]="Markdown editor"
+    ["xournalpp"]="Handwriting and PDF annotation app"
+)
 
-INSTALLED_ITEMS+=("__bind_restart__")
-INSTALLED_NAMES+=("Bind restart to SUPER+ALT+R")
-INSTALLED_TYPES+=("action")
+# Descriptions for webapps
+declare -A WEBAPP_DESCRIPTIONS=(
+    ["basecamp"]="Project management and team communication"
+    ["chatgpt"]="OpenAI's AI chat assistant"
+    ["discord"]="Voice, video and text communication"
+    ["figma"]="Collaborative design tool"
+    ["fizzy"]="Sparkling water tracking app"
+    ["github"]="Code hosting and collaboration platform"
+    ["google-contacts"]="Google contacts manager"
+    ["google-maps"]="Google maps and navigation"
+    ["google-messages"]="Google SMS/RCS messaging"
+    ["google-photos"]="Google photo storage and sharing"
+    ["hey"]="Email service by Basecamp"
+    ["whatsapp"]="Encrypted messaging app"
+    ["x"]="Social media platform (formerly Twitter)"
+    ["youtube"]="Video streaming platform"
+    ["zoom"]="Video conferencing software"
+)
 
-INSTALLED_ITEMS+=("__unbind_shutdown__")
-INSTALLED_NAMES+=("Unbind shutdown (SUPER+ALT+S)")
-INSTALLED_TYPES+=("action")
+# Selection state for toggle items: 0=none, 1=option1, 2=option2
+declare -A TOGGLE_SELECTIONS=()
 
-INSTALLED_ITEMS+=("__unbind_restart__")
-INSTALLED_NAMES+=("Unbind restart (SUPER+ALT+R)")
-INSTALLED_TYPES+=("action")
+# Selection state for packages/webapps (by name)
+declare -A PKG_SELECTIONS=()
+declare -A WEBAPP_SELECTIONS=()
 
-INSTALLED_ITEMS+=("__bind_theme_menu__")
-INSTALLED_NAMES+=("Bind theme menu to ALT+T")
-INSTALLED_TYPES+=("action")
+# Navigation state
+CURRENT_PANEL=0          # 0=left (categories), 1=right (items)
+CATEGORY_CURSOR=1        # Current category in left panel (start at first non-header)
+ITEM_CURSOR=0            # Current item in right panel
+ITEM_SCROLL_OFFSET=0     # Scroll offset for right panel
 
-INSTALLED_ITEMS+=("__unbind_theme_menu__")
-INSTALLED_NAMES+=("Unbind theme menu (ALT+T)")
-INSTALLED_TYPES+=("action")
+# =============================================================================
+# HELPER FUNCTIONS FOR TWO-PANEL UI
+# =============================================================================
 
-INSTALLED_ITEMS+=("__restore_capslock__")
-INSTALLED_NAMES+=("Restore Caps Lock (move compose to Right Alt)")
-INSTALLED_TYPES+=("action")
+# Get items array for a category
+get_category_items() {
+    local cat_idx=$1
+    # Section headers (0, 3) have no items
+    case $cat_idx in
+        1) echo "PACKAGES" ;;
+        2) echo "WEBAPPS" ;;
+        4) echo "KEYBINDINGS" ;;
+        5) echo "DISPLAY" ;;
+        6) echo "SYSTEM" ;;
+        7) echo "APPEARANCE" ;;
+        8) echo "KEYBOARD" ;;
+        9) echo "UTILITIES" ;;
+    esac
+}
 
-INSTALLED_ITEMS+=("__use_capslock_compose__")
-INSTALLED_NAMES+=("Use Caps Lock for compose (Omarchy default)")
-INSTALLED_TYPES+=("action")
+# Get item count for current category
+get_current_item_count() {
+    # Section headers (0, 3) return 0
+    case $CATEGORY_CURSOR in
+        0|3) echo 0 ;;
+        1) echo ${#INSTALLED_PACKAGES[@]} ;;
+        2) echo ${#INSTALLED_WEBAPPS[@]} ;;
+        4) echo ${#KEYBINDINGS_ITEMS[@]} ;;
+        5) echo ${#DISPLAY_ITEMS[@]} ;;
+        6) echo ${#SYSTEM_ITEMS[@]} ;;
+        7) echo ${#APPEARANCE_ITEMS[@]} ;;
+        8) echo ${#KEYBOARD_ITEMS[@]} ;;
+        9) echo ${#UTILITIES_ITEMS[@]} ;;
+    esac
+}
 
-INSTALLED_ITEMS+=("__swap_alt_super__")
-INSTALLED_NAMES+=("Swap Alt and Super keys (macOS-like)")
-INSTALLED_TYPES+=("action")
+# Parse toggle item: returns id, name, opt1, opt2, type via global vars
+parse_toggle_item() {
+    local item="$1"
+    IFS='|' read -r TOGGLE_ID TOGGLE_NAME TOGGLE_OPT1 TOGGLE_OPT2 TOGGLE_TYPE TOGGLE_DESC <<< "$item"
+}
 
-INSTALLED_ITEMS+=("__restore_alt_super__")
-INSTALLED_NAMES+=("Restore Alt and Super keys (Omarchy default)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__enable_suspend__")
-INSTALLED_NAMES+=("Enable suspend in system menu")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__disable_suspend__")
-INSTALLED_NAMES+=("Disable suspend in system menu")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__enable_hibernation__")
-INSTALLED_NAMES+=("Enable hibernation (uses RAM-sized disk space)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__disable_hibernation__")
-INSTALLED_NAMES+=("Disable hibernation (frees disk space)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__enable_fingerprint__")
-INSTALLED_NAMES+=("Enable fingerprint authentication")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__disable_fingerprint__")
-INSTALLED_NAMES+=("Disable fingerprint authentication")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__enable_fido2__")
-INSTALLED_NAMES+=("Enable FIDO2 authentication (sudo only)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__disable_fido2__")
-INSTALLED_NAMES+=("Disable FIDO2 authentication")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__show_all_tray_icons__")
-INSTALLED_NAMES+=("Show all tray icons (always visible)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__hide_tray_icons__")
-INSTALLED_NAMES+=("Hide tray icons (use expander)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__enable_rounded_corners__")
-INSTALLED_NAMES+=("Enable rounded window corners")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__disable_rounded_corners__")
-INSTALLED_NAMES+=("Disable rounded window corners")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__remove_window_gaps__")
-INSTALLED_NAMES+=("Remove window gaps (maximize space)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__restore_window_gaps__")
-INSTALLED_NAMES+=("Restore window gaps (Omarchy default)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__enable_12h_clock__")
-INSTALLED_NAMES+=("Enable 12-hour clock (AM/PM)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__disable_12h_clock__")
-INSTALLED_NAMES+=("Disable 12-hour clock (24-hour)")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__enable_media_directories__")
-INSTALLED_NAMES+=("Enable screenshot/recording directories")
-INSTALLED_TYPES+=("action")
-
-INSTALLED_ITEMS+=("__disable_media_directories__")
-INSTALLED_NAMES+=("Disable screenshot/recording directories")
-INSTALLED_TYPES+=("action")
-
-# Selection state
-declare -a SELECTED=()
-for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
-    SELECTED[$i]=0
-done
-
-# Start cursor on first selectable item (skip leading header)
-CURSOR=0
-for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
-    if [[ "${INSTALLED_TYPES[$i]}" != "header" ]]; then
-        CURSOR=$i
-        break
+# Get description for currently highlighted item
+get_current_description() {
+    local item_count=$(get_current_item_count)
+    if [ $item_count -eq 0 ] || [ $ITEM_CURSOR -ge $item_count ]; then
+        echo ""
+        return
     fi
-done
-SCROLL_OFFSET=0
+
+    case $CATEGORY_CURSOR in
+        1)  # Packages
+            local pkg="${INSTALLED_PACKAGES[$ITEM_CURSOR]}"
+            echo "${PKG_DESCRIPTIONS[$pkg]:-}"
+            ;;
+        2)  # Webapps
+            local webapp="${INSTALLED_WEBAPPS[$ITEM_CURSOR]}"
+            echo "${WEBAPP_DESCRIPTIONS[$webapp]:-}"
+            ;;
+        4|5|6|7|8)  # Toggle items
+            local arr
+            case $CATEGORY_CURSOR in
+                4) arr="KEYBINDINGS_ITEMS" ;; 5) arr="DISPLAY_ITEMS" ;;
+                6) arr="SYSTEM_ITEMS" ;; 7) arr="APPEARANCE_ITEMS" ;; 8) arr="KEYBOARD_ITEMS" ;;
+            esac
+            local -n ref="$arr"
+            parse_toggle_item "${ref[$ITEM_CURSOR]}"
+            echo "$TOGGLE_DESC"
+            ;;
+        9)  # Utilities
+            parse_toggle_item "${UTILITIES_ITEMS[$ITEM_CURSOR]}"
+            echo "$TOGGLE_DESC"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
 
 # Helper function to center text (truncates to fit terminal width)
 center_text() {
     local text="$1"
-    local term_width=$(tput cols)
+    local width="${2:-$(tput cols)}"
     local text_length=${#text}
-    # Truncate if text is wider than terminal
-    if [ $text_length -gt $term_width ]; then
-        text="${text:0:$term_width}"
-        text_length=$term_width
+    if [ $text_length -gt $width ]; then
+        text="${text:0:$width}"
+        text_length=$width
     fi
-    local padding=$(( (term_width - text_length) / 2 ))
+    local padding=$(( (width - text_length) / 2 ))
     if [ $padding -lt 0 ]; then
         padding=0
     fi
-    printf "%*s%s\n" $padding "" "$text"
+    printf "%*s%s" $padding "" "$text"
 }
 
-# Function to draw the interface
-draw_interface() {
-    local term_height=$(tput lines)
-    local term_width=$(tput cols)
+# Draw a horizontal line with box characters
+draw_hline() {
+    local width=$1
+    local left="$2"
+    local right="$3"
+    local mid="${4:-}"
+    local mid_pos="${5:-0}"
 
-    # Determine layout mode based on terminal size
-    local show_ascii=0
-    local show_subtitle=0
-    local compact=0
-    if [ $term_width -ge 50 ] && [ $term_height -ge 20 ]; then
-        show_ascii=1
-    fi
-    if [ $term_height -ge 16 ]; then
-        show_subtitle=1
-    fi
-    if [ $term_height -lt 14 ]; then
-        compact=1
-    fi
-
-    # Calculate header lines used
-    local header_lines=2  # top blank + status line
-    if [ $show_ascii -eq 1 ]; then
-        header_lines=$((header_lines + 4))  # 2 art lines + blank + subtitle area
-    else
-        header_lines=$((header_lines + 2))  # bold title + blank
-    fi
-    if [ $show_subtitle -eq 1 ]; then
-        header_lines=$((header_lines + 2))  # subtitle + blank
-    fi
-    if [ $compact -eq 0 ]; then
-        header_lines=$((header_lines + 1))  # blank after status
-    fi
-    # footer takes 3 lines
-    local footer_lines=3
-
-    # Count section headers for extra line budget (each header adds a blank line)
-    local header_count=0
-    for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
-        if [[ "${INSTALLED_TYPES[$i]}" == "header" ]]; then
-            ((header_count++))
-        fi
-    done
-
-    # Calculate max visible items
-    local MAX_VISIBLE=$((term_height - header_lines - footer_lines - header_count))
-    if [ $MAX_VISIBLE -lt 3 ]; then
-        MAX_VISIBLE=3
-    fi
-
-    # Clamp cursor and scroll offset to valid range
-    local total=${#INSTALLED_ITEMS[@]}
-    if [ $CURSOR -ge $total ]; then
-        CURSOR=$((total - 1))
-    fi
-    if [ $SCROLL_OFFSET -gt $((total - MAX_VISIBLE)) ]; then
-        SCROLL_OFFSET=$((total - MAX_VISIBLE))
-    fi
-    if [ $SCROLL_OFFSET -lt 0 ]; then
-        SCROLL_OFFSET=0
-    fi
-    if [ $CURSOR -lt $SCROLL_OFFSET ]; then
-        SCROLL_OFFSET=$CURSOR
-    fi
-    if [ $CURSOR -ge $((SCROLL_OFFSET + MAX_VISIBLE)) ]; then
-        SCROLL_OFFSET=$((CURSOR - MAX_VISIBLE + 1))
-    fi
-
-    # Calculate visible range
-    local visible_start=$SCROLL_OFFSET
-    local visible_end=$((SCROLL_OFFSET + MAX_VISIBLE))
-    if [ $visible_end -gt $total ]; then
-        visible_end=$total
-    fi
-
-    # Clear and redraw everything (simpler, no glitches)
-    clear
-    # Re-read terminal size after clear for most accurate dimensions
-    term_width=$(tput cols)
-    term_height=$(tput lines)
-
-    # Title - centered
-    echo
-    if [ $term_width -ge 44 ] && [ $show_ascii -eq 1 ]; then
-        local title1=" ▄▀█   █   ▄▀█   █▀▀ ▄▀█ █▀█ █▀▀ █ █ █▄█"
-        local title2=" █▀█   █▄▄ █▀█   █▄▄ █▀█ █▀▄ █▄▄ █▀█  █ "
-        echo -en "${BOLD}"
-        center_text "$title1"
-        center_text "$title2"
-        echo -en "${RESET}"
-    else
-        echo -en "${BOLD}"
-        center_text "A La Carchy"
-        echo -en "${RESET}"
-    fi
-    if [ $show_subtitle -eq 1 ]; then
-        echo
-        echo -en "${DIM}"
-        center_text "Omarchy Linux Debloater"
-        echo -en "${RESET}"
-    fi
-    echo
-    if [ $compact -eq 0 ]; then
-        echo
-    fi
-
-    # Calculate selection count
-    local selected_count=0
-    for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
-        if [ ${SELECTED[$i]} -eq 1 ]; then
-            ((selected_count++))
-        fi
-    done
-
-    # Show count if any selected - centered
-    if [ $selected_count -gt 0 ]; then
-        echo -en "${CHECKED}"
-        center_text "${selected_count} applications selected"
-        echo -en "${RESET}"
-    else
-        echo -en "${DIM}"
-        center_text "Select applications to remove"
-        echo -en "${RESET}"
-    fi
-    if [ $compact -eq 0 ]; then
-        echo
-    fi
-
-    # Draw package list - centered
-    # Find longest package name for proper centering
-    local max_name_len=0
-    for name in "${INSTALLED_NAMES[@]}"; do
-        local len=${#name}
-        if [ $len -gt $max_name_len ]; then
-            max_name_len=$len
-        fi
-    done
-
-    # Add space for checkbox
-    local item_width=$((max_name_len + 6))
-    # Cap item_width to terminal width minus margins
-    local max_item_width=$((term_width - 4))
-    if [ $item_width -gt $max_item_width ]; then
-        item_width=$max_item_width
-    fi
-    local left_margin=$(( (term_width - item_width) / 2 ))
-    if [ $left_margin -lt 0 ]; then
-        left_margin=0
-    fi
-
-    # Max display length for item names (item_width minus checkbox "[ ]  " = 5 chars)
-    local max_display_name=$((item_width - 6))
-
-    for ((i=visible_start; i<visible_end; i++)); do
-        if [[ "${INSTALLED_TYPES[$i]}" == "header" ]]; then
-            # Section header - render as a divider line
-            local header_text="${INSTALLED_NAMES[$i]}"
-            local dash_total=$((item_width - ${#header_text} - 2))
-            if [ $dash_total -lt 2 ]; then
-                dash_total=2
-            fi
-            local dash_left=$((dash_total / 2))
-            local dash_right=$((dash_total - dash_left))
-            local left_dashes=$(printf '%*s' $dash_left '' | tr ' ' '-')
-            local right_dashes=$(printf '%*s' $dash_right '' | tr ' ' '-')
-            # Add blank line before header (except the very first item)
-            if [ $i -gt 0 ]; then
-                echo
-            fi
-            printf "%*s${DIM}${left_dashes} ${BOLD}%s${RESET}${DIM} ${right_dashes}${RESET}\n" $left_margin "" "$header_text"
-            continue
-        fi
-
-        # Truncate name if needed
-        local display_name="${INSTALLED_NAMES[$i]}"
-        if [ ${#display_name} -gt $max_display_name ] && [ $max_display_name -gt 1 ]; then
-            display_name="${display_name:0:$((max_display_name - 1))}…"
-        fi
-
-        local checkbox="[ ]"
-        local check_color=""
-        if [ ${SELECTED[$i]} -eq 1 ]; then
-            checkbox="[•]"
-            check_color="${CHECKED}"
-        fi
-
-        if [ $i -eq $CURSOR ]; then
-            # Highlighted line - centered with full width highlight
-            local item_text="${checkbox}  ${display_name}"
-            local padding_left=$(printf '%*s' $left_margin '')
-            local pad_right=$((term_width - left_margin - item_width))
-            if [ $pad_right -lt 0 ]; then
-                pad_right=0
-            fi
-            local padding_right=$(printf '%*s' $pad_right '')
-            printf "${padding_left}${SELECTED_BG}%-${item_width}s${RESET}${padding_right}\n" "$item_text"
+    printf "%s" "$left"
+    for ((i=1; i<width-1; i++)); do
+        if [ $mid_pos -gt 0 ] && [ $i -eq $mid_pos ]; then
+            printf "%s" "$mid"
         else
-            # Normal line - centered
-            printf "%*s${DIM}${check_color}${checkbox}${RESET}  ${display_name}\n" $left_margin ""
+            printf "─"
+        fi
+    done
+    printf "%s" "$right"
+}
+
+# Function to draw the two-panel interface (fixed 80x24 layout)
+# Layout: │<-25 chars->│<-52 chars->│ = 80 total
+draw_interface() {
+    # Fixed dimensions - must match static borders exactly
+    local LEFT_W=25
+    local RIGHT_W=52
+    local ROWS=11
+
+    # Clamp cursors
+    local cat_count=${#CATEGORIES[@]}
+    (( CATEGORY_CURSOR >= cat_count )) && CATEGORY_CURSOR=$((cat_count - 1))
+    (( CATEGORY_CURSOR < 0 )) && CATEGORY_CURSOR=0
+
+    local item_count=$(get_current_item_count)
+    (( ITEM_CURSOR >= item_count )) && ITEM_CURSOR=$((item_count - 1))
+    (( ITEM_CURSOR < 0 )) && ITEM_CURSOR=0
+
+    # Scroll
+    (( ITEM_CURSOR < ITEM_SCROLL_OFFSET )) && ITEM_SCROLL_OFFSET=$ITEM_CURSOR
+    (( ITEM_CURSOR >= ITEM_SCROLL_OFFSET + ROWS )) && ITEM_SCROLL_OFFSET=$((ITEM_CURSOR - ROWS + 1))
+    (( ITEM_SCROLL_OFFSET < 0 )) && ITEM_SCROLL_OFFSET=0
+
+    clear
+
+    # Header (each line is exactly 80 chars)
+    printf '%s\n' "┌──────────────────────────────────────────────────────────────────────────────┐"
+    printf "│${BOLD}                            A   L A   C A R C H Y                             ${RESET}│\n"
+    printf "│${DIM}                    Omarchy Linux Debloater And Optimizer                     ${RESET}│\n"
+    printf "│${DIM}                               by Daniel Coffey                               ${RESET}│\n"
+    printf '%s\n' "│                                                                              │"
+    printf '%s\n' "├─────────────────────────┬────────────────────────────────────────────────────┤"
+
+    # Get current description for display
+    local cur_desc=$(get_current_description)
+
+    # Content rows
+    for ((row=0; row<ROWS; row++)); do
+        local L="" R=""
+        local Lhl=0 Rhl=0
+
+        # Left panel
+        local Lsection=0
+        if (( row < cat_count )); then
+            local cat_text="${CATEGORIES[$row]}"
+            if [[ "$cat_text" == ---* ]]; then
+                # Section header - will be dimmed at output time
+                L=" ${cat_text}"
+                Lsection=1
+            elif (( row == CATEGORY_CURSOR )); then
+                L=" > ${cat_text}"
+                (( CURRENT_PANEL == 0 )) && Lhl=1
+            else
+                L="   ${cat_text}"
+            fi
+        fi
+
+        # Right panel
+        local idx=$((ITEM_SCROLL_OFFSET + row))
+        if (( idx < item_count )); then
+            (( CURRENT_PANEL == 1 && idx == ITEM_CURSOR )) && Rhl=1
+            case $CATEGORY_CURSOR in
+                1) local p="${INSTALLED_PACKAGES[$idx]}"
+                   [[ "${PKG_SELECTIONS[$p]:-0}" == "1" ]] && R=" [x] $p" || R=" [ ] $p" ;;
+                2) local w="${INSTALLED_WEBAPPS[$idx]}"
+                   [[ "${WEBAPP_SELECTIONS[$w]:-0}" == "1" ]] && R=" [x] $w" || R=" [ ] $w" ;;
+                4|5|6|7|8)
+                    local arr
+                    case $CATEGORY_CURSOR in
+                        4) arr="KEYBINDINGS_ITEMS" ;; 5) arr="DISPLAY_ITEMS" ;;
+                        6) arr="SYSTEM_ITEMS" ;; 7) arr="APPEARANCE_ITEMS" ;; 8) arr="KEYBOARD_ITEMS" ;;
+                    esac
+                    local -n ref="$arr"
+                    parse_toggle_item "${ref[$idx]}"
+                    R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}") ;;
+                9) parse_toggle_item "${UTILITIES_ITEMS[$idx]}"
+                   [[ "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}" == "1" ]] && R=" [x] $TOGGLE_NAME" || R=" [ ] $TOGGLE_NAME" ;;
+            esac
+        fi
+
+        # Format cells to exact width
+        local Lfmt=$(printf "%-${LEFT_W}.${LEFT_W}s" "$L")
+        local Rfmt=$(printf "%-${RIGHT_W}.${RIGHT_W}s" "$R")
+
+        # Output row
+        if (( Lhl )); then
+            printf "│${SELECTED_BG}%s${RESET}│" "$Lfmt"
+        elif (( Lsection )); then
+            printf "│${DIM}%s${RESET}│" "$Lfmt"
+        else
+            printf "│%s│" "$Lfmt"
+        fi
+        if (( Rhl )); then
+            printf "${SELECTED_BG}%s${RESET}│\n" "$Rfmt"
+        else
+            printf "%s│\n" "$Rfmt"
         fi
     done
 
-    # Footer - centered
-    echo
-    local footer_row=$((term_height - 2))
-    tput cup $footer_row 0
-    echo -en "${DIM}"
-    center_text "↑/↓ Navigate  •  Space Select  •  Enter Continue  •  Q Quit"
-    echo -en "${RESET}"
+    # Description row (always visible, spans full width)
+    printf '%s\n' "├─────────────────────────┴────────────────────────────────────────────────────┤"
+    if [[ -n "$cur_desc" ]]; then
+        # Center the description in 78 chars, dimmed
+        local desc_padded=$(printf " %-76s " "${cur_desc:0:76}")
+        printf "│${DIM}%s${RESET}│\n" "$desc_padded"
+    else
+        printf '%s\n' "│                                                                              │"
+    fi
+
+    # Footer (each line exactly 80 chars, ASCII only)
+    printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
+    printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
+    printf '%s\n' "└──────────────────────────────────────────────────────────────────────────────┘"
 }
 
-# Function to handle key input
+# Format a toggle item for display (ASCII only, fixed width)
+format_toggle_item() {
+    local name="$1"
+    local opt1="$2"
+    local opt2="$3"
+    local sel="$4"  # 0=none, 1=opt1, 2=opt2
+
+    if [ -z "$opt2" ]; then
+        # Action item (like backup)
+        if [ "$sel" -eq 1 ]; then
+            printf " [x] %s" "$name"
+        else
+            printf " [ ] %s" "$name"
+        fi
+    else
+        # Toggle item with two options
+        local m1=" " m2=" "
+        [ "$sel" -eq 1 ] && m1="*"
+        [ "$sel" -eq 2 ] && m2="*"
+        printf " %-15s [%s%s] [%s%s]" "$name" "$m1" "$opt1" "$m2" "$opt2"
+    fi
+}
+
+# Function to handle key input for two-panel navigation
 handle_input() {
     local key
-    # Use a timeout loop so SIGWINCH trap can redraw between attempts.
-    # read -t 1 returns 142 on timeout; loop until we get actual input.
     while true; do
         IFS= read -rsn1 -t 1 key < /dev/tty
         local rs=$?
-        # 0 = got input, 1 = EOF/error — process the key
-        # >128 = signal or timeout — loop to let trap redraw
         if [ $rs -le 1 ]; then
             break
         fi
     done
 
-    local term_height=$(tput lines)
-    local MAX_VISIBLE=$((term_height - 10))
-    if [ $MAX_VISIBLE -lt 3 ]; then
-        MAX_VISIBLE=3
-    fi
+    local item_count=$(get_current_item_count)
 
     case "$key" in
         $'\x1b')  # ESC sequence
             read -rsn2 -t 0.1 key
             case "$key" in
                 '[A')  # Up arrow
-                    local new_cursor=$CURSOR
-                    while [ $new_cursor -gt 0 ]; do
-                        ((new_cursor--))
-                        if [[ "${INSTALLED_TYPES[$new_cursor]}" != "header" ]]; then
-                            CURSOR=$new_cursor
-                            if [ $CURSOR -lt $SCROLL_OFFSET ]; then
-                                SCROLL_OFFSET=$CURSOR
-                            fi
-                            break
+                    if [ $CURRENT_PANEL -eq 0 ]; then
+                        # Left panel - navigate categories, skip section headers
+                        local new_cursor=$((CATEGORY_CURSOR - 1))
+                        while [ $new_cursor -ge 0 ] && is_section_header $new_cursor; do
+                            ((new_cursor--))
+                        done
+                        if [ $new_cursor -ge 0 ]; then
+                            CATEGORY_CURSOR=$new_cursor
+                            ITEM_CURSOR=0
+                            ITEM_SCROLL_OFFSET=0
                         fi
-                    done
+                    else
+                        # Right panel - navigate items
+                        if [ $ITEM_CURSOR -gt 0 ]; then
+                            ((ITEM_CURSOR--))
+                        fi
+                    fi
                     ;;
                 '[B')  # Down arrow
-                    local new_cursor=$CURSOR
-                    while [ $new_cursor -lt $((${#INSTALLED_ITEMS[@]} - 1)) ]; do
-                        ((new_cursor++))
-                        if [[ "${INSTALLED_TYPES[$new_cursor]}" != "header" ]]; then
-                            CURSOR=$new_cursor
-                            if [ $CURSOR -ge $((SCROLL_OFFSET + MAX_VISIBLE)) ]; then
-                                ((SCROLL_OFFSET++))
-                            fi
-                            break
+                    if [ $CURRENT_PANEL -eq 0 ]; then
+                        # Left panel - navigate categories, skip section headers
+                        local new_cursor=$((CATEGORY_CURSOR + 1))
+                        while [ $new_cursor -lt ${#CATEGORIES[@]} ] && is_section_header $new_cursor; do
+                            ((new_cursor++))
+                        done
+                        if [ $new_cursor -lt ${#CATEGORIES[@]} ]; then
+                            CATEGORY_CURSOR=$new_cursor
+                            ITEM_CURSOR=0
+                            ITEM_SCROLL_OFFSET=0
                         fi
-                    done
+                    else
+                        # Right panel - navigate items
+                        if [ $ITEM_CURSOR -lt $((item_count - 1)) ]; then
+                            ((ITEM_CURSOR++))
+                        fi
+                    fi
+                    ;;
+                '[C')  # Right arrow - switch to right panel
+                    if [ $CURRENT_PANEL -eq 0 ] && [ $item_count -gt 0 ]; then
+                        CURRENT_PANEL=1
+                    fi
+                    ;;
+                '[D')  # Left arrow - switch to left panel
+                    if [ $CURRENT_PANEL -eq 1 ]; then
+                        CURRENT_PANEL=0
+                    fi
                     ;;
             esac
             ;;
-        ' ')  # Space - toggle selection (skip headers)
-            if [[ "${INSTALLED_TYPES[$CURSOR]}" != "header" ]]; then
-                if [ ${SELECTED[$CURSOR]} -eq 0 ]; then
-                    SELECTED[$CURSOR]=1
-                else
-                    SELECTED[$CURSOR]=0
-                fi
+        ' ')  # Space - toggle selection
+            if [ $CURRENT_PANEL -eq 1 ] && [ $item_count -gt 0 ]; then
+                toggle_current_item
             fi
             ;;
         '')  # Enter - confirm
@@ -2388,6 +2360,68 @@ handle_input() {
             ;;
     esac
     return 0
+}
+
+# Toggle the currently selected item
+toggle_current_item() {
+    local item_count=$(get_current_item_count)
+    if [ $ITEM_CURSOR -ge $item_count ]; then
+        return
+    fi
+
+    case $CATEGORY_CURSOR in
+        1)  # Packages
+            local pkg="${INSTALLED_PACKAGES[$ITEM_CURSOR]}"
+            local cur="${PKG_SELECTIONS[$pkg]:-0}"
+            if [ "$cur" -eq 0 ]; then
+                PKG_SELECTIONS[$pkg]=1
+            else
+                PKG_SELECTIONS[$pkg]=0
+            fi
+            ;;
+        2)  # Webapps
+            local webapp="${INSTALLED_WEBAPPS[$ITEM_CURSOR]}"
+            local cur="${WEBAPP_SELECTIONS[$webapp]:-0}"
+            if [ "$cur" -eq 0 ]; then
+                WEBAPP_SELECTIONS[$webapp]=1
+            else
+                WEBAPP_SELECTIONS[$webapp]=0
+            fi
+            ;;
+        4|5|6|7|8)  # Toggle items (Keybindings, Display, System, Appearance, Keyboard)
+            local items_var=""
+            case $CATEGORY_CURSOR in
+                4) items_var="KEYBINDINGS_ITEMS" ;;
+                5) items_var="DISPLAY_ITEMS" ;;
+                6) items_var="SYSTEM_ITEMS" ;;
+                7) items_var="APPEARANCE_ITEMS" ;;
+                8) items_var="KEYBOARD_ITEMS" ;;
+            esac
+            local -n items_arr="$items_var"
+            local item="${items_arr[$ITEM_CURSOR]}"
+            parse_toggle_item "$item"
+
+            local cur="${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}"
+            # Cycle: 0 -> 1 -> 2 -> 0
+            if [ "$cur" -eq 0 ]; then
+                TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+            elif [ "$cur" -eq 1 ]; then
+                TOGGLE_SELECTIONS[$TOGGLE_ID]=2
+            else
+                TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+            fi
+            ;;
+        9)  # Utilities (simple toggle)
+            local item="${UTILITIES_ITEMS[$ITEM_CURSOR]}"
+            parse_toggle_item "$item"
+            local cur="${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}"
+            if [ "$cur" -eq 0 ]; then
+                TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+            else
+                TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+            fi
+            ;;
+    esac
 }
 
 # Main selection loop
@@ -2422,120 +2456,172 @@ done
 stty echo
 tput cnorm
 
-# Build lists of selected packages, webapps, and actions
-declare -a SELECTED_PACKAGES=()
-declare -a SELECTED_WEBAPPS=()
-RESET_KEYBINDS=false
-BACKUP_CONFIGS=false
-MONITOR_4K=false
-MONITOR_1080_1440=false
-BIND_SHUTDOWN=false
-BIND_RESTART=false
-UNBIND_SHUTDOWN=false
-UNBIND_RESTART=false
-BIND_THEME_MENU=false
-UNBIND_THEME_MENU=false
-RESTORE_CAPSLOCK=false
-USE_CAPSLOCK_COMPOSE=false
-SWAP_ALT_SUPER=false
-RESTORE_ALT_SUPER=false
-ENABLE_SUSPEND=false
-DISABLE_SUSPEND=false
-ENABLE_HIBERNATION=false
-DISABLE_HIBERNATION=false
-ENABLE_FINGERPRINT=false
-DISABLE_FINGERPRINT=false
-ENABLE_FIDO2=false
-DISABLE_FIDO2=false
-SHOW_ALL_TRAY_ICONS=false
-HIDE_TRAY_ICONS=false
-ENABLE_ROUNDED_CORNERS=false
-DISABLE_ROUNDED_CORNERS=false
-REMOVE_WINDOW_GAPS=false
-RESTORE_WINDOW_GAPS=false
-ENABLE_12H_CLOCK=false
-DISABLE_12H_CLOCK=false
-ENABLE_MEDIA_DIRECTORIES=false
-DISABLE_MEDIA_DIRECTORIES=false
+# =============================================================================
+# CONVERT SELECTIONS TO ACTION FLAGS
+# =============================================================================
 
-for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
-    if [ ${SELECTED[$i]} -eq 1 ]; then
-        case "${INSTALLED_TYPES[$i]}" in
-            "package") SELECTED_PACKAGES+=("${INSTALLED_ITEMS[$i]}") ;;
-            "webapp")  SELECTED_WEBAPPS+=("${INSTALLED_ITEMS[$i]}") ;;
-            "action")
-                if [[ "${INSTALLED_ITEMS[$i]}" == "__reset_keybinds__" ]]; then
-                    RESET_KEYBINDS=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__backup_configs__" ]]; then
-                    BACKUP_CONFIGS=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__monitor_4k__" ]]; then
-                    MONITOR_4K=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__monitor_1080_1440__" ]]; then
-                    MONITOR_1080_1440=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__bind_shutdown__" ]]; then
-                    BIND_SHUTDOWN=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__bind_restart__" ]]; then
-                    BIND_RESTART=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__unbind_shutdown__" ]]; then
-                    UNBIND_SHUTDOWN=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__unbind_restart__" ]]; then
-                    UNBIND_RESTART=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__bind_theme_menu__" ]]; then
-                    BIND_THEME_MENU=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__unbind_theme_menu__" ]]; then
-                    UNBIND_THEME_MENU=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__restore_capslock__" ]]; then
-                    RESTORE_CAPSLOCK=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__use_capslock_compose__" ]]; then
-                    USE_CAPSLOCK_COMPOSE=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__swap_alt_super__" ]]; then
-                    SWAP_ALT_SUPER=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__restore_alt_super__" ]]; then
-                    RESTORE_ALT_SUPER=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_suspend__" ]]; then
-                    ENABLE_SUSPEND=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_suspend__" ]]; then
-                    DISABLE_SUSPEND=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_hibernation__" ]]; then
-                    ENABLE_HIBERNATION=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_hibernation__" ]]; then
-                    DISABLE_HIBERNATION=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_fingerprint__" ]]; then
-                    ENABLE_FINGERPRINT=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_fingerprint__" ]]; then
-                    DISABLE_FINGERPRINT=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_fido2__" ]]; then
-                    ENABLE_FIDO2=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_fido2__" ]]; then
-                    DISABLE_FIDO2=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__show_all_tray_icons__" ]]; then
-                    SHOW_ALL_TRAY_ICONS=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__hide_tray_icons__" ]]; then
-                    HIDE_TRAY_ICONS=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_rounded_corners__" ]]; then
-                    ENABLE_ROUNDED_CORNERS=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_rounded_corners__" ]]; then
-                    DISABLE_ROUNDED_CORNERS=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__remove_window_gaps__" ]]; then
-                    REMOVE_WINDOW_GAPS=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__restore_window_gaps__" ]]; then
-                    RESTORE_WINDOW_GAPS=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_12h_clock__" ]]; then
-                    ENABLE_12H_CLOCK=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_12h_clock__" ]]; then
-                    DISABLE_12H_CLOCK=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_media_directories__" ]]; then
-                    ENABLE_MEDIA_DIRECTORIES=true
-                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_media_directories__" ]]; then
-                    DISABLE_MEDIA_DIRECTORIES=true
-                fi
-                ;;
-        esac
+# Build lists of selected packages and webapps
+declare -a SELECTED_PACKAGES_FINAL=()
+declare -a SELECTED_WEBAPPS_FINAL=()
+
+for pkg in "${INSTALLED_PACKAGES[@]}"; do
+    if [ "${PKG_SELECTIONS[$pkg]:-0}" -eq 1 ]; then
+        SELECTED_PACKAGES_FINAL+=("$pkg")
     fi
 done
 
+for webapp in "${INSTALLED_WEBAPPS[@]}"; do
+    if [ "${WEBAPP_SELECTIONS[$webapp]:-0}" -eq 1 ]; then
+        SELECTED_WEBAPPS_FINAL+=("$webapp")
+    fi
+done
+
+# Convert toggle selections to action flags
+# close_window: 1=SUPER+Q (rebind), 2=SUPER+W (default, no action)
+RESET_KEYBINDS=false
+if [ "${TOGGLE_SELECTIONS[close_window]:-0}" -eq 1 ]; then
+    RESET_KEYBINDS=true
+fi
+
+# shutdown: 1=Bind, 2=Unbind
+BIND_SHUTDOWN=false
+UNBIND_SHUTDOWN=false
+case "${TOGGLE_SELECTIONS[shutdown]:-0}" in
+    1) BIND_SHUTDOWN=true ;;
+    2) UNBIND_SHUTDOWN=true ;;
+esac
+
+# restart: 1=Bind, 2=Unbind
+BIND_RESTART=false
+UNBIND_RESTART=false
+case "${TOGGLE_SELECTIONS[restart]:-0}" in
+    1) BIND_RESTART=true ;;
+    2) UNBIND_RESTART=true ;;
+esac
+
+# theme_menu: 1=Bind, 2=Unbind
+BIND_THEME_MENU=false
+UNBIND_THEME_MENU=false
+case "${TOGGLE_SELECTIONS[theme_menu]:-0}" in
+    1) BIND_THEME_MENU=true ;;
+    2) UNBIND_THEME_MENU=true ;;
+esac
+
+# monitor_scale: 1=4K, 2=1080p/1440p
+MONITOR_4K=false
+MONITOR_1080_1440=false
+case "${TOGGLE_SELECTIONS[monitor_scale]:-0}" in
+    1) MONITOR_4K=true ;;
+    2) MONITOR_1080_1440=true ;;
+esac
+
+# suspend: 1=Enable, 2=Disable
+ENABLE_SUSPEND=false
+DISABLE_SUSPEND=false
+case "${TOGGLE_SELECTIONS[suspend]:-0}" in
+    1) ENABLE_SUSPEND=true ;;
+    2) DISABLE_SUSPEND=true ;;
+esac
+
+# hibernation: 1=Enable, 2=Disable
+ENABLE_HIBERNATION=false
+DISABLE_HIBERNATION=false
+case "${TOGGLE_SELECTIONS[hibernation]:-0}" in
+    1) ENABLE_HIBERNATION=true ;;
+    2) DISABLE_HIBERNATION=true ;;
+esac
+
+# fingerprint: 1=Enable, 2=Disable
+ENABLE_FINGERPRINT=false
+DISABLE_FINGERPRINT=false
+case "${TOGGLE_SELECTIONS[fingerprint]:-0}" in
+    1) ENABLE_FINGERPRINT=true ;;
+    2) DISABLE_FINGERPRINT=true ;;
+esac
+
+# fido2: 1=Enable, 2=Disable
+ENABLE_FIDO2=false
+DISABLE_FIDO2=false
+case "${TOGGLE_SELECTIONS[fido2]:-0}" in
+    1) ENABLE_FIDO2=true ;;
+    2) DISABLE_FIDO2=true ;;
+esac
+
+# rounded_corners: 1=Enable, 2=Disable
+ENABLE_ROUNDED_CORNERS=false
+DISABLE_ROUNDED_CORNERS=false
+case "${TOGGLE_SELECTIONS[rounded_corners]:-0}" in
+    1) ENABLE_ROUNDED_CORNERS=true ;;
+    2) DISABLE_ROUNDED_CORNERS=true ;;
+esac
+
+# window_gaps: 1=Remove, 2=Restore
+REMOVE_WINDOW_GAPS=false
+RESTORE_WINDOW_GAPS=false
+case "${TOGGLE_SELECTIONS[window_gaps]:-0}" in
+    1) REMOVE_WINDOW_GAPS=true ;;
+    2) RESTORE_WINDOW_GAPS=true ;;
+esac
+
+# tray_icons: 1=Show all, 2=Hide
+SHOW_ALL_TRAY_ICONS=false
+HIDE_TRAY_ICONS=false
+case "${TOGGLE_SELECTIONS[tray_icons]:-0}" in
+    1) SHOW_ALL_TRAY_ICONS=true ;;
+    2) HIDE_TRAY_ICONS=true ;;
+esac
+
+# clock_format: 1=12h, 2=24h
+ENABLE_12H_CLOCK=false
+DISABLE_12H_CLOCK=false
+case "${TOGGLE_SELECTIONS[clock_format]:-0}" in
+    1) ENABLE_12H_CLOCK=true ;;
+    2) DISABLE_12H_CLOCK=true ;;
+esac
+
+# media_dirs: 1=Enable, 2=Disable
+ENABLE_MEDIA_DIRECTORIES=false
+DISABLE_MEDIA_DIRECTORIES=false
+case "${TOGGLE_SELECTIONS[media_dirs]:-0}" in
+    1) ENABLE_MEDIA_DIRECTORIES=true ;;
+    2) DISABLE_MEDIA_DIRECTORIES=true ;;
+esac
+
+# caps_lock: 1=Normal (restore), 2=Compose
+RESTORE_CAPSLOCK=false
+USE_CAPSLOCK_COMPOSE=false
+case "${TOGGLE_SELECTIONS[caps_lock]:-0}" in
+    1) RESTORE_CAPSLOCK=true ;;
+    2) USE_CAPSLOCK_COMPOSE=true ;;
+esac
+
+# alt_super: 1=Swap, 2=Normal (restore)
+SWAP_ALT_SUPER=false
+RESTORE_ALT_SUPER=false
+case "${TOGGLE_SELECTIONS[alt_super]:-0}" in
+    1) SWAP_ALT_SUPER=true ;;
+    2) RESTORE_ALT_SUPER=true ;;
+esac
+
+# backup_config: 1=Select
+BACKUP_CONFIGS=false
+if [ "${TOGGLE_SELECTIONS[backup_config]:-0}" -eq 1 ]; then
+    BACKUP_CONFIGS=true
+fi
+
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ] && [ "$ENABLE_ROUNDED_CORNERS" = false ] && [ "$DISABLE_ROUNDED_CORNERS" = false ] && [ "$REMOVE_WINDOW_GAPS" = false ] && [ "$RESTORE_WINDOW_GAPS" = false ] && [ "$ENABLE_12H_CLOCK" = false ] && [ "$DISABLE_12H_CLOCK" = false ] && [ "$ENABLE_MEDIA_DIRECTORIES" = false ] && [ "$DISABLE_MEDIA_DIRECTORIES" = false ]; then
+has_selection=false
+if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ] || [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ]; then
+    has_selection=true
+fi
+for key in "${!TOGGLE_SELECTIONS[@]}"; do
+    if [ "${TOGGLE_SELECTIONS[$key]}" -ne 0 ]; then
+        has_selection=true
+        break
+    fi
+done
+
+if [ "$has_selection" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -2675,7 +2761,7 @@ if [ "$DISABLE_MEDIA_DIRECTORIES" = true ]; then
 fi
 
 # If only action items were selected, show summary and exit
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ]; then
+if [ ${#SELECTED_PACKAGES_FINAL[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS_FINAL[@]} -eq 0 ]; then
     trap - EXIT
     clear
     echo
@@ -2698,27 +2784,27 @@ echo -e "${BOLD}  Confirm Removal${RESET}"
 echo
 echo
 
-if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
-    echo -e "${DIM}  Packages (${#SELECTED_PACKAGES[@]}):${RESET}"
-    for pkg in "${SELECTED_PACKAGES[@]}"; do
+if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ]; then
+    echo -e "${DIM}  Packages (${#SELECTED_PACKAGES_FINAL[@]}):${RESET}"
+    for pkg in "${SELECTED_PACKAGES_FINAL[@]}"; do
         echo "    ${DIM}•${RESET}  $pkg"
     done
     echo
 fi
 
-if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
-    echo -e "${DIM}  Web Apps (${#SELECTED_WEBAPPS[@]}):${RESET}"
-    for webapp in "${SELECTED_WEBAPPS[@]}"; do
+if [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ]; then
+    echo -e "${DIM}  Web Apps (${#SELECTED_WEBAPPS_FINAL[@]}):${RESET}"
+    for webapp in "${SELECTED_WEBAPPS_FINAL[@]}"; do
         echo "    ${DIM}•${RESET}  $webapp"
     done
     echo
 fi
 
 echo
-if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
+if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ]; then
     echo -e "${DIM}  Packages will be removed with their dependencies.${RESET}"
 fi
-if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
+if [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ]; then
     echo -e "${DIM}  Web apps will be removed via omarchy-webapp-remove.${RESET}"
 fi
 echo
@@ -2739,7 +2825,7 @@ TOTAL_ATTEMPTED=0
 TOTAL_FAILED=0
 
 # Remove packages one by one
-if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
+if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ]; then
     echo "  Removing packages..."
     echo
 
@@ -2754,9 +2840,9 @@ if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
     fi
 
     local_current=0
-    local_total=${#SELECTED_PACKAGES[@]}
+    local_total=${#SELECTED_PACKAGES_FINAL[@]}
 
-    for pkg in "${SELECTED_PACKAGES[@]}"; do
+    for pkg in "${SELECTED_PACKAGES_FINAL[@]}"; do
         ((local_current++))
         ((TOTAL_ATTEMPTED++))
 
@@ -2775,14 +2861,14 @@ if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
 fi
 
 # Remove webapps one by one
-if [ ${#SELECTED_WEBAPPS[@]} -gt 0 ]; then
+if [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ]; then
     echo "  Removing web apps..."
     echo
 
     local_current=0
-    local_total=${#SELECTED_WEBAPPS[@]}
+    local_total=${#SELECTED_WEBAPPS_FINAL[@]}
 
-    for webapp in "${SELECTED_WEBAPPS[@]}"; do
+    for webapp in "${SELECTED_WEBAPPS_FINAL[@]}"; do
         ((local_current++))
         ((TOTAL_ATTEMPTED++))
 
@@ -2817,7 +2903,7 @@ done
 echo
 if [ $TOTAL_FAILED -eq 0 ]; then
     echo -e "  ${CHECKED}All $TOTAL_ATTEMPTED item(s) removed successfully.${RESET}"
-    if [ ${#SELECTED_PACKAGES[@]} -gt 0 ]; then
+    if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ]; then
         echo
         echo -e "  ${DIM}Optionally, clean your package cache:${RESET}"
         echo "  sudo pacman -Sc"
