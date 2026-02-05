@@ -70,6 +70,9 @@ XCOMPOSE_CONF="$HOME/.XCompose"
 # Hyprland input config path
 INPUT_CONF="$HOME/.config/hypr/input.conf"
 
+# Suspend state file path
+SUSPEND_STATE="$HOME/.local/state/omarchy/toggles/suspend-on"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -913,6 +916,86 @@ restore_alt_super() {
     echo
 }
 
+enable_suspend() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Enable Suspend${RESET}"
+    echo
+    echo -e "  ${DIM}Adds the Suspend option to the Omarchy system menu.${RESET}"
+    echo -e "  ${DIM}Access via: Super+Alt+Space → System → Suspend${RESET}"
+    echo
+    echo
+
+    # Check if already enabled
+    if [[ -f "$SUSPEND_STATE" ]]; then
+        echo -e "  ${DIM}Suspend already enabled. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable suspend -- already enabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Enable suspend -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create state directory and file
+    mkdir -p "$(dirname "$SUSPEND_STATE")"
+    touch "$SUSPEND_STATE"
+
+    echo -e "  ${CHECKED}✓${RESET}  Suspend enabled in system menu"
+    SUMMARY_LOG+=("✓  Enabled suspend")
+    echo
+}
+
+disable_suspend() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable Suspend${RESET}"
+    echo
+    echo -e "  ${DIM}Removes the Suspend option from the Omarchy system menu.${RESET}"
+    echo
+    echo
+
+    # Check if already disabled
+    if [[ ! -f "$SUSPEND_STATE" ]]; then
+        echo -e "  ${DIM}Suspend already disabled. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Disable suspend -- already disabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Disable suspend -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Remove state file
+    rm -f "$SUSPEND_STATE"
+
+    echo -e "  ${CHECKED}✓${RESET}  Suspend disabled in system menu"
+    SUMMARY_LOG+=("✓  Disabled suspend")
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1015,6 +1098,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__restore_alt_super__")
 INSTALLED_NAMES+=("Restore Alt and Super keys (Omarchy default)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__enable_suspend__")
+INSTALLED_NAMES+=("Enable suspend in system menu")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__disable_suspend__")
+INSTALLED_NAMES+=("Disable suspend in system menu")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -1381,6 +1472,8 @@ RESTORE_CAPSLOCK=false
 USE_CAPSLOCK_COMPOSE=false
 SWAP_ALT_SUPER=false
 RESTORE_ALT_SUPER=false
+ENABLE_SUSPEND=false
+DISABLE_SUSPEND=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -1416,6 +1509,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     SWAP_ALT_SUPER=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__restore_alt_super__" ]]; then
                     RESTORE_ALT_SUPER=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_suspend__" ]]; then
+                    ENABLE_SUSPEND=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_suspend__" ]]; then
+                    DISABLE_SUSPEND=true
                 fi
                 ;;
         esac
@@ -1423,7 +1520,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -1488,6 +1585,14 @@ fi
 
 if [ "$RESTORE_ALT_SUPER" = true ]; then
     restore_alt_super
+fi
+
+if [ "$ENABLE_SUSPEND" = true ]; then
+    enable_suspend
+fi
+
+if [ "$DISABLE_SUSPEND" = true ]; then
+    disable_suspend
 fi
 
 # If only action items were selected, show summary and exit
