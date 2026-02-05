@@ -1646,6 +1646,128 @@ restore_window_gaps() {
     echo
 }
 
+enable_12h_clock() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Enable 12-Hour Clock${RESET}"
+    echo
+    echo -e "  ${DIM}Changes the waybar clock to 12-hour format with AM/PM.${RESET}"
+    echo -e "  ${DIM}Example: \"Sunday 10:55 AM\"${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Enable 12h clock -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already using 12-hour format
+    if grep -q '%I:%M %p' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Already using 12-hour clock. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable 12h clock -- already set")
+        return 0
+    fi
+
+    # Check if 24-hour format exists
+    if ! grep -q '%H:%M' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}24-hour clock format not found. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable 12h clock -- 24h format not found")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Enable 12h clock -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Replace 24-hour format with 12-hour format
+    sed -i 's/%H:%M/%I:%M %p/g' "$WAYBAR_CONF"
+
+    # Restart waybar to apply
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  12-hour clock enabled"
+    SUMMARY_LOG+=("✓  Enabled 12-hour clock")
+    echo
+}
+
+disable_12h_clock() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable 12-Hour Clock${RESET}"
+    echo
+    echo -e "  ${DIM}Changes the waybar clock back to 24-hour format.${RESET}"
+    echo -e "  ${DIM}Example: \"Sunday 22:55\"${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Disable 12h clock -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if using 12-hour format
+    if ! grep -q '%I:%M %p' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Already using 24-hour clock. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Disable 12h clock -- already set")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Disable 12h clock -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Replace 12-hour format with 24-hour format
+    sed -i 's/%I:%M %p/%H:%M/g' "$WAYBAR_CONF"
+
+    # Restart waybar to apply
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  24-hour clock restored"
+    SUMMARY_LOG+=("✓  Restored 24-hour clock")
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1804,6 +1926,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__restore_window_gaps__")
 INSTALLED_NAMES+=("Restore window gaps (Omarchy default)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__enable_12h_clock__")
+INSTALLED_NAMES+=("Enable 12-hour clock (AM/PM)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__disable_12h_clock__")
+INSTALLED_NAMES+=("Disable 12-hour clock (24-hour)")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -2184,6 +2314,8 @@ ENABLE_ROUNDED_CORNERS=false
 DISABLE_ROUNDED_CORNERS=false
 REMOVE_WINDOW_GAPS=false
 RESTORE_WINDOW_GAPS=false
+ENABLE_12H_CLOCK=false
+DISABLE_12H_CLOCK=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -2247,6 +2379,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     REMOVE_WINDOW_GAPS=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__restore_window_gaps__" ]]; then
                     RESTORE_WINDOW_GAPS=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_12h_clock__" ]]; then
+                    ENABLE_12H_CLOCK=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_12h_clock__" ]]; then
+                    DISABLE_12H_CLOCK=true
                 fi
                 ;;
         esac
@@ -2254,7 +2390,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ] && [ "$ENABLE_ROUNDED_CORNERS" = false ] && [ "$DISABLE_ROUNDED_CORNERS" = false ] && [ "$REMOVE_WINDOW_GAPS" = false ] && [ "$RESTORE_WINDOW_GAPS" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ] && [ "$ENABLE_ROUNDED_CORNERS" = false ] && [ "$DISABLE_ROUNDED_CORNERS" = false ] && [ "$REMOVE_WINDOW_GAPS" = false ] && [ "$RESTORE_WINDOW_GAPS" = false ] && [ "$ENABLE_12H_CLOCK" = false ] && [ "$DISABLE_12H_CLOCK" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -2375,6 +2511,14 @@ fi
 
 if [ "$RESTORE_WINDOW_GAPS" = true ]; then
     restore_window_gaps
+fi
+
+if [ "$ENABLE_12H_CLOCK" = true ]; then
+    enable_12h_clock
+fi
+
+if [ "$DISABLE_12H_CLOCK" = true ]; then
+    disable_12h_clock
 fi
 
 # If only action items were selected, show summary and exit
