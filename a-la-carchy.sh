@@ -79,6 +79,9 @@ WAYBAR_CONF="$HOME/.config/waybar/config.jsonc"
 # Hyprland looknfeel config path
 LOOKNFEEL_CONF="$HOME/.config/hypr/looknfeel.conf"
 
+# UWSM defaults config path
+UWSM_DEFAULT="$HOME/.config/uwsm/default"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -1768,6 +1771,134 @@ disable_12h_clock() {
     echo
 }
 
+enable_media_directories() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Enable Screenshot/Recording Directories${RESET}"
+    echo
+    echo -e "  ${DIM}Saves screenshots and recordings to dedicated folders:${RESET}"
+    echo -e "  ${DIM}  • Screenshots → ~/Pictures/Screenshots${RESET}"
+    echo -e "  ${DIM}  • Recordings → ~/Videos/Screencasts${RESET}"
+    echo
+    echo -e "  ${DIM}Note: Requires Omarchy restart to take effect.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$UWSM_DEFAULT" ]]; then
+        echo -e "  ${DIM}✗${RESET}  uwsm default config not found at $UWSM_DEFAULT"
+        echo
+        SUMMARY_LOG+=("✗  Enable media directories -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already enabled (uncommented lines)
+    if grep -q '^export OMARCHY_SCREENSHOT_DIR=' "$UWSM_DEFAULT"; then
+        echo -e "  ${DIM}Media directories already enabled. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable media directories -- already enabled")
+        return 0
+    fi
+
+    # Check if commented lines exist
+    if ! grep -q '^#.*export OMARCHY_SCREENSHOT_DIR=' "$UWSM_DEFAULT"; then
+        echo -e "  ${DIM}Screenshot directory setting not found. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Enable media directories -- settings not found")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Enable media directories -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${UWSM_DEFAULT}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$UWSM_DEFAULT" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Create the directories
+    mkdir -p "$HOME/Pictures/Screenshots"
+    mkdir -p "$HOME/Videos/Screencasts"
+    echo -e "  ${DIM}Created ~/Pictures/Screenshots${RESET}"
+    echo -e "  ${DIM}Created ~/Videos/Screencasts${RESET}"
+
+    # Uncomment the export lines
+    sed -i 's/^# *\(export OMARCHY_SCREENSHOT_DIR=.*\)/\1/' "$UWSM_DEFAULT"
+    sed -i 's/^# *\(export OMARCHY_SCREENRECORD_DIR=.*\)/\1/' "$UWSM_DEFAULT"
+
+    echo -e "  ${CHECKED}✓${RESET}  Media directories enabled"
+    SUMMARY_LOG+=("✓  Enabled screenshot/recording directories")
+    echo
+    echo -e "  ${DIM}Restart Omarchy for changes to take effect.${RESET}"
+    echo
+}
+
+disable_media_directories() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable Screenshot/Recording Directories${RESET}"
+    echo
+    echo -e "  ${DIM}Returns to default behavior (saves to ~/Pictures and ~/Videos).${RESET}"
+    echo
+    echo -e "  ${DIM}Note: Requires Omarchy restart to take effect.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$UWSM_DEFAULT" ]]; then
+        echo -e "  ${DIM}✗${RESET}  uwsm default config not found at $UWSM_DEFAULT"
+        echo
+        SUMMARY_LOG+=("✗  Disable media directories -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if enabled (uncommented lines)
+    if ! grep -q '^export OMARCHY_SCREENSHOT_DIR=' "$UWSM_DEFAULT"; then
+        echo -e "  ${DIM}Media directories already disabled. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Disable media directories -- already disabled")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Disable media directories -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${UWSM_DEFAULT}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$UWSM_DEFAULT" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Comment out the export lines
+    sed -i 's/^\(export OMARCHY_SCREENSHOT_DIR=.*\)/# \1/' "$UWSM_DEFAULT"
+    sed -i 's/^\(export OMARCHY_SCREENRECORD_DIR=.*\)/# \1/' "$UWSM_DEFAULT"
+
+    echo -e "  ${CHECKED}✓${RESET}  Media directories disabled"
+    SUMMARY_LOG+=("✓  Disabled screenshot/recording directories")
+    echo
+    echo -e "  ${DIM}Restart Omarchy for changes to take effect.${RESET}"
+    echo
+}
+
 # Build list of installed packages and webapps
 declare -a INSTALLED_ITEMS=()
 declare -a INSTALLED_NAMES=()
@@ -1934,6 +2065,14 @@ INSTALLED_TYPES+=("action")
 
 INSTALLED_ITEMS+=("__disable_12h_clock__")
 INSTALLED_NAMES+=("Disable 12-hour clock (24-hour)")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__enable_media_directories__")
+INSTALLED_NAMES+=("Enable screenshot/recording directories")
+INSTALLED_TYPES+=("action")
+
+INSTALLED_ITEMS+=("__disable_media_directories__")
+INSTALLED_NAMES+=("Disable screenshot/recording directories")
 INSTALLED_TYPES+=("action")
 
 # Selection state
@@ -2316,6 +2455,8 @@ REMOVE_WINDOW_GAPS=false
 RESTORE_WINDOW_GAPS=false
 ENABLE_12H_CLOCK=false
 DISABLE_12H_CLOCK=false
+ENABLE_MEDIA_DIRECTORIES=false
+DISABLE_MEDIA_DIRECTORIES=false
 
 for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
     if [ ${SELECTED[$i]} -eq 1 ]; then
@@ -2383,6 +2524,10 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
                     ENABLE_12H_CLOCK=true
                 elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_12h_clock__" ]]; then
                     DISABLE_12H_CLOCK=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__enable_media_directories__" ]]; then
+                    ENABLE_MEDIA_DIRECTORIES=true
+                elif [[ "${INSTALLED_ITEMS[$i]}" == "__disable_media_directories__" ]]; then
+                    DISABLE_MEDIA_DIRECTORIES=true
                 fi
                 ;;
         esac
@@ -2390,7 +2535,7 @@ for ((i=0; i<${#INSTALLED_ITEMS[@]}; i++)); do
 done
 
 # Check if anything was selected
-if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ] && [ "$ENABLE_ROUNDED_CORNERS" = false ] && [ "$DISABLE_ROUNDED_CORNERS" = false ] && [ "$REMOVE_WINDOW_GAPS" = false ] && [ "$RESTORE_WINDOW_GAPS" = false ] && [ "$ENABLE_12H_CLOCK" = false ] && [ "$DISABLE_12H_CLOCK" = false ]; then
+if [ ${#SELECTED_PACKAGES[@]} -eq 0 ] && [ ${#SELECTED_WEBAPPS[@]} -eq 0 ] && [ "$RESET_KEYBINDS" = false ] && [ "$BACKUP_CONFIGS" = false ] && [ "$MONITOR_4K" = false ] && [ "$MONITOR_1080_1440" = false ] && [ "$BIND_SHUTDOWN" = false ] && [ "$BIND_RESTART" = false ] && [ "$UNBIND_SHUTDOWN" = false ] && [ "$UNBIND_RESTART" = false ] && [ "$BIND_THEME_MENU" = false ] && [ "$UNBIND_THEME_MENU" = false ] && [ "$RESTORE_CAPSLOCK" = false ] && [ "$USE_CAPSLOCK_COMPOSE" = false ] && [ "$SWAP_ALT_SUPER" = false ] && [ "$RESTORE_ALT_SUPER" = false ] && [ "$ENABLE_SUSPEND" = false ] && [ "$DISABLE_SUSPEND" = false ] && [ "$ENABLE_HIBERNATION" = false ] && [ "$DISABLE_HIBERNATION" = false ] && [ "$ENABLE_FINGERPRINT" = false ] && [ "$DISABLE_FINGERPRINT" = false ] && [ "$ENABLE_FIDO2" = false ] && [ "$DISABLE_FIDO2" = false ] && [ "$SHOW_ALL_TRAY_ICONS" = false ] && [ "$HIDE_TRAY_ICONS" = false ] && [ "$ENABLE_ROUNDED_CORNERS" = false ] && [ "$DISABLE_ROUNDED_CORNERS" = false ] && [ "$REMOVE_WINDOW_GAPS" = false ] && [ "$RESTORE_WINDOW_GAPS" = false ] && [ "$ENABLE_12H_CLOCK" = false ] && [ "$DISABLE_12H_CLOCK" = false ] && [ "$ENABLE_MEDIA_DIRECTORIES" = false ] && [ "$DISABLE_MEDIA_DIRECTORIES" = false ]; then
     clear
     echo
     echo "Nothing selected."
@@ -2519,6 +2664,14 @@ fi
 
 if [ "$DISABLE_12H_CLOCK" = true ]; then
     disable_12h_clock
+fi
+
+if [ "$ENABLE_MEDIA_DIRECTORIES" = true ]; then
+    enable_media_directories
+fi
+
+if [ "$DISABLE_MEDIA_DIRECTORIES" = true ]; then
+    disable_media_directories
 fi
 
 # If only action items were selected, show summary and exit
