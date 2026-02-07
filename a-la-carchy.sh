@@ -1970,6 +1970,8 @@ declare -a CATEGORIES=(
     "  Appearance"
     "  Keyboard"
     "  Utilities"
+    "--- Install ---"
+    "  Extra Themes"
 )
 
 # Check if a category index is a section header
@@ -2030,6 +2032,131 @@ declare -a KEYBOARD_ITEMS=(
 declare -a UTILITIES_ITEMS=(
     "backup_config|Backup config|[Select]||action|Create a backup of your Omarchy configuration"
 )
+
+# Extra themes: each entry is "Display Name|github_url"
+declare -a EXTRA_THEMES=(
+    "Aetheria|https://github.com/JJDizz1L/aetheria"
+    "Amberbyte|https://github.com/tahfizhabib/omarchy-amberbyte-theme"
+    "Arc Blueberry|https://github.com/vale-c/omarchy-arc-blueberry"
+    "Archwave|https://github.com/davidguttman/archwave"
+    "Ash|https://github.com/bjarneo/omarchy-ash-theme"
+    "Artzen|https://github.com/tahfizhabib/omarchy-artzen-theme"
+    "Aura|https://github.com/bjarneo/omarchy-aura-theme"
+    "All Hallow's Eve|https://github.com/guilhermetk/omarchy-all-hallows-eve-theme"
+    "Ayaka|https://github.com/abhijeet-swami/omarchy-ayaka-theme"
+    "Azure Glow|https://github.com/Hydradevx/omarchy-azure-glow-theme"
+    "Bauhaus|https://github.com/somerocketeer/omarchy-bauhaus-theme"
+    "Black Arch|https://github.com/ankur311sudo/black_arch"
+    "Black Gold|https://github.com/HANCORE-linux/omarchy-blackgold-theme"
+    "Black Turq|https://github.com/HANCORE-linux/omarchy-blackturq-theme"
+    "Bliss|https://github.com/mishonki3/omarchy-bliss-theme"
+    "bluedotrb|https://github.com/dotsilva/omarchy-bluedotrb-theme"
+    "Blue Ridge Dark|https://github.com/hipsterusername/omarchy-blueridge-dark-theme"
+    "Catppuccin Mocha Dark|https://github.com/Luquatic/omarchy-catppuccin-dark"
+    "Citrus Cynapse|https://github.com/Grey-007/citrus-cynapse"
+    "Cobalt2|https://github.com/hoblin/omarchy-cobalt2-theme"
+    "Darcula|https://github.com/noahljungberg/omarchy-darcula-theme"
+    "Demon|https://github.com/HANCORE-linux/omarchy-demon-theme"
+    "Dotrb|https://github.com/dotsilva/omarchy-dotrb-theme"
+    "Drac|https://github.com/ShehabShaef/omarchy-drac-theme"
+    "Dracula|https://github.com/catlee/omarchy-dracula-theme"
+    "Eldritch|https://github.com/eldritch-theme/omarchy"
+    "Evergarden|https://github.com/celsobenedetti/omarchy-evergarden"
+    "Felix|https://github.com/TyRichards/omarchy-felix-theme"
+    "Fireside|https://github.com/bjarneo/omarchy-fireside-theme"
+    "Flexoki Dark|https://github.com/euandeas/omarchy-flexoki-dark-theme"
+    "Forest Green|https://github.com/abhijeet-swami/omarchy-forest-green-theme"
+    "Frost|https://github.com/bjarneo/omarchy-frost-theme"
+    "Futurism|https://github.com/bjarneo/omarchy-futurism-theme"
+    "Gold Rush|https://github.com/tahayvr/omarchy-gold-rush-theme"
+    "The Greek|https://github.com/HANCORE-linux/omarchy-thegreek-theme"
+    "Green Garden|https://github.com/kalk-ak/omarchy-green-garden-theme"
+    "Green Hakkar|https://github.com/joaquinmeza/omarchy-hakker-green-theme"
+    "Gruvu|https://github.com/ankur311sudo/gruvu"
+    "Infernium|https://github.com/RiO7MAKK3R/omarchy-infernium-dark-theme"
+    "Map Quest|https://github.com/ItsABigIgloo/omarchy-mapquest-theme"
+    "Mars|https://github.com/steve-lohmeyer/omarchy-mars-theme"
+    "Mechanoonna|https://github.com/HANCORE-linux/omarchy-mechanoonna-theme"
+    "Miasma|https://github.com/OldJobobo/omarchy-miasma-theme"
+    "Midnight|https://github.com/JaxonWright/omarchy-midnight-theme"
+    "Milky Matcha|https://github.com/hipsterusername/omarchy-milkmatcha-light-theme"
+    "Monochrome|https://github.com/Swarnim114/omarchy-monochrome-theme"
+    "Monokai|https://github.com/bjarneo/omarchy-monokai-theme"
+    "Nagai Poolside|https://github.com/somerocketeer/omarchy-nagai-poolside-theme"
+    "Neo Sploosh|https://github.com/monoooki/omarchy-neo-sploosh-theme"
+    "Neovoid|https://github.com/RiO7MAKK3R/omarchy-neovoid-theme"
+    "NES|https://github.com/bjarneo/omarchy-nes-theme"
+    "Omacarchy|https://github.com/RiO7MAKK3R/omarchy-omacarchy-theme"
+    "One Dark Pro|https://github.com/sc0ttman/omarchy-one-dark-pro-theme"
+    "Pandora|https://github.com/imbypass/omarchy-pandora-theme"
+    "Pina|https://github.com/bjarneo/omarchy-pina-theme"
+    "Pink Blood|https://github.com/ITSZXY/pink-blood-omarchy-theme"
+    "Pulsar|https://github.com/bjarneo/omarchy-pulsar-theme"
+    "Purple Moon|https://github.com/Grey-007/purple-moon"
+    "Purplewave|https://github.com/dotsilva/omarchy-purplewave-theme"
+    "Rainy Night|https://github.com/atif-1402/omarchy-rainynight-theme"
+    "RetroPC|https://github.com/rondilley/omarchy-retropc-theme"
+    "Rose Pine Dark|https://github.com/guilhermetk/omarchy-rose-pine-dark"
+    "Rose of Dune|https://github.com/HANCORE-linux/omarchy-roseofdune-theme"
+    "Sakura|https://github.com/bjarneo/omarchy-sakura-theme"
+    "Sapphire|https://github.com/HANCORE-linux/omarchy-sapphire-theme"
+    "Shades of Jade|https://github.com/HANCORE-linux/omarchy-shadesofjade-theme"
+    "Space Monkey|https://github.com/TyRichards/omarchy-space-monkey-theme"
+    "Snow|https://github.com/bjarneo/omarchy-snow-theme"
+    "Snow Black|https://github.com/ankur311sudo/snow_black"
+    "Solarized|https://github.com/Gazler/omarchy-solarized-theme"
+    "Solarized Light|https://github.com/dfrico/omarchy-solarized-light-theme"
+    "Solarized Osaka|https://github.com/motorsss/omarchy-solarizedosaka-theme"
+    "Sunset|https://github.com/rondilley/omarchy-sunset-theme"
+    "Sunset Drive|https://github.com/tahayvr/omarchy-sunset-drive-theme"
+    "Super Game Bro|https://github.com/TyRichards/omarchy-super-game-bro-theme"
+    "Synthwave '84|https://github.com/omacom-io/omarchy-synthwave84-theme"
+    "Temerald|https://github.com/Ahmad-Mtr/omarchy-temerald-theme"
+    "Tokyo Night OLED|https://github.com/Justin-De-Sio/omarchy-tokyoled-theme"
+    "Torrentz Hydra|https://github.com/monoooki/omarchy-torrentz-hydra-theme"
+    "Tycho|https://github.com/leonardobetti/omarchy-tycho"
+    "Waveform Dark|https://github.com/hipsterusername/omarchy-waveform-dark-theme"
+    "White Gold|https://github.com/HANCORE-linux/omarchy-whitegold-theme"
+    "Van Gogh|https://github.com/Nirmal314/omarchy-van-gogh-theme"
+    "Vesper|https://github.com/thmoee/omarchy-vesper-theme"
+    "VHS 80|https://github.com/tahayvr/omarchy-vhs80-theme"
+    "Void|https://github.com/vyrx-dev/omarchy-void-theme"
+)
+
+# Selection state for themes (by display name): 0=not selected, 1=selected
+declare -A THEME_SELECTIONS=()
+
+# Extract installed directory name from a GitHub URL
+# omarchy-theme-install strips "omarchy-" prefix and "-theme" suffix
+get_theme_dir_name() {
+    local url="$1"
+    local repo_name="${url##*/}"
+    # Remove trailing slash if present
+    repo_name="${repo_name%/}"
+    # Strip omarchy- prefix and -theme suffix to match omarchy-theme-install behavior
+    repo_name="${repo_name#omarchy-}"
+    repo_name="${repo_name%-theme}"
+    echo "$repo_name"
+}
+
+# Check if a theme is already installed
+is_theme_installed() {
+    local url="$1"
+    local dir_name
+    dir_name=$(get_theme_dir_name "$url")
+    [[ -d "$HOME/.config/omarchy/themes/$dir_name" ]]
+}
+
+# Build installed themes lookup set for fast rendering
+declare -A INSTALLED_THEME_SET=()
+if [[ -d "$HOME/.config/omarchy/themes" ]]; then
+    for dir in "$HOME/.config/omarchy/themes"/*/; do
+        [[ -d "$dir" ]] || continue
+        local_name="${dir%/}"
+        local_name="${local_name##*/}"
+        INSTALLED_THEME_SET["$local_name"]=1
+    done
+fi
 
 # Descriptions for packages (shown when highlighted)
 declare -A PKG_DESCRIPTIONS=(
@@ -2101,14 +2228,15 @@ get_category_items() {
         7) echo "APPEARANCE" ;;
         8) echo "KEYBOARD" ;;
         9) echo "UTILITIES" ;;
+        11) echo "EXTRA_THEMES" ;;
     esac
 }
 
 # Get item count for current category
 get_current_item_count() {
-    # Section headers (0, 3) return 0
+    # Section headers (0, 3, 10) return 0
     case $CATEGORY_CURSOR in
-        0|3) echo 0 ;;
+        0|3|10) echo 0 ;;
         1) echo ${#INSTALLED_PACKAGES[@]} ;;
         2) echo ${#INSTALLED_WEBAPPS[@]} ;;
         4) echo ${#KEYBINDINGS_ITEMS[@]} ;;
@@ -2117,6 +2245,7 @@ get_current_item_count() {
         7) echo ${#APPEARANCE_ITEMS[@]} ;;
         8) echo ${#KEYBOARD_ITEMS[@]} ;;
         9) echo ${#UTILITIES_ITEMS[@]} ;;
+        11) echo ${#EXTRA_THEMES[@]} ;;
     esac
 }
 
@@ -2156,6 +2285,13 @@ get_current_description() {
         9)  # Utilities
             parse_toggle_item "${UTILITIES_ITEMS[$ITEM_CURSOR]}"
             echo "$TOGGLE_DESC"
+            ;;
+        11) # Extra Themes
+            local entry="${EXTRA_THEMES[$ITEM_CURSOR]}"
+            local theme_url="${entry#*|}"
+            local repo_name="${theme_url##*/}"
+            repo_name="${repo_name%/}"
+            echo "Install from $repo_name"
             ;;
         *)
             echo ""
@@ -2204,7 +2340,7 @@ draw_interface() {
     # Fixed dimensions - must match static borders exactly
     local LEFT_W=25
     local RIGHT_W=52
-    local ROWS=11
+    local ROWS=12
 
     # Clamp cursors
     local cat_count=${#CATEGORIES[@]}
@@ -2274,6 +2410,18 @@ draw_interface() {
                     R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}") ;;
                 9) parse_toggle_item "${UTILITIES_ITEMS[$idx]}"
                    [[ "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}" == "1" ]] && R=" [x] $TOGGLE_NAME" || R=" [ ] $TOGGLE_NAME" ;;
+                11) local entry="${EXTRA_THEMES[$idx]}"
+                    local tname="${entry%%|*}"
+                    local turl="${entry#*|}"
+                    local tdir
+                    tdir=$(get_theme_dir_name "$turl")
+                    local installed_suffix=""
+                    [[ -n "${INSTALLED_THEME_SET[$tdir]:-}" ]] && installed_suffix=" (installed)"
+                    if [[ "${THEME_SELECTIONS[$tname]:-0}" == "1" ]]; then
+                        R=" [x] ${tname}${installed_suffix}"
+                    else
+                        R=" [ ] ${tname}${installed_suffix}"
+                    fi ;;
             esac
         fi
 
@@ -2476,6 +2624,16 @@ toggle_current_item() {
                 TOGGLE_SELECTIONS[$TOGGLE_ID]=0
             fi
             ;;
+        11) # Extra Themes (simple toggle)
+            local entry="${EXTRA_THEMES[$ITEM_CURSOR]}"
+            local tname="${entry%%|*}"
+            local cur="${THEME_SELECTIONS[$tname]:-0}"
+            if [ "$cur" -eq 0 ]; then
+                THEME_SELECTIONS[$tname]=1
+            else
+                THEME_SELECTIONS[$tname]=0
+            fi
+            ;;
     esac
 }
 
@@ -2528,6 +2686,19 @@ done
 for webapp in "${INSTALLED_WEBAPPS[@]}"; do
     if [ "${WEBAPP_SELECTIONS[$webapp]:-0}" -eq 1 ]; then
         SELECTED_WEBAPPS_FINAL+=("$webapp")
+    fi
+done
+
+# Build list of selected themes (filtering out already-installed)
+declare -a SELECTED_THEMES_FINAL=()
+for entry in "${EXTRA_THEMES[@]}"; do
+    local_tname="${entry%%|*}"
+    local_turl="${entry#*|}"
+    if [ "${THEME_SELECTIONS[$local_tname]:-0}" -eq 1 ]; then
+        local_tdir=$(get_theme_dir_name "$local_turl")
+        if [[ -z "${INSTALLED_THEME_SET[$local_tdir]:-}" ]]; then
+            SELECTED_THEMES_FINAL+=("$local_tname|$local_turl")
+        fi
     fi
 done
 
@@ -2668,7 +2839,7 @@ fi
 
 # Check if anything was selected
 has_selection=false
-if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ] || [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ]; then
+if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ] || [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ] || [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ]; then
     has_selection=true
 fi
 for key in "${!TOGGLE_SELECTIONS[@]}"; do
@@ -2820,6 +2991,56 @@ fi
 
 if [ "$DISABLE_MEDIA_DIRECTORIES" = true ]; then
     disable_media_directories
+fi
+
+# Handle theme installations
+if [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ]; then
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Confirm Theme Installation${RESET}"
+    echo
+    echo
+    echo -e "${DIM}  Themes (${#SELECTED_THEMES_FINAL[@]}):${RESET}"
+    for entry in "${SELECTED_THEMES_FINAL[@]}"; do
+        local_tname="${entry%%|*}"
+        echo "    ${DIM}•${RESET}  $local_tname"
+    done
+    echo
+    echo
+    echo -e "${DIM}  The last theme installed will become the active theme.${RESET}"
+    echo
+    echo
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Installing themes..."
+        echo
+
+        local_current=0
+        local_total=${#SELECTED_THEMES_FINAL[@]}
+
+        for entry in "${SELECTED_THEMES_FINAL[@]}"; do
+            local_tname="${entry%%|*}"
+            local_turl="${entry#*|}"
+            ((local_current++))
+
+            echo -e "  ${DIM}[$local_current/$local_total]${RESET} Installing $local_tname..."
+
+            if omarchy-theme-install "$local_turl" >/dev/null 2>&1; then
+                echo -e "    ${CHECKED}✓${RESET}  Installed: $local_tname"
+                SUMMARY_LOG+=("✓  Installed theme: $local_tname")
+            else
+                echo -e "    ${DIM}✗${RESET}  Failed: $local_tname"
+                SUMMARY_LOG+=("✗  Failed to install theme: $local_tname")
+            fi
+        done
+        echo
+    else
+        SUMMARY_LOG+=("–  Theme installation cancelled")
+    fi
 fi
 
 # If only action items were selected, show summary and exit

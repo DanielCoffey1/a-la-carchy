@@ -11,6 +11,7 @@ A simple TUI (Terminal User Interface) debloater and configuration tool for Omar
 - **Beautiful centered TUI** with smooth navigation
 - Interactive checklist of preinstalled packages and webapps
 - Only shows packages and webapps that are currently installed
+- **86 extra community themes** browseable and installable with one click
 - **40+ configuration tweaks** for keybindings, display, and system settings
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
@@ -151,6 +152,108 @@ The script can also remove the following preinstalled Omarchy webapps:
 | Disable fingerprint auth | Remove fingerprint authentication |
 | Enable FIDO2 auth | Set up security keys (YubiKey, etc.) |
 | Disable FIDO2 auth | Remove security key authentication |
+
+### Extra Themes
+
+Browse and install 86 community-made themes directly from the TUI. Themes are sourced from the [Omarchy Extra Themes](https://learn.omacom.io/2/the-omarchy-manual/90/extra-themes) directory and installed via `omarchy-theme-install`.
+
+- Already-installed themes are marked with `(installed)` and skipped during installation
+- The last theme installed becomes the active theme
+- Themes are installed to `~/.config/omarchy/themes/`
+
+<details>
+<summary>Available themes (86)</summary>
+
+| Theme | Repository |
+|-------|------------|
+| Aetheria | JJDizz1L/aetheria |
+| All Hallow's Eve | guilhermetk/omarchy-all-hallows-eve-theme |
+| Amberbyte | tahfizhabib/omarchy-amberbyte-theme |
+| Arc Blueberry | vale-c/omarchy-arc-blueberry |
+| Archwave | davidguttman/archwave |
+| Artzen | tahfizhabib/omarchy-artzen-theme |
+| Ash | bjarneo/omarchy-ash-theme |
+| Aura | bjarneo/omarchy-aura-theme |
+| Ayaka | abhijeet-swami/omarchy-ayaka-theme |
+| Azure Glow | Hydradevx/omarchy-azure-glow-theme |
+| Bauhaus | somerocketeer/omarchy-bauhaus-theme |
+| Black Arch | ankur311sudo/black_arch |
+| Black Gold | HANCORE-linux/omarchy-blackgold-theme |
+| Black Turq | HANCORE-linux/omarchy-blackturq-theme |
+| Bliss | mishonki3/omarchy-bliss-theme |
+| Blue Ridge Dark | hipsterusername/omarchy-blueridge-dark-theme |
+| bluedotrb | dotsilva/omarchy-bluedotrb-theme |
+| Catppuccin Mocha Dark | Luquatic/omarchy-catppuccin-dark |
+| Citrus Cynapse | Grey-007/citrus-cynapse |
+| Cobalt2 | hoblin/omarchy-cobalt2-theme |
+| Darcula | noahljungberg/omarchy-darcula-theme |
+| Demon | HANCORE-linux/omarchy-demon-theme |
+| Dotrb | dotsilva/omarchy-dotrb-theme |
+| Drac | ShehabShaef/omarchy-drac-theme |
+| Dracula | catlee/omarchy-dracula-theme |
+| Eldritch | eldritch-theme/omarchy |
+| Evergarden | celsobenedetti/omarchy-evergarden |
+| Felix | TyRichards/omarchy-felix-theme |
+| Fireside | bjarneo/omarchy-fireside-theme |
+| Flexoki Dark | euandeas/omarchy-flexoki-dark-theme |
+| Forest Green | abhijeet-swami/omarchy-forest-green-theme |
+| Frost | bjarneo/omarchy-frost-theme |
+| Futurism | bjarneo/omarchy-futurism-theme |
+| Gold Rush | tahayvr/omarchy-gold-rush-theme |
+| Green Garden | kalk-ak/omarchy-green-garden-theme |
+| Green Hakkar | joaquinmeza/omarchy-hakker-green-theme |
+| Gruvu | ankur311sudo/gruvu |
+| Infernium | RiO7MAKK3R/omarchy-infernium-dark-theme |
+| Map Quest | ItsABigIgloo/omarchy-mapquest-theme |
+| Mars | steve-lohmeyer/omarchy-mars-theme |
+| Mechanoonna | HANCORE-linux/omarchy-mechanoonna-theme |
+| Miasma | OldJobobo/omarchy-miasma-theme |
+| Midnight | JaxonWright/omarchy-midnight-theme |
+| Milky Matcha | hipsterusername/omarchy-milkmatcha-light-theme |
+| Monochrome | Swarnim114/omarchy-monochrome-theme |
+| Monokai | bjarneo/omarchy-monokai-theme |
+| Nagai Poolside | somerocketeer/omarchy-nagai-poolside-theme |
+| Neo Sploosh | monoooki/omarchy-neo-sploosh-theme |
+| Neovoid | RiO7MAKK3R/omarchy-neovoid-theme |
+| NES | bjarneo/omarchy-nes-theme |
+| Omacarchy | RiO7MAKK3R/omarchy-omacarchy-theme |
+| One Dark Pro | sc0ttman/omarchy-one-dark-pro-theme |
+| Pandora | imbypass/omarchy-pandora-theme |
+| Pina | bjarneo/omarchy-pina-theme |
+| Pink Blood | ITSZXY/pink-blood-omarchy-theme |
+| Pulsar | bjarneo/omarchy-pulsar-theme |
+| Purple Moon | Grey-007/purple-moon |
+| Purplewave | dotsilva/omarchy-purplewave-theme |
+| Rainy Night | atif-1402/omarchy-rainynight-theme |
+| RetroPC | rondilley/omarchy-retropc-theme |
+| Rose of Dune | HANCORE-linux/omarchy-roseofdune-theme |
+| Rose Pine Dark | guilhermetk/omarchy-rose-pine-dark |
+| Sakura | bjarneo/omarchy-sakura-theme |
+| Sapphire | HANCORE-linux/omarchy-sapphire-theme |
+| Shades of Jade | HANCORE-linux/omarchy-shadesofjade-theme |
+| Snow | bjarneo/omarchy-snow-theme |
+| Snow Black | ankur311sudo/snow_black |
+| Solarized | Gazler/omarchy-solarized-theme |
+| Solarized Light | dfrico/omarchy-solarized-light-theme |
+| Solarized Osaka | motorsss/omarchy-solarizedosaka-theme |
+| Space Monkey | TyRichards/omarchy-space-monkey-theme |
+| Sunset | rondilley/omarchy-sunset-theme |
+| Sunset Drive | tahayvr/omarchy-sunset-drive-theme |
+| Super Game Bro | TyRichards/omarchy-super-game-bro-theme |
+| Synthwave '84 | omacom-io/omarchy-synthwave84-theme |
+| Temerald | Ahmad-Mtr/omarchy-temerald-theme |
+| The Greek | HANCORE-linux/omarchy-thegreek-theme |
+| Tokyo Night OLED | Justin-De-Sio/omarchy-tokyoled-theme |
+| Torrentz Hydra | monoooki/omarchy-torrentz-hydra-theme |
+| Tycho | leonardobetti/omarchy-tycho |
+| Van Gogh | Nirmal314/omarchy-van-gogh-theme |
+| Vesper | thmoee/omarchy-vesper-theme |
+| VHS 80 | tahayvr/omarchy-vhs80-theme |
+| Void | vyrx-dev/omarchy-void-theme |
+| Waveform Dark | hipsterusername/omarchy-waveform-dark-theme |
+| White Gold | HANCORE-linux/omarchy-whitegold-theme |
+
+</details>
 
 ### Backup Config
 
