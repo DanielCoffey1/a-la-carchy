@@ -134,6 +134,8 @@ The script can also remove the following preinstalled Omarchy webapps:
 | Disable 12-hour clock | 24-hour format |
 | Show clock date | Display day name on clock (e.g. "Sunday 10:55 AM") |
 | Hide clock date | Show time only (e.g. "10:55 AM") |
+| Show window title | Display active window name next to workspaces |
+| Hide window title | Remove active window name from waybar |
 
 #### Media Organization
 

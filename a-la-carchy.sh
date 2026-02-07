@@ -1826,6 +1826,127 @@ disable_12h_clock() {
     echo
 }
 
+show_window_title() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Show Window Title${RESET}"
+    echo
+    echo -e "  ${DIM}Displays the active window name on the waybar next to workspaces.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Show window title -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already enabled
+    if grep -q 'hyprland/window' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Window title is already shown. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Show window title -- already set")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Show window title -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Add hyprland/window to modules-left after workspaces
+    sed -i 's/"hyprland\/workspaces"\]/"hyprland\/workspaces", "hyprland\/window"]/' "$WAYBAR_CONF"
+
+    # Add hyprland/window config block before the closing brace
+    sed -i '/^}$/i\  ,"hyprland/window": {\n    "format": "{}",\n    "max-length": 40,\n    "tooltip": false\n  }' "$WAYBAR_CONF"
+
+    # Restart waybar to apply
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Window title shown"
+    SUMMARY_LOG+=("✓  Showing window title")
+    echo
+}
+
+hide_window_title() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Hide Window Title${RESET}"
+    echo
+    echo -e "  ${DIM}Removes the active window name from the waybar.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Hide window title -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already hidden
+    if ! grep -q 'hyprland/window' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Window title is already hidden. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Hide window title -- already set")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Hide window title -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Remove hyprland/window from modules-left
+    sed -i 's/, "hyprland\/window"//' "$WAYBAR_CONF"
+
+    # Remove hyprland/window config block
+    sed -i '/"hyprland\/window"/,/^  }/d' "$WAYBAR_CONF"
+
+    # Clean up any trailing comma left before closing brace
+    sed -i -z 's/,\n}/\n}/' "$WAYBAR_CONF"
+
+    # Restart waybar to apply
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Window title hidden"
+    SUMMARY_LOG+=("✓  Hidden window title")
+    echo
+}
+
 show_clock_date() {
     clear
     echo
@@ -2136,6 +2257,7 @@ declare -a APPEARANCE_ITEMS=(
     "tray_icons|Tray icons|Show all|Hide|toggle|Show all system tray icons or hide extras"
     "clock_format|Clock format|12h|24h|radio|Set waybar clock to 12-hour or 24-hour format"
     "clock_date|Clock date|Show|Hide|toggle|Show or hide the day name on the waybar clock"
+    "window_title|Window title|Show|Hide|toggle|Show active window name on waybar next to workspaces"
     "media_dirs|Media dirs|Enable|Disable|toggle|Organize screenshots and recordings into subdirs"
 )
 
@@ -2938,6 +3060,14 @@ case "${TOGGLE_SELECTIONS[clock_date]:-0}" in
     2) HIDE_CLOCK_DATE=true ;;
 esac
 
+# window_title: 1=Show, 2=Hide
+SHOW_WINDOW_TITLE=false
+HIDE_WINDOW_TITLE=false
+case "${TOGGLE_SELECTIONS[window_title]:-0}" in
+    1) SHOW_WINDOW_TITLE=true ;;
+    2) HIDE_WINDOW_TITLE=true ;;
+esac
+
 # caps_lock: 1=Normal (restore), 2=Compose
 RESTORE_CAPSLOCK=false
 USE_CAPSLOCK_COMPOSE=false
@@ -3122,6 +3252,14 @@ fi
 
 if [ "$HIDE_CLOCK_DATE" = true ]; then
     hide_clock_date
+fi
+
+if [ "$SHOW_WINDOW_TITLE" = true ]; then
+    show_window_title
+fi
+
+if [ "$HIDE_WINDOW_TITLE" = true ]; then
+    hide_window_title
 fi
 
 # Handle theme installations
