@@ -164,6 +164,8 @@ Browse and install 86 community-made themes directly from the TUI. Themes are so
 - Already-installed themes are marked with `(installed)` and skipped during installation
 - The last theme installed becomes the active theme
 - Themes are installed to `~/.config/omarchy/themes/`
+- Press `A` to select/deselect all themes at once
+- Themes that require GitHub authentication are automatically skipped after a timeout
 
 <details>
 <summary>Available themes (86)</summary>

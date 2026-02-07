@@ -2693,7 +2693,11 @@ draw_interface() {
 
     # Footer (each line exactly 80 chars, ASCII only)
     printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
-    printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
+    if [ $CATEGORY_CURSOR -eq 11 ]; then
+        printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit         │"
+    else
+        printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
+    fi
     printf '%s\n' "└──────────────────────────────────────────────────────────────────────────────┘"
 }
 
@@ -2795,11 +2799,42 @@ handle_input() {
         '')  # Enter - confirm
             return 1
             ;;
+        'a'|'A')  # Select all / deselect all (Extra Themes only)
+            if [ $CATEGORY_CURSOR -eq 11 ]; then
+                toggle_all_themes
+            fi
+            ;;
         'q'|'Q')  # Quit
             return 2
             ;;
     esac
     return 0
+}
+
+# Toggle all themes: if any are selected, deselect all; otherwise select all
+toggle_all_themes() {
+    local any_selected=false
+    for entry in "${EXTRA_THEMES[@]}"; do
+        local tname="${entry%%|*}"
+        if [ "${THEME_SELECTIONS[$tname]:-0}" -eq 1 ]; then
+            any_selected=true
+            break
+        fi
+    done
+
+    if [ "$any_selected" = true ]; then
+        # Deselect all
+        for entry in "${EXTRA_THEMES[@]}"; do
+            local tname="${entry%%|*}"
+            THEME_SELECTIONS[$tname]=0
+        done
+    else
+        # Select all
+        for entry in "${EXTRA_THEMES[@]}"; do
+            local tname="${entry%%|*}"
+            THEME_SELECTIONS[$tname]=1
+        done
+    fi
 }
 
 # Toggle the currently selected item
@@ -3290,6 +3325,7 @@ if [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ]; then
 
         local_current=0
         local_total=${#SELECTED_THEMES_FINAL[@]}
+        local_timeout=30
 
         for entry in "${SELECTED_THEMES_FINAL[@]}"; do
             local_tname="${entry%%|*}"
@@ -3298,9 +3334,13 @@ if [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ]; then
 
             echo -e "  ${DIM}[$local_current/$local_total]${RESET} Installing $local_tname..."
 
-            if omarchy-theme-install "$local_turl" >/dev/null 2>&1; then
+            if timeout $local_timeout omarchy-theme-install "$local_turl" >/dev/null 2>&1; then
                 echo -e "    ${CHECKED}✓${RESET}  Installed: $local_tname"
                 SUMMARY_LOG+=("✓  Installed theme: $local_tname")
+            elif [ $? -eq 124 ]; then
+                echo -e "    ${DIM}✗${RESET}  Skipped: $local_tname (timed out -- may require GitHub auth)"
+                SUMMARY_LOG+=("✗  Skipped theme: $local_tname (timed out)")
+                local_timeout=15
             else
                 echo -e "    ${DIM}✗${RESET}  Failed: $local_tname"
                 SUMMARY_LOG+=("✗  Failed to install theme: $local_tname")
