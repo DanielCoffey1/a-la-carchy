@@ -253,7 +253,7 @@ backup_configs() {
 
     echo -e "  ${DIM}Directories to back up:${RESET}"
     for d in "${existing_dirs[@]}"; do
-        echo "    ${DIM}•${RESET}  ~/$d"
+        echo -e "    ${DIM}•${RESET}  ~/$d"
     done
     echo
     echo
@@ -3004,7 +3004,7 @@ if [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ]; then
     echo -e "${DIM}  Themes (${#SELECTED_THEMES_FINAL[@]}):${RESET}"
     for entry in "${SELECTED_THEMES_FINAL[@]}"; do
         local_tname="${entry%%|*}"
-        echo "    ${DIM}•${RESET}  $local_tname"
+        echo -e "    ${DIM}•${RESET}  $local_tname"
     done
     echo
     echo
@@ -3070,7 +3070,7 @@ echo
 if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ]; then
     echo -e "${DIM}  Packages (${#SELECTED_PACKAGES_FINAL[@]}):${RESET}"
     for pkg in "${SELECTED_PACKAGES_FINAL[@]}"; do
-        echo "    ${DIM}•${RESET}  $pkg"
+        echo -e "    ${DIM}•${RESET}  $pkg"
     done
     echo
 fi
@@ -3078,7 +3078,7 @@ fi
 if [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ]; then
     echo -e "${DIM}  Web Apps (${#SELECTED_WEBAPPS_FINAL[@]}):${RESET}"
     for webapp in "${SELECTED_WEBAPPS_FINAL[@]}"; do
-        echo "    ${DIM}•${RESET}  $webapp"
+        echo -e "    ${DIM}•${RESET}  $webapp"
     done
     echo
 fi
