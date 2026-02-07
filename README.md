@@ -132,6 +132,8 @@ The script can also remove the following preinstalled Omarchy webapps:
 | Hide tray icons | Use expander for cleaner bar |
 | Enable 12-hour clock | Clock displays with AM/PM |
 | Disable 12-hour clock | 24-hour format |
+| Show clock date | Display day name on clock (e.g. "Sunday 10:55 AM") |
+| Hide clock date | Show time only (e.g. "10:55 AM") |
 
 #### Media Organization
 

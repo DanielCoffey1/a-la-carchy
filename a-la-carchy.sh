@@ -1826,6 +1826,120 @@ disable_12h_clock() {
     echo
 }
 
+show_clock_date() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Show Clock Date${RESET}"
+    echo
+    echo -e "  ${DIM}Adds the day name to the waybar clock.${RESET}"
+    echo -e "  ${DIM}Example: \"Sunday 10:55 AM\" or \"Sunday 22:55\"${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Show clock date -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if date is already shown (look for %A in the clock format line)
+    if grep -q '"format":.*%A' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Clock date is already visible. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Show clock date -- already set")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Show clock date -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Add %A before the time format (handles both 12h and 24h)
+    sed -i 's/{:L%H:%M/{:L%A %H:%M/g; s/{:L%I:%M/{:L%A %I:%M/g' "$WAYBAR_CONF"
+
+    # Restart waybar to apply
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Clock date shown"
+    SUMMARY_LOG+=("✓  Showing clock date")
+    echo
+}
+
+hide_clock_date() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Hide Clock Date${RESET}"
+    echo
+    echo -e "  ${DIM}Removes the day name from the waybar clock.${RESET}"
+    echo -e "  ${DIM}Example: \"10:55 AM\" or \"22:55\"${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Hide clock date -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if date is already hidden
+    if ! grep -q '"format":.*%A' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Clock date is already hidden. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Hide clock date -- already set")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Hide clock date -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    # Remove %A and trailing space from the clock format
+    sed -i 's/%A //g' "$WAYBAR_CONF"
+
+    # Restart waybar to apply
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Clock date hidden"
+    SUMMARY_LOG+=("✓  Hidden clock date")
+    echo
+}
+
 enable_media_directories() {
     clear
     echo
@@ -2021,6 +2135,7 @@ declare -a APPEARANCE_ITEMS=(
     "window_gaps|Window gaps|Remove|Restore|toggle|Remove or restore gaps between tiled windows"
     "tray_icons|Tray icons|Show all|Hide|toggle|Show all system tray icons or hide extras"
     "clock_format|Clock format|12h|24h|radio|Set waybar clock to 12-hour or 24-hour format"
+    "clock_date|Clock date|Show|Hide|toggle|Show or hide the day name on the waybar clock"
     "media_dirs|Media dirs|Enable|Disable|toggle|Organize screenshots and recordings into subdirs"
 )
 
@@ -2815,6 +2930,14 @@ case "${TOGGLE_SELECTIONS[media_dirs]:-0}" in
     2) DISABLE_MEDIA_DIRECTORIES=true ;;
 esac
 
+# clock_date: 1=Show, 2=Hide
+SHOW_CLOCK_DATE=false
+HIDE_CLOCK_DATE=false
+case "${TOGGLE_SELECTIONS[clock_date]:-0}" in
+    1) SHOW_CLOCK_DATE=true ;;
+    2) HIDE_CLOCK_DATE=true ;;
+esac
+
 # caps_lock: 1=Normal (restore), 2=Compose
 RESTORE_CAPSLOCK=false
 USE_CAPSLOCK_COMPOSE=false
@@ -2991,6 +3114,14 @@ fi
 
 if [ "$DISABLE_MEDIA_DIRECTORIES" = true ]; then
     disable_media_directories
+fi
+
+if [ "$SHOW_CLOCK_DATE" = true ]; then
+    show_clock_date
+fi
+
+if [ "$HIDE_CLOCK_DATE" = true ]; then
+    hide_clock_date
 fi
 
 # Handle theme installations
