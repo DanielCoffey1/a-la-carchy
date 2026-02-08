@@ -4,11 +4,12 @@
 
 ![A La Carchy TUI](screenshots/A%20La%20Carchy.png)
 
-A simple TUI (Terminal User Interface) debloater and configuration tool for Omarchy Linux.
+A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Linux.
 
 ## Features
 
-- **Beautiful centered TUI** with smooth navigation
+- **Two-panel TUI** with categories on the left and items on the right
+- **Description bar** showing context for the currently highlighted item
 - Interactive checklist of preinstalled packages and webapps
 - Only shows packages and webapps that are currently installed
 - **86 extra community themes** browseable and installable with one click
@@ -18,7 +19,6 @@ A simple TUI (Terminal User Interface) debloater and configuration tool for Omar
 - Safe removal with confirmation prompts
 - **No installation required** - just run the one-liner command!
 - No external dependencies needed
-- Clean, modern interface
 
 ## Quick Start (One-Liner)
 
@@ -29,8 +29,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/DanielCoffey1/a-la-carchy/ma
 ```
 
 That's it! The script will:
-1. Show you a beautiful centered TUI
-2. Let you select packages/webapps to remove and actions to run
+1. Show you a two-panel TUI with category navigation
+2. Let you browse categories, select items, and configure tweaks
 3. Execute your selections safely with confirmation prompts
 
 ## Alternative: Download and Run
@@ -51,10 +51,12 @@ chmod +x a-la-carchy.sh
 ## How to Use
 
 1. Run the script using one of the methods above
-2. Use the interactive menu:
-   - **↑/↓** Navigate through applications and actions
-   - **Space** Select/deselect items
-   - **Enter** Continue with selected actions
+2. Use the two-panel interface:
+   - **←/→** Switch between the category panel (left) and items panel (right)
+   - **↑/↓** Navigate within the current panel
+   - **Space** Select/deselect items (in the right panel)
+   - **A** Select/deselect all (Extra Themes only)
+   - **Enter** Confirm and execute selected actions
    - **Q** Quit
 3. Type `yes` when prompted to confirm
 
