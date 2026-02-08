@@ -2694,7 +2694,7 @@ draw_interface() {
     # Footer (each line exactly 80 chars, ASCII only)
     printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
     if [ $CATEGORY_CURSOR -eq 11 ]; then
-        printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit         │"
+        printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit          │"
     else
         printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
     fi
