@@ -3170,6 +3170,11 @@ if [ "$has_selection" = false ]; then
     exit 0
 fi
 
+# Handle backup first (before any config changes)
+if [ "$BACKUP_CONFIGS" = true ]; then
+    backup_configs
+fi
+
 # Handle keybind reset (runs its own confirmation flow)
 if [ "$RESET_KEYBINDS" = true ]; then
     rebind_close_window
@@ -3178,11 +3183,6 @@ fi
 # Handle keybind restore (runs its own confirmation flow)
 if [ "$RESTORE_KEYBINDS" = true ]; then
     restore_close_window
-fi
-
-# Handle backup (runs its own confirmation flow)
-if [ "$BACKUP_CONFIGS" = true ]; then
-    backup_configs
 fi
 
 # Handle monitor scaling (runs its own confirmation flow)
