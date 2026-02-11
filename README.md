@@ -276,12 +276,37 @@ Creates a timestamped archive (`~/omarchy-backup-YYYYMMDD_HHMMSS.tar.gz`) of you
 - `~/.config/kitty/`
 - `~/.config/ghostty/`
 
-Also generates `~/restore-omarchy-config.sh` — a self-contained script that extracts the archive back into place. Symlinks are followed so the actual file content is preserved in the backup.
+Also generates `~/restore-omarchy-config.sh` — a self-contained script to restore from any previous backup. Symlinks are followed so the actual file content is preserved in the backup.
 
-To restore later:
+#### Backup Timing
+
+When backup is selected alongside configuration tweaks, you'll be prompted to choose when to back up:
+
+| Option | Description |
+|--------|-------------|
+| Before changes | Preserve current state as a rollback point |
+| After changes | Save the new configuration |
+| Both | Full safety net — before and after |
+
+If backup is the only selection (no tweaks), it runs immediately.
+
+#### Restoring from Backup
+
+Run the restore script to choose from all available backups:
 
 ```bash
 bash ~/restore-omarchy-config.sh
+```
+
+The restore script lists all backups with dates and sizes, letting you select which one to restore:
+
+```
+Available backups:
+
+  1) 2026-02-11 14:30:15  (12K)
+  2) 2026-02-11 14:28:42  (12K)
+
+Select a backup to restore (1-2):
 ```
 
 ## Safety Features
@@ -291,7 +316,9 @@ bash ~/restore-omarchy-config.sh
 - Shows exactly what will be removed
 - Uses `-Rns` flags to remove dependencies safely
 - Timestamped backups created before modifying any config file
+- Backup runs before any config modifications when selected with tweaks
 - Config backup follows symlinks to preserve actual file content
+- Restore script lists all backups and lets you choose which to restore
 - Restore script prompts for confirmation before overwriting
 - Idempotent operations - skips actions already applied
 

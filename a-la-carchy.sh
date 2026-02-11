@@ -3170,8 +3170,49 @@ if [ "$has_selection" = false ]; then
     exit 0
 fi
 
-# Handle backup first (before any config changes)
+# Handle backup timing
+BACKUP_BEFORE=false
+BACKUP_AFTER=false
 if [ "$BACKUP_CONFIGS" = true ]; then
+    # Check if any tweaks are also selected (config-modifying actions)
+    has_tweaks=false
+    for key in "${!TOGGLE_SELECTIONS[@]}"; do
+        if [ "$key" != "backup_config" ] && [ "${TOGGLE_SELECTIONS[$key]}" -ne 0 ]; then
+            has_tweaks=true
+            break
+        fi
+    done
+
+    if [ "$has_tweaks" = true ]; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Backup Timing${RESET}"
+        echo
+        echo -e "  ${DIM}You selected tweaks that will modify config files.${RESET}"
+        echo -e "  ${DIM}When would you like to back up?${RESET}"
+        echo
+        echo -e "    ${BOLD}1)${RESET}  Before changes  ${DIM}(preserve current state)${RESET}"
+        echo -e "    ${BOLD}2)${RESET}  After changes   ${DIM}(save new configuration)${RESET}"
+        echo -e "    ${BOLD}3)${RESET}  Both            ${DIM}(before and after)${RESET}"
+        echo
+        while true; do
+            printf "  ${BOLD}Select (1-3):${RESET} "
+            read -r < /dev/tty
+            case "$REPLY" in
+                1) BACKUP_BEFORE=true; break ;;
+                2) BACKUP_AFTER=true; break ;;
+                3) BACKUP_BEFORE=true; BACKUP_AFTER=true; break ;;
+                *) echo -e "  ${DIM}Invalid selection. Please enter 1, 2, or 3.${RESET}" ;;
+            esac
+        done
+    else
+        BACKUP_BEFORE=true
+    fi
+fi
+
+# Run backup before changes if requested
+if [ "$BACKUP_BEFORE" = true ]; then
     backup_configs
 fi
 
@@ -3320,6 +3361,11 @@ fi
 
 if [ "$HIDE_WINDOW_TITLE" = true ]; then
     hide_window_title
+fi
+
+# Run backup after changes if requested
+if [ "$BACKUP_AFTER" = true ]; then
+    backup_configs
 fi
 
 # Handle theme installations
