@@ -285,13 +285,40 @@ backup_configs() {
     cat > "$restore_script" << 'RESTORE_EOF'
 #!/bin/bash
 # Omarchy Config Restore Script
-ARCHIVE="ARCHIVE_PLACEHOLDER"
 
-if [[ ! -f "$ARCHIVE" ]]; then
-    echo "Error: Archive not found: $ARCHIVE"
+# Find all backup archives
+mapfile -t BACKUPS < <(ls -1t ~/omarchy-backup-*.tar.gz 2>/dev/null)
+
+if [[ ${#BACKUPS[@]} -eq 0 ]]; then
+    echo "No backup archives found in ~/"
     exit 1
 fi
 
+echo "Available backups:"
+echo
+for i in "${!BACKUPS[@]}"; do
+    # Extract timestamp from filename for display
+    fname=$(basename "${BACKUPS[$i]}")
+    ts="${fname#omarchy-backup-}"
+    ts="${ts%.tar.gz}"
+    date_part="${ts:0:4}-${ts:4:2}-${ts:6:2}"
+    time_part="${ts:9:2}:${ts:11:2}:${ts:13:2}"
+    size=$(du -h "${BACKUPS[$i]}" | cut -f1)
+    echo "  $((i + 1))) $date_part $time_part  ($size)"
+done
+
+echo
+printf "Select a backup to restore (1-%d): " "${#BACKUPS[@]}"
+read -r choice
+
+if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#BACKUPS[@]} )); then
+    echo "Invalid selection."
+    exit 1
+fi
+
+ARCHIVE="${BACKUPS[$((choice - 1))]}"
+
+echo
 echo "This will restore Omarchy config files from:"
 echo "  $ARCHIVE"
 echo
@@ -314,8 +341,6 @@ else
 fi
 RESTORE_EOF
 
-    # Patch in the actual archive path
-    sed -i "s|ARCHIVE_PLACEHOLDER|$archive|" "$restore_script"
     chmod +x "$restore_script"
 
     echo -e "    ${CHECKED}✓${RESET}  Restore script: $restore_script"
