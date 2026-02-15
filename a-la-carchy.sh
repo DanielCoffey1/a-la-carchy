@@ -243,6 +243,75 @@ load_all_bindings() {
     fi
 }
 
+# Parse a Hyprland settings item string into global variables
+parse_hypr_item() {
+    IFS='|' read -r HYPR_ID HYPR_LABEL HYPR_TYPE HYPR_SECTION HYPR_KEY HYPR_DEFAULT HYPR_FILE HYPR_DESC <<< "$1"
+}
+
+# Load current values from managed blocks in config files
+load_hypr_settings() {
+    HYPR_CURRENT=()
+    local marker_start="# === a-la-carchy hyprland settings ==="
+    local marker_end="# === end a-la-carchy hyprland settings ==="
+
+    local config_files=("$LOOKNFEEL_CONF" "$INPUT_CONF")
+    for conf in "${config_files[@]}"; do
+        [[ -f "$conf" ]] || continue
+
+        local in_block=false
+        local section_stack=()
+        while IFS= read -r line; do
+            if [[ "$line" == "$marker_start" ]]; then
+                in_block=true
+                section_stack=()
+                continue
+            fi
+            if [[ "$line" == "$marker_end" ]]; then
+                in_block=false
+                continue
+            fi
+            $in_block || continue
+
+            # Skip empty lines and comments
+            local trimmed="${line#"${line%%[![:space:]]*}"}"
+            [[ -z "$trimmed" ]] && continue
+            [[ "$trimmed" == \#* ]] && continue
+
+            # Opening brace: push section
+            if [[ "$trimmed" =~ ^([a-zA-Z_][a-zA-Z0-9_.-]*)[[:space:]]*\{$ ]]; then
+                section_stack+=("${BASH_REMATCH[1]}")
+                continue
+            fi
+
+            # Closing brace: pop section
+            if [[ "$trimmed" == "}" ]]; then
+                if [[ ${#section_stack[@]} -gt 0 ]]; then
+                    unset 'section_stack[${#section_stack[@]}-1]'
+                fi
+                continue
+            fi
+
+            # Key = value assignment
+            if [[ "$trimmed" =~ ^([a-zA-Z_][a-zA-Z0-9_.-]*)[[:space:]]*=[[:space:]]*(.+)$ ]]; then
+                local k="${BASH_REMATCH[1]}"
+                local v="${BASH_REMATCH[2]}"
+                # Trim trailing whitespace from value
+                v="${v%"${v##*[![:space:]]}"}"
+
+                # Build full section path
+                local section_path=""
+                for s in "${section_stack[@]}"; do
+                    [[ -n "$section_path" ]] && section_path+="."
+                    section_path+="$s"
+                done
+
+                local full_key="${section_path}.${k}"
+                HYPR_CURRENT["$full_key"]="$v"
+            fi
+        done < "$conf"
+    done
+}
+
 # Check if a keybind editor item is a section header
 is_binding_header() {
     [[ "${EDIT_BINDINGS_ITEMS[$1]}" == HEADER* ]]
@@ -422,6 +491,337 @@ edit_binding() {
             BINDING_EDITS[$idx]="$new_mods|$new_key"
             ;;
     esac
+}
+
+# Guided Hyprland setting edit dialog
+# Dispatches based on type_info: bool, int, float, enum, color
+edit_hypr_setting() {
+    local item="$1"
+    parse_hypr_item "$item"
+
+    local id="$HYPR_ID"
+    local label="$HYPR_LABEL"
+    local type_info="$HYPR_TYPE"
+    local section="$HYPR_SECTION"
+    local config_key="$HYPR_KEY"
+    local default="$HYPR_DEFAULT"
+
+    # Get current display value: pending > saved > default
+    local cur_val="$default"
+    local full_key="${section}.${config_key}"
+    [[ -n "${HYPR_CURRENT[$full_key]:-}" ]] && cur_val="${HYPR_CURRENT[$full_key]}"
+    [[ -n "${HYPR_EDITS[$id]:-}" ]] && cur_val="${HYPR_EDITS[$id]}"
+
+    # Bool: immediate toggle, no dialog
+    if [[ "$type_info" == "bool" ]]; then
+        if [[ "$cur_val" == "true" ]]; then
+            HYPR_EDITS[$id]="false"
+        else
+            HYPR_EDITS[$id]="true"
+        fi
+        return
+    fi
+
+    # Int/Float: text input with range validation
+    if [[ "$type_info" =~ ^(int|float):(.+):(.+)$ ]]; then
+        local val_type="${BASH_REMATCH[1]}"
+        local range_min="${BASH_REMATCH[2]}"
+        local range_max="${BASH_REMATCH[3]}"
+        local input_error=""
+
+        while true; do
+            clear
+            echo
+            echo -e "  ${BOLD}Edit: $label${RESET}"
+            echo -e "  ${DIM}Current value: $cur_val${RESET}"
+            echo -e "  ${DIM}Range: $range_min - $range_max${RESET}"
+            echo
+            if [[ -n "$input_error" ]]; then
+                echo -e "  ${DIM}x $input_error${RESET}"
+                echo
+            fi
+            printf "  Enter new value: "
+
+            stty echo 2>/dev/null
+            tput cnorm
+            read -r new_val < /dev/tty
+            tput civis
+            stty -echo 2>/dev/null
+
+            new_val="${new_val## }"
+            new_val="${new_val%% }"
+
+            if [[ -z "$new_val" ]]; then
+                return  # Cancel on empty input
+            fi
+
+            if [[ "$val_type" == "int" ]]; then
+                if ! [[ "$new_val" =~ ^-?[0-9]+$ ]]; then
+                    input_error="Must be an integer"
+                    continue
+                fi
+                if (( new_val < range_min || new_val > range_max )); then
+                    input_error="Out of range ($range_min - $range_max)"
+                    continue
+                fi
+            else
+                # float validation
+                if ! [[ "$new_val" =~ ^-?[0-9]*\.?[0-9]+$ ]]; then
+                    input_error="Must be a number"
+                    continue
+                fi
+                # Use awk for float comparison
+                if ! awk "BEGIN { exit !(($new_val) >= ($range_min) && ($new_val) <= ($range_max)) }"; then
+                    input_error="Out of range ($range_min - $range_max)"
+                    continue
+                fi
+            fi
+
+            HYPR_EDITS[$id]="$new_val"
+            return
+        done
+    fi
+
+    # Enum: arrow-key selection dialog
+    if [[ "$type_info" =~ ^enum: ]]; then
+        local opts_str="${type_info#enum:}"
+        IFS=':' read -ra opts <<< "$opts_str"
+        local opt_cursor=0
+
+        # Find current value in options
+        for i in "${!opts[@]}"; do
+            if [[ "${opts[$i]}" == "$cur_val" ]]; then
+                opt_cursor=$i
+                break
+            fi
+        done
+
+        while true; do
+            clear
+            echo
+            echo -e "  ${BOLD}Edit: $label${RESET}"
+            echo -e "  ${DIM}Current: $cur_val${RESET}"
+            echo
+            echo -e "  ${DIM}Select option (Up/Down, Enter to confirm):${RESET}"
+            echo
+
+            for i in "${!opts[@]}"; do
+                if [[ $i -eq $opt_cursor ]]; then
+                    echo -e "    ${SELECTED_BG}> ${opts[$i]}${RESET}"
+                else
+                    echo -e "      ${opts[$i]}"
+                fi
+            done
+
+            echo
+            echo -e "  ${DIM}Escape: cancel${RESET}"
+
+            IFS= read -rsn1 key < /dev/tty
+            case "$key" in
+                $'\x1b')
+                    read -rsn2 -t 0.1 key
+                    case "$key" in
+                        '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                        '[B') (( opt_cursor < ${#opts[@]} - 1 )) && ((opt_cursor++)) ;;
+                    esac
+                    [[ -z "$key" ]] && return  # Bare escape = cancel
+                    ;;
+                '')  # Enter - confirm
+                    HYPR_EDITS[$id]="${opts[$opt_cursor]}"
+                    return
+                    ;;
+            esac
+        done
+    fi
+
+    # Color: text input dialog
+    if [[ "$type_info" == "color" ]]; then
+        local input_error=""
+
+        while true; do
+            clear
+            echo
+            echo -e "  ${BOLD}Edit: $label${RESET}"
+            echo -e "  ${DIM}Current: $cur_val${RESET}"
+            echo
+            if [[ -n "$input_error" ]]; then
+                echo -e "  ${DIM}x $input_error${RESET}"
+                echo
+            fi
+            printf "  Enter color value: "
+
+            stty echo 2>/dev/null
+            tput cnorm
+            read -r new_val < /dev/tty
+            tput civis
+            stty -echo 2>/dev/null
+
+            new_val="${new_val## }"
+            new_val="${new_val%% }"
+
+            if [[ -z "$new_val" ]]; then
+                return  # Cancel on empty input
+            fi
+
+            # Basic validation: must contain rgba( or rgb( or be a hex color
+            if [[ "$new_val" =~ rgba?\( ]] || [[ "$new_val" =~ ^0x[0-9a-fA-F]+$ ]]; then
+                HYPR_EDITS[$id]="$new_val"
+                return
+            else
+                input_error="Supports: rgba(RRGGBBAA), rgb(RRGGBB), gradients"
+                continue
+            fi
+        done
+    fi
+}
+
+# Apply all pending Hyprland setting edits to config files
+apply_hypr_edits() {
+    if [[ ${#HYPR_EDITS[@]} -eq 0 ]]; then
+        return
+    fi
+
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Apply Hyprland Settings${RESET}"
+    echo
+    echo -e "  ${DIM}Changes to apply:${RESET}"
+    echo
+
+    # Show summary of changes
+    local all_items=("${HYPR_GENERAL_ITEMS[@]}" "${HYPR_DECORATION_ITEMS[@]}" "${HYPR_INPUT_ITEMS[@]}" "${HYPR_GESTURES_ITEMS[@]}")
+    for entry in "${all_items[@]}"; do
+        parse_hypr_item "$entry"
+        [[ -z "${HYPR_EDITS[$HYPR_ID]:-}" ]] && continue
+        local new_val="${HYPR_EDITS[$HYPR_ID]}"
+        local old_val="$HYPR_DEFAULT"
+        local fk="${HYPR_SECTION}.${HYPR_KEY}"
+        [[ -n "${HYPR_CURRENT[$fk]:-}" ]] && old_val="${HYPR_CURRENT[$fk]}"
+        echo -e "    ${DIM}•${RESET}  $HYPR_LABEL: $old_val -> $new_val"
+    done
+    echo
+    echo
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Hyprland settings -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local marker_start="# === a-la-carchy hyprland settings ==="
+    local marker_end="# === end a-la-carchy hyprland settings ==="
+
+    # Group edits by config file, then by section_path
+    for target_file in "looknfeel" "input"; do
+        local conf
+        [[ "$target_file" == "looknfeel" ]] && conf="$LOOKNFEEL_CONF"
+        [[ "$target_file" == "input" ]] && conf="$INPUT_CONF"
+
+        # Collect edits for this file
+        local -A file_edits=()
+        local has_edits=false
+        for entry in "${all_items[@]}"; do
+            parse_hypr_item "$entry"
+            [[ "$HYPR_FILE" != "$target_file" ]] && continue
+            [[ -z "${HYPR_EDITS[$HYPR_ID]:-}" ]] && continue
+            file_edits["${HYPR_SECTION}.${HYPR_KEY}"]="${HYPR_EDITS[$HYPR_ID]}"
+            has_edits=true
+        done
+        $has_edits || continue
+
+        [[ ! -f "$conf" ]] && continue
+
+        # Backup
+        local backup_file="${conf}.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$conf" "$backup_file"
+        echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+        # Build managed block content with nested sections
+        local -A sections_content=()
+        for full_key in "${!file_edits[@]}"; do
+            local section="${full_key%.*}"
+            local key="${full_key##*.}"
+            local val="${file_edits[$full_key]}"
+            sections_content["$section"]+="    ${key} = ${val}"$'\n'
+        done
+
+        # Build the block with proper nesting
+        local block=""
+        block+="$marker_start"$'\n'
+
+        # Sort sections and build nested structure
+        local -A top_sections=()
+        for section in "${!sections_content[@]}"; do
+            local top="${section%%.*}"
+            top_sections["$top"]=1
+        done
+
+        for top in "${!top_sections[@]}"; do
+            # Collect direct keys for this top section
+            local direct_content="${sections_content[$top]:-}"
+            # Collect sub-sections
+            local -A sub_sections=()
+            for section in "${!sections_content[@]}"; do
+                if [[ "$section" == "$top."* ]]; then
+                    local sub="${section#*.}"
+                    sub_sections["$sub"]="${sections_content[$section]}"
+                fi
+            done
+
+            block+="${top} {"$'\n'
+            if [[ -n "$direct_content" ]]; then
+                block+="$direct_content"
+            fi
+            for sub in "${!sub_sections[@]}"; do
+                block+="    ${sub} {"$'\n'
+                # Indent sub-section content further
+                local sub_content="${sub_sections[$sub]}"
+                while IFS= read -r sline; do
+                    [[ -z "$sline" ]] && continue
+                    block+="    ${sline}"$'\n'
+                done <<< "$sub_content"
+                block+="    }"$'\n'
+            done
+            block+="}"$'\n'
+        done
+
+        block+="$marker_end"
+
+        # Remove existing managed block if present, then append new one
+        if grep -q "$marker_start" "$conf"; then
+            # Use awk to remove the block
+            awk -v start="$marker_start" -v end="$marker_end" '
+                $0 == start { skip=1; next }
+                $0 == end { skip=0; next }
+                !skip { print }
+            ' "$conf" > "${conf}.tmp"
+            mv "${conf}.tmp" "$conf"
+        fi
+
+        # Append the new managed block
+        echo "" >> "$conf"
+        echo "$block" >> "$conf"
+
+        # Log each setting
+        for full_key in "${!file_edits[@]}"; do
+            local key="${full_key##*.}"
+            local val="${file_edits[$full_key]}"
+            echo -e "    ${CHECKED}✓${RESET}  ${full_key} = ${val}"
+            SUMMARY_LOG+=("✓  Hyprland: ${full_key} = ${val}")
+        done
+    done
+
+    echo
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
 }
 
 # Apply all pending keybinding edits to bindings.conf
@@ -2626,6 +3026,11 @@ declare -a CATEGORIES=(
     "  Appearance"
     "  Keyboard"
     "  Utilities"
+    "--- Hyprland ---"
+    "  General"
+    "  Decoration"
+    "  Input"
+    "  Gestures"
     "--- Install ---"
     "  Extra Themes"
 )
@@ -2784,6 +3189,98 @@ declare -a EXTRA_THEMES=(
 # Selection state for themes (by display name): 0=not selected, 1=selected
 declare -A THEME_SELECTIONS=()
 
+# Hyprland General settings (write to looknfeel.conf)
+declare -a HYPR_GENERAL_ITEMS=(
+    "gaps_in|Gap between windows|int:0:100|general|gaps_in|5|looknfeel|Gap size between tiled windows"
+    "gaps_out|Gap from edges|int:0:100|general|gaps_out|10|looknfeel|Gap size from screen edges"
+    "border_size|Border width|int:0:10|general|border_size|2|looknfeel|Window border thickness in pixels"
+    "active_border|Active border color|color|general|col.active_border|rgba(33ccffee) rgba(00ff99ee) 45deg|looknfeel|Border color of focused window"
+    "inactive_border|Inactive border color|color|general|col.inactive_border|rgba(595959aa)|looknfeel|Border color of unfocused windows"
+    "resize_on_border|Drag-resize borders|bool|general|resize_on_border|false|looknfeel|Allow resizing windows by dragging borders"
+    "no_border_floating|No border floating|bool|general|no_border_on_floating|false|looknfeel|Remove borders from floating windows"
+    "allow_tearing|Allow screen tearing|bool|general|allow_tearing|false|looknfeel|Allow tearing for reduced input lag"
+    "layout|Window layout|enum:dwindle:master|general|layout|dwindle|looknfeel|Tiling layout algorithm"
+    "pseudotile|Pseudotiling|bool|dwindle|pseudotile|true|looknfeel|Windows keep requested size in tiling"
+    "preserve_split|Keep split direction|bool|dwindle|preserve_split|true|looknfeel|Maintain split direction on resize"
+    "force_split|Split direction|enum:0:1:2|dwindle|force_split|2|looknfeel|0=follow mouse 1=left/top 2=right/bottom"
+    "smart_split|Smart split|bool|dwindle|smart_split|false|looknfeel|Split direction follows cursor position"
+    "new_status|New window status|enum:master:slave|master|new_status|master|looknfeel|Where new windows appear in master layout"
+    "focus_on_activate|Focus on activation|bool|misc|focus_on_activate|true|looknfeel|Focus windows when they request activation"
+    "disable_logo|Disable startup logo|bool|misc|disable_hyprland_logo|true|looknfeel|Hide the Hyprland logo on startup"
+    "vrr|Variable refresh rate|enum:0:1:2|misc|vrr|0|looknfeel|0=off 1=on 2=fullscreen only (FreeSync/G-Sync)"
+    "new_window_fullscreen|New window vs fullscreen|enum:0:1:2|misc|new_window_takes_over_fullscreen|0|looknfeel|0=behind 1=unfullscreen 2=new fullscreen"
+    "extend_border_grab|Border grab area|int:0:50|general|extend_border_grab_area|15|looknfeel|Extra pixels for grabbing window borders"
+    "middle_click_paste|Middle click paste|bool|misc|middle_click_paste|true|looknfeel|Paste clipboard on middle mouse click"
+    "enable_swallow|Window swallowing|bool|misc|enable_swallow|false|looknfeel|Terminal windows absorb spawned child windows"
+    "workspace_back_forth|Workspace back-forth|bool|binds|workspace_back_and_forth|false|looknfeel|Same workspace key toggles to previous"
+    "allow_ws_cycles|Workspace cycles|bool|binds|allow_workspace_cycles|false|looknfeel|Allow cycling through workspaces with binds"
+    "force_zero_scaling|XWayland zero scale|bool|xwayland|force_zero_scaling|false|looknfeel|Fix blurry XWayland apps on scaled displays"
+    "key_dpms|Keypress wakes display|bool|misc|key_press_enables_dpms|true|looknfeel|Keypress wakes display from DPMS off"
+    "mouse_dpms|Mouse wakes display|bool|misc|mouse_move_enables_dpms|true|looknfeel|Mouse movement wakes display from DPMS off"
+)
+
+# Hyprland Decoration settings (write to looknfeel.conf)
+declare -a HYPR_DECORATION_ITEMS=(
+    "rounding|Corner radius|int:0:30|decoration|rounding|0|looknfeel|Window corner rounding in pixels. See also: Appearance"
+    "shadow_enabled|Shadows|bool|decoration.shadow|enabled|true|looknfeel|Enable window drop shadows"
+    "shadow_range|Shadow range|int:1:100|decoration.shadow|range|2|looknfeel|Shadow spread distance in pixels"
+    "shadow_power|Shadow sharpness|int:1:4|decoration.shadow|render_power|3|looknfeel|Shadow falloff power (1=soft 4=sharp)"
+    "shadow_color|Shadow color|color|decoration.shadow|color|rgba(1a1a1aee)|looknfeel|Shadow color in rgba format"
+    "blur_enabled|Blur|bool|decoration.blur|enabled|true|looknfeel|Enable background blur on transparent windows"
+    "blur_size|Blur radius|int:1:20|decoration.blur|size|2|looknfeel|Blur kernel size (higher=more blur)"
+    "blur_passes|Blur iterations|int:1:10|decoration.blur|passes|2|looknfeel|Blur render passes (higher=smoother)"
+    "blur_special|Blur special ws|bool|decoration.blur|special|true|looknfeel|Apply blur to special workspace background"
+    "blur_brightness|Blur brightness|float:0.0:2.0|decoration.blur|brightness|0.60|looknfeel|Brightness of blurred background"
+    "blur_contrast|Blur contrast|float:0.0:2.0|decoration.blur|contrast|0.75|looknfeel|Contrast of blurred background"
+    "blur_noise|Blur noise|float:0.0:1.0|decoration.blur|noise|0.0117|looknfeel|Noise applied to blur"
+    "blur_popups|Blur popups|bool|decoration.blur|popups|false|looknfeel|Apply blur to popup windows and tooltips"
+    "anim_enabled|Animations|bool|animations|enabled|true|looknfeel|Enable window animations"
+    "dim_inactive|Dim inactive|bool|decoration|dim_inactive|false|looknfeel|Dim unfocused windows"
+    "dim_strength|Dim strength|float:0.0:1.0|decoration|dim_strength|0.5|looknfeel|How much to dim inactive windows"
+    "dim_special|Dim special ws bg|float:0.0:1.0|decoration|dim_special|0.2|looknfeel|Dim amount for special workspace background"
+    "cursor_hide|Hide cursor on type|bool|cursor|hide_on_key_press|true|looknfeel|Hide cursor when typing"
+    "cursor_size|Cursor size|int:16:48|cursor|size|24|looknfeel|Cursor size in pixels"
+    "active_opacity|Active opacity|float:0.0:1.0|decoration|active_opacity|1.0|looknfeel|Opacity of focused window (1.0=opaque)"
+    "inactive_opacity|Inactive opacity|float:0.0:1.0|decoration|inactive_opacity|1.0|looknfeel|Opacity of unfocused windows (1.0=opaque)"
+    "fullscreen_opacity|Fullscreen opacity|float:0.0:1.0|decoration|fullscreen_opacity|1.0|looknfeel|Opacity of fullscreen windows (1.0=opaque)"
+)
+
+# Hyprland Input settings (write to input.conf)
+declare -a HYPR_INPUT_ITEMS=(
+    "sensitivity|Mouse sensitivity|float:-1.0:1.0|input|sensitivity|0|input|Mouse sensitivity (-1.0 to 1.0)"
+    "follow_mouse|Focus follows mouse|enum:0:1:2:3|input|follow_mouse|1|input|0=off 1=always 2=click-unfocus 3=lock-unfocus"
+    "accel_profile|Accel profile|enum:flat:adaptive|input|accel_profile||input|Mouse acceleration profile"
+    "force_no_accel|Disable acceleration|bool|input|force_no_accel|false|input|Force disable mouse acceleration entirely"
+    "left_handed|Left handed mouse|bool|input|left_handed|false|input|Swap left and right mouse buttons"
+    "repeat_rate|Key repeat speed|int:1:100|input|repeat_rate|40|input|Key repeat rate in characters per second"
+    "repeat_delay|Key repeat delay|int:100:2000|input|repeat_delay|600|input|Delay before key repeat starts (ms)"
+    "numlock_default|Numlock on start|bool|input|numlock_by_default|true|input|Enable numlock on startup"
+    "natural_scroll|Natural scroll|bool|input.touchpad|natural_scroll|false|input|Reverse scroll direction (natural/Apple-style)"
+    "scroll_factor|Scroll speed|float:0.1:5.0|input.touchpad|scroll_factor|0.4|input|Touchpad scroll speed multiplier"
+    "disable_typing|Off while typing|bool|input.touchpad|disable_while_typing|true|input|Disable touchpad while typing"
+    "tap_to_click|Tap to click|bool|input.touchpad|tap-to-click|true|input|Enable tap-to-click on touchpad"
+    "drag_lock|Drag lock|bool|input.touchpad|drag_lock|false|input|Keep drag active after lifting finger"
+    "middle_emulation|Middle btn emulation|bool|input.touchpad|middle_button_emulation|false|input|Emulate middle click with two-finger tap"
+    "scroll_button|Scroll button|int:0:999|input|scroll_button|0|input|Button for on-button-down scrolling (0=disable)"
+    "scroll_method|Scroll method|enum:2fg:edge:on_button_down:no_scroll|input|scroll_method|2fg|input|Touchpad scroll method"
+)
+
+# Hyprland Gestures settings (write to looknfeel.conf)
+declare -a HYPR_GESTURES_ITEMS=(
+    "ws_swipe|Workspace swipe|bool|gestures|workspace_swipe|false|looknfeel|Swipe between workspaces on touchpad"
+    "ws_swipe_fingers|Swipe fingers|int:2:5|gestures|workspace_swipe_fingers|3|looknfeel|Number of fingers for workspace swipe"
+    "ws_swipe_distance|Swipe distance|int:50:1000|gestures|workspace_swipe_distance|300|looknfeel|Distance in pixels to trigger swipe"
+    "ws_swipe_invert|Invert swipe|bool|gestures|workspace_swipe_invert|true|looknfeel|Reverse workspace swipe direction"
+    "ws_swipe_create|Swipe new workspace|bool|gestures|workspace_swipe_create_new|true|looknfeel|Create new workspace at end of swipe"
+)
+
+# Hyprland pending edits and current values
+declare -A HYPR_EDITS=()
+declare -A HYPR_CURRENT=()
+
+# Load saved Hyprland settings from managed blocks
+load_hypr_settings
+
 # Extract installed directory name from a GitHub URL
 # omarchy-theme-install strips "omarchy-" prefix and "-theme" suffix
 get_theme_dir_name() {
@@ -2899,7 +3396,7 @@ CAT_SCROLL_OFFSET=0      # Scroll offset for left panel
 # Get items array for a category
 get_category_items() {
     local cat_idx=$1
-    # Section headers (0, 3) have no items
+    # Section headers (0, 3, 11, 15) have no items
     case $cat_idx in
         1) echo "PACKAGES" ;;
         2) echo "WEBAPPS" ;;
@@ -2910,15 +3407,19 @@ get_category_items() {
         8) echo "APPEARANCE" ;;
         9) echo "KEYBOARD" ;;
         10) echo "UTILITIES" ;;
-        12) echo "EXTRA_THEMES" ;;
+        12) echo "HYPR_GENERAL" ;;
+        13) echo "HYPR_DECORATION" ;;
+        14) echo "HYPR_INPUT" ;;
+        15) echo "HYPR_GESTURES" ;;
+        17) echo "EXTRA_THEMES" ;;
     esac
 }
 
 # Get item count for current category
 get_current_item_count() {
-    # Section headers (0, 3, 11) return 0
+    # Section headers (0, 3, 11, 15) return 0
     case $CATEGORY_CURSOR in
-        0|3|11) echo 0 ;;
+        0|3|11|16) echo 0 ;;
         1) echo ${#INSTALLED_PACKAGES[@]} ;;
         2) echo ${#INSTALLED_WEBAPPS[@]} ;;
         4) echo ${#KEYBINDINGS_ITEMS[@]} ;;
@@ -2928,7 +3429,11 @@ get_current_item_count() {
         8) echo ${#APPEARANCE_ITEMS[@]} ;;
         9) echo ${#KEYBOARD_ITEMS[@]} ;;
         10) echo ${#UTILITIES_ITEMS[@]} ;;
-        12) echo ${#EXTRA_THEMES[@]} ;;
+        12) echo ${#HYPR_GENERAL_ITEMS[@]} ;;
+        13) echo ${#HYPR_DECORATION_ITEMS[@]} ;;
+        14) echo ${#HYPR_INPUT_ITEMS[@]} ;;
+        15) echo ${#HYPR_GESTURES_ITEMS[@]} ;;
+        17) echo ${#EXTRA_THEMES[@]} ;;
     esac
 }
 
@@ -2983,7 +3488,19 @@ get_current_description() {
             parse_toggle_item "${UTILITIES_ITEMS[$ITEM_CURSOR]}"
             echo "$TOGGLE_DESC"
             ;;
-        12) # Extra Themes
+        12|13|14|15)  # Hyprland settings
+            local hypr_arr
+            case $CATEGORY_CURSOR in
+                12) hypr_arr="HYPR_GENERAL_ITEMS" ;;
+                13) hypr_arr="HYPR_DECORATION_ITEMS" ;;
+                14) hypr_arr="HYPR_INPUT_ITEMS" ;;
+                15) hypr_arr="HYPR_GESTURES_ITEMS" ;;
+            esac
+            local -n hypr_ref="$hypr_arr"
+            parse_hypr_item "${hypr_ref[$ITEM_CURSOR]}"
+            echo "$HYPR_DESC"
+            ;;
+        17) # Extra Themes
             local entry="${EXTRA_THEMES[$ITEM_CURSOR]}"
             local theme_url="${entry#*|}"
             local repo_name="${theme_url##*/}"
@@ -3132,7 +3649,37 @@ draw_interface() {
                     fi ;;
                 10) parse_toggle_item "${UTILITIES_ITEMS[$idx]}"
                    [[ "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}" == "1" ]] && R=" [x] $TOGGLE_NAME" || R=" [ ] $TOGGLE_NAME" ;;
-                12) local entry="${EXTRA_THEMES[$idx]}"
+                12|13|14|15)  # Hyprland settings
+                    local hypr_arr
+                    case $CATEGORY_CURSOR in
+                        12) hypr_arr="HYPR_GENERAL_ITEMS" ;;
+                        13) hypr_arr="HYPR_DECORATION_ITEMS" ;;
+                        14) hypr_arr="HYPR_INPUT_ITEMS" ;;
+                        15) hypr_arr="HYPR_GESTURES_ITEMS" ;;
+                    esac
+                    local -n hypr_ref="$hypr_arr"
+                    local h_entry="${hypr_ref[$idx]}"
+                    parse_hypr_item "$h_entry"
+                    # Get display value: pending edit > current > default
+                    local h_val="$HYPR_DEFAULT"
+                    local full_key="${HYPR_SECTION}.${HYPR_KEY}"
+                    [[ -n "${HYPR_CURRENT[$full_key]:-}" ]] && h_val="${HYPR_CURRENT[$full_key]}"
+                    local h_prefix=" "
+                    if [[ -n "${HYPR_EDITS[$HYPR_ID]:-}" ]]; then
+                        local h_new="${HYPR_EDITS[$HYPR_ID]}"
+                        h_prefix="*"
+                        if [[ "$HYPR_TYPE" == "bool" ]]; then
+                            [[ "$h_val" == "true" ]] && h_val="ON" || h_val="OFF"
+                            [[ "$h_new" == "true" ]] && h_new="ON" || h_new="OFF"
+                        fi
+                        R=$(printf "%s%-24s %s > %s" "$h_prefix" "$HYPR_LABEL" "$h_val" "$h_new")
+                    else
+                        if [[ "$HYPR_TYPE" == "bool" ]]; then
+                            [[ "$h_val" == "true" ]] && h_val="ON" || h_val="OFF"
+                        fi
+                        R=$(printf " %-24s %s" "$HYPR_LABEL" "$h_val")
+                    fi ;;
+                17) local entry="${EXTRA_THEMES[$idx]}"
                     local tname="${entry%%|*}"
                     local turl="${entry#*|}"
                     local tdir
@@ -3180,9 +3727,9 @@ draw_interface() {
 
     # Footer (each line exactly 80 chars, ASCII only)
     printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
-    if [ $CATEGORY_CURSOR -eq 12 ]; then
+    if [ $CATEGORY_CURSOR -eq 17 ]; then
         printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit          │"
-    elif [ $CATEGORY_CURSOR -eq 5 ]; then
+    elif [ $CATEGORY_CURSOR -eq 5 ] || [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ]; then
         printf '%s\n' "│          Arrows:Navigate  Space:Edit  R:Reset  Enter:Confirm  Q:Quit         │"
     else
         printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
@@ -3310,13 +3857,24 @@ handle_input() {
             return 1
             ;;
         'a'|'A')  # Select all / deselect all (Extra Themes only)
-            if [ $CATEGORY_CURSOR -eq 12 ]; then
+            if [ $CATEGORY_CURSOR -eq 17 ]; then
                 toggle_all_themes
             fi
             ;;
-        'r'|'R')  # Reset pending edit (Keybind Editor only)
+        'r'|'R')  # Reset pending edit (Keybind Editor / Hyprland settings)
             if [ $CATEGORY_CURSOR -eq 5 ] && [ $CURRENT_PANEL -eq 1 ]; then
                 unset 'BINDING_EDITS[$ITEM_CURSOR]'
+            elif [ $CURRENT_PANEL -eq 1 ] && { [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ]; }; then
+                local hypr_arr
+                case $CATEGORY_CURSOR in
+                    12) hypr_arr="HYPR_GENERAL_ITEMS" ;;
+                    13) hypr_arr="HYPR_DECORATION_ITEMS" ;;
+                    14) hypr_arr="HYPR_INPUT_ITEMS" ;;
+                    15) hypr_arr="HYPR_GESTURES_ITEMS" ;;
+                esac
+                local -n hypr_reset_ref="$hypr_arr"
+                parse_hypr_item "${hypr_reset_ref[$ITEM_CURSOR]}"
+                unset 'HYPR_EDITS[$HYPR_ID]'
             fi
             ;;
         'q'|'Q')  # Quit
@@ -3420,7 +3978,22 @@ toggle_current_item() {
                 TOGGLE_SELECTIONS[$TOGGLE_ID]=0
             fi
             ;;
-        12) # Extra Themes (simple toggle)
+        12|13|14|15)  # Hyprland settings - open edit dialog
+            local hypr_arr
+            case $CATEGORY_CURSOR in
+                12) hypr_arr="HYPR_GENERAL_ITEMS" ;;
+                13) hypr_arr="HYPR_DECORATION_ITEMS" ;;
+                14) hypr_arr="HYPR_INPUT_ITEMS" ;;
+                15) hypr_arr="HYPR_GESTURES_ITEMS" ;;
+            esac
+            local -n hypr_items_ref="$hypr_arr"
+            stty echo 2>/dev/null
+            tput cnorm
+            edit_hypr_setting "${hypr_items_ref[$ITEM_CURSOR]}"
+            tput civis
+            stty -echo 2>/dev/null
+            ;;
+        17) # Extra Themes (simple toggle)
             local entry="${EXTRA_THEMES[$ITEM_CURSOR]}"
             local tname="${entry%%|*}"
             local cur="${THEME_SELECTIONS[$tname]:-0}"
@@ -3663,6 +4236,9 @@ done
 if [ ${#BINDING_EDITS[@]} -gt 0 ]; then
     has_selection=true
 fi
+if [ ${#HYPR_EDITS[@]} -gt 0 ]; then
+    has_selection=true
+fi
 
 if [ "$has_selection" = false ]; then
     clear
@@ -3684,6 +4260,9 @@ if [ "$BACKUP_CONFIGS" = true ]; then
             break
         fi
     done
+    if [ ${#BINDING_EDITS[@]} -gt 0 ] || [ ${#HYPR_EDITS[@]} -gt 0 ]; then
+        has_tweaks=true
+    fi
 
     if [ "$has_tweaks" = true ]; then
         clear
@@ -3763,6 +4342,9 @@ fi
 
 # Apply keybind editor changes
 apply_binding_edits
+
+# Apply Hyprland setting changes
+apply_hypr_edits
 
 if [ "$RESTORE_CAPSLOCK" = true ]; then
     restore_capslock

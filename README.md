@@ -14,6 +14,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - Only shows packages and webapps that are currently installed
 - **86 extra community themes** browseable and installable with one click
 - **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
+- **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
 - **40+ configuration tweaks** for keybindings, display, and system settings
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
@@ -119,6 +120,125 @@ On confirm, the editor writes `unbind` + `bindd` pairs to `~/.config/hypr/bindin
 - `~/.local/share/omarchy/default/hypr/bindings/utilities.conf`
 - `~/.local/share/omarchy/default/hypr/bindings/media.conf`
 - `~/.config/hypr/bindings.conf` (user overrides)
+
+#### Hyprland Configurator
+
+A dedicated Hyprland section with 69 curated settings across 4 categories, offering precise numeric, enum, color, and boolean control through guided input dialogs. Changes are written as managed blocks appended to config files using Hyprland's "last value wins" behavior, so they safely override defaults without touching original files.
+
+**Edit dialogs** — press Space on any setting:
+- **Bool** — toggles ON/OFF in-place, no dialog needed
+- **Int/Float** — text input with range validation
+- **Enum** — arrow-key option selection
+- **Color** — text input supporting `rgba()`, `rgb()`, and gradients
+
+Modified settings show a `*` prefix and `current > new` values. Press `R` to reset a pending edit. On confirm, settings are written to `~/.config/hypr/looknfeel.conf` or `~/.config/hypr/input.conf` as appropriate.
+
+Previous settings are detected on subsequent runs so you always see your current configuration.
+
+<details>
+<summary>General (26 settings)</summary>
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| Gap between windows | int 0-100 | Gap size between tiled windows |
+| Gap from edges | int 0-100 | Gap size from screen edges |
+| Border width | int 0-10 | Window border thickness in pixels |
+| Active border color | color | Border color of focused window |
+| Inactive border color | color | Border color of unfocused windows |
+| Drag-resize borders | bool | Allow resizing windows by dragging borders |
+| No border floating | bool | Remove borders from floating windows |
+| Border grab area | int 0-50 | Extra pixels for grabbing window borders |
+| Allow screen tearing | bool | Allow tearing for reduced input lag |
+| Window layout | dwindle/master | Tiling layout algorithm |
+| Pseudotiling | bool | Windows keep requested size in tiling |
+| Keep split direction | bool | Maintain split direction on resize |
+| Split direction | 0/1/2 | Follow mouse, left/top, or right/bottom |
+| Smart split | bool | Split direction follows cursor position |
+| New window status | master/slave | Where new windows appear in master layout |
+| Focus on activation | bool | Focus windows when they request activation |
+| Disable startup logo | bool | Hide the Hyprland logo on startup |
+| Variable refresh rate | 0/1/2 | Off, on, or fullscreen only (FreeSync/G-Sync) |
+| New window vs fullscreen | 0/1/2 | Behind, unfullscreen, or new fullscreen |
+| Middle click paste | bool | Paste clipboard on middle mouse click |
+| Window swallowing | bool | Terminal windows absorb spawned child windows |
+| Workspace back-forth | bool | Same workspace key toggles to previous |
+| Workspace cycles | bool | Allow cycling through workspaces with binds |
+| XWayland zero scale | bool | Fix blurry XWayland apps on scaled displays |
+| Keypress wakes display | bool | Keypress wakes display from DPMS off |
+| Mouse wakes display | bool | Mouse movement wakes display from DPMS off |
+
+</details>
+
+<details>
+<summary>Decoration (22 settings)</summary>
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| Corner radius | int 0-30 | Window corner rounding in pixels |
+| Shadows | bool | Enable window drop shadows |
+| Shadow range | int 1-100 | Shadow spread distance in pixels |
+| Shadow sharpness | int 1-4 | Shadow falloff power |
+| Shadow color | color | Shadow color in rgba format |
+| Blur | bool | Enable background blur on transparent windows |
+| Blur radius | int 1-20 | Blur kernel size |
+| Blur iterations | int 1-10 | Blur render passes |
+| Blur special ws | bool | Apply blur to special workspace background |
+| Blur brightness | float 0.0-2.0 | Brightness of blurred background |
+| Blur contrast | float 0.0-2.0 | Contrast of blurred background |
+| Blur noise | float 0.0-1.0 | Noise applied to blur |
+| Blur popups | bool | Apply blur to popup windows and tooltips |
+| Animations | bool | Enable window animations |
+| Dim inactive | bool | Dim unfocused windows |
+| Dim strength | float 0.0-1.0 | How much to dim inactive windows |
+| Dim special ws bg | float 0.0-1.0 | Dim amount for special workspace background |
+| Hide cursor on type | bool | Hide cursor when typing |
+| Cursor size | int 16-48 | Cursor size in pixels |
+| Active opacity | float 0.0-1.0 | Opacity of focused window |
+| Inactive opacity | float 0.0-1.0 | Opacity of unfocused windows |
+| Fullscreen opacity | float 0.0-1.0 | Opacity of fullscreen windows |
+
+</details>
+
+<details>
+<summary>Input (16 settings)</summary>
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| Mouse sensitivity | float -1.0-1.0 | Mouse sensitivity |
+| Focus follows mouse | 0/1/2/3 | Focus behavior on mouse move |
+| Accel profile | flat/adaptive | Mouse acceleration profile |
+| Disable acceleration | bool | Force disable mouse acceleration entirely |
+| Left handed mouse | bool | Swap left and right mouse buttons |
+| Key repeat speed | int 1-100 | Key repeat rate in characters per second |
+| Key repeat delay | int 100-2000 | Delay before key repeat starts (ms) |
+| Numlock on start | bool | Enable numlock on startup |
+| Natural scroll | bool | Reverse scroll direction |
+| Scroll speed | float 0.1-5.0 | Touchpad scroll speed multiplier |
+| Off while typing | bool | Disable touchpad while typing |
+| Tap to click | bool | Enable tap-to-click on touchpad |
+| Drag lock | bool | Keep drag active after lifting finger |
+| Middle btn emulation | bool | Emulate middle click with two-finger tap |
+| Scroll button | int 0-999 | Button for on-button-down scrolling |
+| Scroll method | 2fg/edge/on_button_down/no_scroll | Touchpad scroll method |
+
+</details>
+
+<details>
+<summary>Gestures (5 settings)</summary>
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| Workspace swipe | bool | Swipe between workspaces on touchpad |
+| Swipe fingers | int 2-5 | Number of fingers for workspace swipe |
+| Swipe distance | int 50-1000 | Distance in pixels to trigger swipe |
+| Invert swipe | bool | Reverse workspace swipe direction |
+| Swipe new workspace | bool | Create new workspace at end of swipe |
+
+</details>
+
+**Config files written:**
+- `~/.config/hypr/looknfeel.conf` — General, Decoration, and Gestures settings (managed block)
+- `~/.config/hypr/input.conf` — Input settings (managed block)
 
 #### Keyboard & Input
 
@@ -399,8 +519,8 @@ The script modifies the following Omarchy configuration files (with automatic ba
 |------|---------|
 | `~/.config/hypr/monitors.conf` | Monitor scaling |
 | `~/.config/hypr/bindings.conf` | Keybindings (toggles and keybind editor overrides) |
-| `~/.config/hypr/looknfeel.conf` | Rounded corners, window gaps |
-| `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping |
+| `~/.config/hypr/looknfeel.conf` | Rounded corners, window gaps, Hyprland General/Decoration/Gestures settings |
+| `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping, Hyprland Input settings |
 | `~/.config/waybar/config.jsonc` | Clock format, tray icons |
 | `~/.config/uwsm/default` | Screenshot/recording directories |
 | `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
