@@ -107,7 +107,7 @@ A full keybinding editor that loads all active Hyprland bindings from config fil
 
 1. **Modifier selection** — toggle SUPER, SHIFT, CTRL, ALT with Space, navigate with arrows
 2. **Key input** — type a key name (e.g. Q, RETURN, F1) validated against known Hyprland keys
-3. **Preview & confirm** — review the new binding before accepting
+3. **Preview & confirm** — review the new binding before accepting; shows a **conflict warning** if the key combo is already bound to another action
 
 Press `R` to reset a pending edit back to its current value.
 

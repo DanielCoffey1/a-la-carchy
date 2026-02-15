@@ -380,6 +380,28 @@ edit_binding() {
         break
     done
 
+    # Check for conflicts with other bindings
+    local conflict_desc=""
+    for ci in "${!EDIT_BINDINGS_ITEMS[@]}"; do
+        [[ $ci -eq $idx ]] && continue
+        local c_entry="${EDIT_BINDINGS_ITEMS[$ci]}"
+        [[ "$c_entry" == HEADER* ]] && continue
+
+        # Use pending edit if one exists, otherwise use stored mods/key
+        local c_mods c_key c_desc
+        if [[ -n "${BINDING_EDITS[$ci]:-}" ]]; then
+            IFS='|' read -r c_mods c_key <<< "${BINDING_EDITS[$ci]}"
+            IFS='|' read -r _t _m _k c_desc _rest <<< "$c_entry"
+        else
+            IFS='|' read -r _t c_mods c_key c_desc _rest <<< "$c_entry"
+        fi
+
+        if [[ "$c_mods" == "$new_mods" ]] && [[ "$c_key" == "$new_key" ]]; then
+            conflict_desc="$c_desc"
+            break
+        fi
+    done
+
     # Step 3: Preview and confirm
     clear
     echo
@@ -387,6 +409,11 @@ edit_binding() {
     echo
     echo -e "  New binding: ${BOLD}$new_mods, $new_key${RESET}  ->  $cur_desc"
     echo
+    if [[ -n "$conflict_desc" ]]; then
+        echo -e "  ${BOLD}Warning:${RESET} ${DIM}$new_mods+$new_key is already bound to:${RESET}"
+        echo -e "  ${DIM}  $conflict_desc${RESET}"
+        echo
+    fi
     echo -e "  ${DIM}Enter: confirm   Escape: cancel${RESET}"
 
     IFS= read -rsn1 key < /dev/tty
