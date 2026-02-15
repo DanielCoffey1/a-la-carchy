@@ -99,6 +99,374 @@ is_webapp_installed() {
     [[ -f "$HOME/.local/share/applications/$1.desktop" ]]
 }
 
+# Function to load all keybindings from config files for the Keybind Editor
+# Applies unbind/rebind overrides from bindings.conf so entries show current state
+load_all_bindings() {
+    EDIT_BINDINGS_ITEMS=()
+
+    # Phase 1: Load default config files (not bindings.conf)
+    local default_files=(
+        "$HOME/.local/share/omarchy/default/hypr/bindings/clipboard.conf"
+        "$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf"
+        "$HOME/.local/share/omarchy/default/hypr/bindings/utilities.conf"
+        "$HOME/.local/share/omarchy/default/hypr/bindings/media.conf"
+    )
+    local file_labels=("Clipboard" "Tiling" "Utilities" "Media")
+
+    for i in "${!default_files[@]}"; do
+        local file="${default_files[$i]}"
+        local label="${file_labels[$i]}"
+
+        [[ -f "$file" ]] || continue
+
+        EDIT_BINDINGS_ITEMS+=("HEADER|$label")
+
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            [[ "$line" =~ ^bindd[[:space:]]*= ]] || continue
+
+            local content="${line#bindd = }"
+            content="${content#bindd=}"
+
+            IFS=',' read -ra parts <<< "$content"
+            [[ ${#parts[@]} -lt 4 ]] && continue
+
+            local mods="${parts[0]## }"
+            mods="${mods%% }"
+            local bkey="${parts[1]## }"
+            bkey="${bkey%% }"
+            local desc="${parts[2]## }"
+            desc="${desc%% }"
+            local dispatcher="${parts[3]## }"
+            dispatcher="${dispatcher%% }"
+            local args=""
+            if [[ ${#parts[@]} -gt 4 ]]; then
+                args="${parts[*]:4}"
+                args="${args## }"
+                args="${args%% }"
+            fi
+
+            EDIT_BINDINGS_ITEMS+=("bindd|$mods|$bkey|$desc|$dispatcher|$args|$file")
+        done < "$file"
+    done
+
+    # Phase 2: Process bindings.conf overrides
+    # For each unbind+bindd pair, update the matching default entry in-place
+    # Non-override bindd entries are collected as user bindings
+    if [[ -f "$BINDINGS_CONF" ]]; then
+        # Build lookup: "MODS|KEY" -> EDIT_BINDINGS_ITEMS index
+        local -A binding_lookup=()
+        for idx in "${!EDIT_BINDINGS_ITEMS[@]}"; do
+            local entry="${EDIT_BINDINGS_ITEMS[$idx]}"
+            [[ "$entry" == HEADER* ]] && continue
+            IFS='|' read -r _t lk_mods lk_key _rest <<< "$entry"
+            binding_lookup["$lk_mods|$lk_key"]=$idx
+        done
+
+        # Process line-by-line to pair unbinds with rebinds
+        local -A pending_unbinds=()  # "MODS|KEY" -> 1
+        local -a user_entries=()
+
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+
+            # Process unbind lines
+            if [[ "$line" =~ ^unbind[[:space:]]*=[[:space:]]*(.*) ]]; then
+                local ucontent="${BASH_REMATCH[1]}"
+                IFS=',' read -ra uparts <<< "$ucontent"
+                [[ ${#uparts[@]} -lt 2 ]] && continue
+                local u_mods="${uparts[0]## }"
+                u_mods="${u_mods%% }"
+                local u_key="${uparts[1]## }"
+                u_key="${u_key%% }"
+                local u_lookup="$u_mods|$u_key"
+                if [[ -n "${binding_lookup[$u_lookup]:-}" ]]; then
+                    pending_unbinds["$u_lookup"]=1
+                fi
+                continue
+            fi
+
+            # Process bindd lines
+            [[ "$line" =~ ^bindd[[:space:]]*= ]] || continue
+
+            local content="${line#bindd = }"
+            content="${content#bindd=}"
+            IFS=',' read -ra parts <<< "$content"
+            [[ ${#parts[@]} -lt 4 ]] && continue
+
+            local b_mods="${parts[0]## }"
+            b_mods="${b_mods%% }"
+            local b_key="${parts[1]## }"
+            b_key="${b_key%% }"
+            local b_desc="${parts[2]## }"
+            b_desc="${b_desc%% }"
+            local b_disp="${parts[3]## }"
+            b_disp="${b_disp%% }"
+            local b_args=""
+            if [[ ${#parts[@]} -gt 4 ]]; then
+                b_args="${parts[*]:4}"
+                b_args="${b_args## }"
+                b_args="${b_args%% }"
+            fi
+
+            # Check if this bindd matches a pending unbind (override)
+            local was_override=false
+            for u_lookup in "${!pending_unbinds[@]}"; do
+                local orig_idx="${binding_lookup[$u_lookup]}"
+                local orig_entry="${EDIT_BINDINGS_ITEMS[$orig_idx]}"
+                IFS='|' read -r _t _m _k orig_desc _rest <<< "$orig_entry"
+                if [[ "$orig_desc" == "$b_desc" ]]; then
+                    # Update the default entry with overridden mods/key
+                    IFS='|' read -r _t _m _k _d orig_disp orig_args orig_file <<< "$orig_entry"
+                    EDIT_BINDINGS_ITEMS[$orig_idx]="bindd|$b_mods|$b_key|$b_desc|$b_disp|$b_args|$orig_file"
+                    # Update lookup for chained overrides
+                    unset "binding_lookup[$u_lookup]"
+                    binding_lookup["$b_mods|$b_key"]=$orig_idx
+                    unset "pending_unbinds[$u_lookup]"
+                    was_override=true
+                    break
+                fi
+            done
+
+            if [[ "$was_override" == false ]]; then
+                user_entries+=("bindd|$b_mods|$b_key|$b_desc|$b_disp|$b_args|$BINDINGS_CONF")
+            fi
+        done < "$BINDINGS_CONF"
+
+        # Add non-override user bindings
+        if [[ ${#user_entries[@]} -gt 0 ]]; then
+            EDIT_BINDINGS_ITEMS+=("HEADER|User Bindings")
+            for entry in "${user_entries[@]}"; do
+                EDIT_BINDINGS_ITEMS+=("$entry")
+            done
+        fi
+    fi
+}
+
+# Check if a keybind editor item is a section header
+is_binding_header() {
+    [[ "${EDIT_BINDINGS_ITEMS[$1]}" == HEADER* ]]
+}
+
+# Guided keybinding edit dialog (3 steps: modifiers, key, confirm)
+edit_binding() {
+    local idx=$1
+    local entry="${EDIT_BINDINGS_ITEMS[$idx]}"
+
+    # Skip headers
+    [[ "$entry" == HEADER* ]] && return
+
+    # Parse the binding entry
+    IFS='|' read -r _type cur_mods cur_key cur_desc cur_dispatcher cur_args cur_file <<< "$entry"
+
+    # Check if there's a pending edit - use those values
+    if [[ -n "${BINDING_EDITS[$idx]:-}" ]]; then
+        IFS='|' read -r cur_mods cur_key <<< "${BINDING_EDITS[$idx]}"
+    fi
+
+    # Step 1: Modifier selection
+    local mod_super=0 mod_shift=0 mod_ctrl=0 mod_alt=0
+    [[ "$cur_mods" == *SUPER* ]] && mod_super=1
+    [[ "$cur_mods" == *SHIFT* ]] && mod_shift=1
+    [[ "$cur_mods" == *CTRL* ]] && mod_ctrl=1
+    [[ "$cur_mods" == *ALT* ]] && mod_alt=1
+
+    local mod_cursor=0
+    local mod_names=("SUPER" "SHIFT" "CTRL" "ALT")
+    local -a mod_vals=($mod_super $mod_shift $mod_ctrl $mod_alt)
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Edit Keybinding: $cur_desc${RESET}"
+        echo -e "  ${DIM}Current: $cur_mods, $cur_key${RESET}"
+        echo
+        echo -e "  Select modifiers (Space to toggle, arrows to move):"
+        echo
+        printf "   "
+        for i in 0 1 2 3; do
+            local mark=" "
+            [[ ${mod_vals[$i]} -eq 1 ]] && mark="x"
+            if [[ $i -eq $mod_cursor ]]; then
+                printf " ${SELECTED_BG}[%s] %s${RESET}" "$mark" "${mod_names[$i]}"
+            else
+                printf " [%s] %s" "$mark" "${mod_names[$i]}"
+            fi
+        done
+        echo
+        echo
+        echo -e "  ${DIM}Enter: next   Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[C') (( mod_cursor < 3 )) && ((mod_cursor++)) ;;
+                    '[D') (( mod_cursor > 0 )) && ((mod_cursor--)) ;;
+                esac
+                [[ -z "$key" ]] && return  # Bare escape = cancel
+                ;;
+            ' ')
+                if [[ ${mod_vals[$mod_cursor]} -eq 0 ]]; then
+                    mod_vals[$mod_cursor]=1
+                else
+                    mod_vals[$mod_cursor]=0
+                fi
+                ;;
+            '')  # Enter
+                break
+                ;;
+        esac
+    done
+
+    # Build modifier string
+    local new_mods=""
+    [[ ${mod_vals[0]} -eq 1 ]] && new_mods="SUPER"
+    [[ ${mod_vals[1]} -eq 1 ]] && { [[ -n "$new_mods" ]] && new_mods+=" "; new_mods+="SHIFT"; }
+    [[ ${mod_vals[2]} -eq 1 ]] && { [[ -n "$new_mods" ]] && new_mods+=" "; new_mods+="CTRL"; }
+    [[ ${mod_vals[3]} -eq 1 ]] && { [[ -n "$new_mods" ]] && new_mods+=" "; new_mods+="ALT"; }
+
+    # Step 2: Key input
+    local new_key=""
+    local key_error=""
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Edit Keybinding: $cur_desc${RESET}"
+        echo -e "  ${DIM}Modifiers: $new_mods${RESET}"
+        echo
+        echo -e "  Type key name (e.g. Q, RETURN, F1):"
+        echo
+        if [[ -n "$key_error" ]]; then
+            echo -e "  ${DIM}x $key_error${RESET}"
+            echo
+        fi
+        echo -e "  ${DIM}Common keys: A-Z  0-9  RETURN  SPACE  TAB  ESCAPE${RESET}"
+        echo -e "  ${DIM}F1-F12  PRINT  DELETE  BACKSPACE  UP DOWN LEFT RIGHT${RESET}"
+        echo
+        printf "  > "
+
+        stty echo 2>/dev/null
+        tput cnorm
+        read -r new_key < /dev/tty
+        tput civis
+        stty -echo 2>/dev/null
+
+        # Trim whitespace and convert to uppercase
+        new_key="${new_key## }"
+        new_key="${new_key%% }"
+        new_key="${new_key^^}"
+
+        if [[ -z "$new_key" ]]; then
+            key_error="Key cannot be empty"
+            continue
+        fi
+
+        # Validate against known keys
+        local valid=false
+        for vk in "${VALID_KEYS[@]}"; do
+            if [[ "$new_key" == "$vk" ]]; then
+                valid=true
+                break
+            fi
+        done
+
+        if [[ "$valid" == false ]]; then
+            key_error="Unknown key: $new_key"
+            continue
+        fi
+
+        break
+    done
+
+    # Step 3: Preview and confirm
+    clear
+    echo
+    echo -e "  ${BOLD}Edit Keybinding: $cur_desc${RESET}"
+    echo
+    echo -e "  New binding: ${BOLD}$new_mods, $new_key${RESET}  ->  $cur_desc"
+    echo
+    echo -e "  ${DIM}Enter: confirm   Escape: cancel${RESET}"
+
+    IFS= read -rsn1 key < /dev/tty
+    case "$key" in
+        '')  # Enter - confirm
+            BINDING_EDITS[$idx]="$new_mods|$new_key"
+            ;;
+    esac
+}
+
+# Apply all pending keybinding edits to bindings.conf
+apply_binding_edits() {
+    if [[ ${#BINDING_EDITS[@]} -eq 0 ]]; then
+        return
+    fi
+
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Apply Keybinding Edits${RESET}"
+    echo
+    echo -e "  ${DIM}Changes to apply:${RESET}"
+    echo
+
+    for idx in "${!BINDING_EDITS[@]}"; do
+        local entry="${EDIT_BINDINGS_ITEMS[$idx]}"
+        IFS='|' read -r _type orig_mods orig_key desc dispatcher args source <<< "$entry"
+        IFS='|' read -r new_mods new_key <<< "${BINDING_EDITS[$idx]}"
+        echo -e "    ${DIM}•${RESET}  $desc: $orig_mods+$orig_key -> $new_mods+$new_key"
+    done
+    echo
+    echo
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Keybinding edits -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        SUMMARY_LOG+=("✗  Keybinding edits -- failed (config not found)")
+        return 1
+    fi
+
+    # Create backup
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+    echo
+
+    for idx in "${!BINDING_EDITS[@]}"; do
+        local entry="${EDIT_BINDINGS_ITEMS[$idx]}"
+        IFS='|' read -r _type orig_mods orig_key desc dispatcher args source <<< "$entry"
+        IFS='|' read -r new_mods new_key <<< "${BINDING_EDITS[$idx]}"
+
+        # Append unbind + rebind to bindings.conf
+        echo "" >> "$BINDINGS_CONF"
+        echo "unbind = $orig_mods, $orig_key" >> "$BINDINGS_CONF"
+        if [[ -n "$args" ]]; then
+            echo "bindd = $new_mods, $new_key, $desc, $dispatcher,$args" >> "$BINDINGS_CONF"
+        else
+            echo "bindd = $new_mods, $new_key, $desc, $dispatcher," >> "$BINDINGS_CONF"
+        fi
+
+        echo -e "    ${CHECKED}✓${RESET}  $desc: $orig_mods+$orig_key -> $new_mods+$new_key"
+        SUMMARY_LOG+=("✓  Rebound $desc: $new_mods+$new_key")
+    done
+    echo
+    echo -e "  ${DIM}Reload Hyprland or log out/in to apply.${RESET}"
+    echo
+}
+
 # Function to rebind close window from SUPER+W to SUPER+Q
 rebind_close_window() {
     clear
@@ -2225,6 +2593,7 @@ declare -a CATEGORIES=(
     "  Web Apps"
     "--- Tweaks ---"
     "  Keybindings"
+    "  Keybind Editor"
     "  Display"
     "  System"
     "  Appearance"
@@ -2460,6 +2829,28 @@ declare -A WEBAPP_DESCRIPTIONS=(
     ["zoom"]="Video conferencing software"
 )
 
+# Keybind Editor data structures
+declare -a EDIT_BINDINGS_ITEMS=()
+declare -A BINDING_EDITS=()  # idx -> "new_mods|new_key"
+declare -a VALID_KEYS=(
+    A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+    0 1 2 3 4 5 6 7 8 9
+    F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12
+    RETURN SPACE TAB ESCAPE BACKSPACE DELETE INSERT HOME END
+    PAGEUP PAGEDOWN UP DOWN LEFT RIGHT
+    PRINT SCROLL_LOCK PAUSE
+    KP_0 KP_1 KP_2 KP_3 KP_4 KP_5 KP_6 KP_7 KP_8 KP_9
+    KP_ADD KP_SUBTRACT KP_MULTIPLY KP_DIVIDE KP_ENTER KP_DECIMAL
+    MINUS EQUAL BRACKETLEFT BRACKETRIGHT BACKSLASH SEMICOLON
+    APOSTROPHE GRAVE COMMA PERIOD SLASH
+    XF86AUDIOMUTE XF86AUDIOLOWERVOLUME XF86AUDIORAISEVOLUME
+    XF86AUDIOPLAY XF86AUDIOPREV XF86AUDIONEXT
+    XF86MONBRIGHTNESSUP XF86MONBRIGHTNESSDOWN
+)
+
+# Load keybindings for the editor
+load_all_bindings
+
 # Selection state for toggle items: 0=none, 1=option1, 2=option2
 declare -A TOGGLE_SELECTIONS=()
 
@@ -2472,6 +2863,7 @@ CURRENT_PANEL=0          # 0=left (categories), 1=right (items)
 CATEGORY_CURSOR=1        # Current category in left panel (start at first non-header)
 ITEM_CURSOR=0            # Current item in right panel
 ITEM_SCROLL_OFFSET=0     # Scroll offset for right panel
+CAT_SCROLL_OFFSET=0      # Scroll offset for left panel
 
 # =============================================================================
 # HELPER FUNCTIONS FOR TWO-PANEL UI
@@ -2485,29 +2877,31 @@ get_category_items() {
         1) echo "PACKAGES" ;;
         2) echo "WEBAPPS" ;;
         4) echo "KEYBINDINGS" ;;
-        5) echo "DISPLAY" ;;
-        6) echo "SYSTEM" ;;
-        7) echo "APPEARANCE" ;;
-        8) echo "KEYBOARD" ;;
-        9) echo "UTILITIES" ;;
-        11) echo "EXTRA_THEMES" ;;
+        5) echo "EDIT_BINDINGS" ;;
+        6) echo "DISPLAY" ;;
+        7) echo "SYSTEM" ;;
+        8) echo "APPEARANCE" ;;
+        9) echo "KEYBOARD" ;;
+        10) echo "UTILITIES" ;;
+        12) echo "EXTRA_THEMES" ;;
     esac
 }
 
 # Get item count for current category
 get_current_item_count() {
-    # Section headers (0, 3, 10) return 0
+    # Section headers (0, 3, 11) return 0
     case $CATEGORY_CURSOR in
-        0|3|10) echo 0 ;;
+        0|3|11) echo 0 ;;
         1) echo ${#INSTALLED_PACKAGES[@]} ;;
         2) echo ${#INSTALLED_WEBAPPS[@]} ;;
         4) echo ${#KEYBINDINGS_ITEMS[@]} ;;
-        5) echo ${#DISPLAY_ITEMS[@]} ;;
-        6) echo ${#SYSTEM_ITEMS[@]} ;;
-        7) echo ${#APPEARANCE_ITEMS[@]} ;;
-        8) echo ${#KEYBOARD_ITEMS[@]} ;;
-        9) echo ${#UTILITIES_ITEMS[@]} ;;
-        11) echo ${#EXTRA_THEMES[@]} ;;
+        5) echo ${#EDIT_BINDINGS_ITEMS[@]} ;;
+        6) echo ${#DISPLAY_ITEMS[@]} ;;
+        7) echo ${#SYSTEM_ITEMS[@]} ;;
+        8) echo ${#APPEARANCE_ITEMS[@]} ;;
+        9) echo ${#KEYBOARD_ITEMS[@]} ;;
+        10) echo ${#UTILITIES_ITEMS[@]} ;;
+        12) echo ${#EXTRA_THEMES[@]} ;;
     esac
 }
 
@@ -2534,21 +2928,35 @@ get_current_description() {
             local webapp="${INSTALLED_WEBAPPS[$ITEM_CURSOR]}"
             echo "${WEBAPP_DESCRIPTIONS[$webapp]:-}"
             ;;
-        4|5|6|7|8)  # Toggle items
+        4|6|7|8|9)  # Toggle items
             local arr
             case $CATEGORY_CURSOR in
-                4) arr="KEYBINDINGS_ITEMS" ;; 5) arr="DISPLAY_ITEMS" ;;
-                6) arr="SYSTEM_ITEMS" ;; 7) arr="APPEARANCE_ITEMS" ;; 8) arr="KEYBOARD_ITEMS" ;;
+                4) arr="KEYBINDINGS_ITEMS" ;; 6) arr="DISPLAY_ITEMS" ;;
+                7) arr="SYSTEM_ITEMS" ;; 8) arr="APPEARANCE_ITEMS" ;; 9) arr="KEYBOARD_ITEMS" ;;
             esac
             local -n ref="$arr"
             parse_toggle_item "${ref[$ITEM_CURSOR]}"
             echo "$TOGGLE_DESC"
             ;;
-        9)  # Utilities
+        5)  # Keybind Editor
+            local be_entry="${EDIT_BINDINGS_ITEMS[$ITEM_CURSOR]}"
+            if [[ "$be_entry" == HEADER* ]]; then
+                echo ""
+            else
+                IFS='|' read -r _t _m _k _d be_disp be_args be_file <<< "$be_entry"
+                local base_file="${be_file##*/}"
+                if [[ -n "$be_args" ]]; then
+                    echo "[$base_file] $be_disp,$be_args"
+                else
+                    echo "[$base_file] $be_disp"
+                fi
+            fi
+            ;;
+        10)  # Utilities
             parse_toggle_item "${UTILITIES_ITEMS[$ITEM_CURSOR]}"
             echo "$TOGGLE_DESC"
             ;;
-        11) # Extra Themes
+        12) # Extra Themes
             local entry="${EXTRA_THEMES[$ITEM_CURSOR]}"
             local theme_url="${entry#*|}"
             local repo_name="${theme_url##*/}"
@@ -2613,10 +3021,15 @@ draw_interface() {
     (( ITEM_CURSOR >= item_count )) && ITEM_CURSOR=$((item_count - 1))
     (( ITEM_CURSOR < 0 )) && ITEM_CURSOR=0
 
-    # Scroll
+    # Scroll (right panel)
     (( ITEM_CURSOR < ITEM_SCROLL_OFFSET )) && ITEM_SCROLL_OFFSET=$ITEM_CURSOR
     (( ITEM_CURSOR >= ITEM_SCROLL_OFFSET + ROWS )) && ITEM_SCROLL_OFFSET=$((ITEM_CURSOR - ROWS + 1))
     (( ITEM_SCROLL_OFFSET < 0 )) && ITEM_SCROLL_OFFSET=0
+
+    # Scroll (left panel)
+    (( CATEGORY_CURSOR < CAT_SCROLL_OFFSET )) && CAT_SCROLL_OFFSET=$CATEGORY_CURSOR
+    (( CATEGORY_CURSOR >= CAT_SCROLL_OFFSET + ROWS )) && CAT_SCROLL_OFFSET=$((CATEGORY_CURSOR - ROWS + 1))
+    (( CAT_SCROLL_OFFSET < 0 )) && CAT_SCROLL_OFFSET=0
 
     clear
 
@@ -2636,15 +3049,16 @@ draw_interface() {
         local L="" R=""
         local Lhl=0 Rhl=0
 
-        # Left panel
+        # Left panel (with scroll offset)
         local Lsection=0
-        if (( row < cat_count )); then
-            local cat_text="${CATEGORIES[$row]}"
+        local cat_idx=$((CAT_SCROLL_OFFSET + row))
+        if (( cat_idx < cat_count )); then
+            local cat_text="${CATEGORIES[$cat_idx]}"
             if [[ "$cat_text" == ---* ]]; then
                 # Section header - will be dimmed at output time
                 L=" ${cat_text}"
                 Lsection=1
-            elif (( row == CATEGORY_CURSOR )); then
+            elif (( cat_idx == CATEGORY_CURSOR )); then
                 L=" > ${cat_text}"
                 (( CURRENT_PANEL == 0 )) && Lhl=1
             else
@@ -2653,6 +3067,7 @@ draw_interface() {
         fi
 
         # Right panel
+        local Rsection=0
         local idx=$((ITEM_SCROLL_OFFSET + row))
         if (( idx < item_count )); then
             (( CURRENT_PANEL == 1 && idx == ITEM_CURSOR )) && Rhl=1
@@ -2661,18 +3076,36 @@ draw_interface() {
                    [[ "${PKG_SELECTIONS[$p]:-0}" == "1" ]] && R=" [x] $p" || R=" [ ] $p" ;;
                 2) local w="${INSTALLED_WEBAPPS[$idx]}"
                    [[ "${WEBAPP_SELECTIONS[$w]:-0}" == "1" ]] && R=" [x] $w" || R=" [ ] $w" ;;
-                4|5|6|7|8)
+                4|6|7|8|9)
                     local arr
                     case $CATEGORY_CURSOR in
-                        4) arr="KEYBINDINGS_ITEMS" ;; 5) arr="DISPLAY_ITEMS" ;;
-                        6) arr="SYSTEM_ITEMS" ;; 7) arr="APPEARANCE_ITEMS" ;; 8) arr="KEYBOARD_ITEMS" ;;
+                        4) arr="KEYBINDINGS_ITEMS" ;; 6) arr="DISPLAY_ITEMS" ;;
+                        7) arr="SYSTEM_ITEMS" ;; 8) arr="APPEARANCE_ITEMS" ;; 9) arr="KEYBOARD_ITEMS" ;;
                     esac
                     local -n ref="$arr"
                     parse_toggle_item "${ref[$idx]}"
                     R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}") ;;
-                9) parse_toggle_item "${UTILITIES_ITEMS[$idx]}"
+                5)  # Keybind Editor
+                    local be_entry="${EDIT_BINDINGS_ITEMS[$idx]}"
+                    if [[ "$be_entry" == HEADER* ]]; then
+                        local header_name="${be_entry#HEADER|}"
+                        R=" -- $header_name --"
+                        Rsection=1
+                    else
+                        IFS='|' read -r _t be_mods be_key be_desc _rest <<< "$be_entry"
+                        local be_prefix=" "
+                        local display_mods="$be_mods"
+                        local display_key="$be_key"
+                        if [[ -n "${BINDING_EDITS[$idx]:-}" ]]; then
+                            IFS='|' read -r display_mods display_key <<< "${BINDING_EDITS[$idx]}"
+                            be_prefix="*"
+                        fi
+                        local keycombo="${display_mods}+${display_key}"
+                        R=$(printf "%s%-17s %s" "$be_prefix" "$keycombo" "$be_desc")
+                    fi ;;
+                10) parse_toggle_item "${UTILITIES_ITEMS[$idx]}"
                    [[ "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}" == "1" ]] && R=" [x] $TOGGLE_NAME" || R=" [ ] $TOGGLE_NAME" ;;
-                11) local entry="${EXTRA_THEMES[$idx]}"
+                12) local entry="${EXTRA_THEMES[$idx]}"
                     local tname="${entry%%|*}"
                     local turl="${entry#*|}"
                     local tdir
@@ -2701,6 +3134,8 @@ draw_interface() {
         fi
         if (( Rhl )); then
             printf "${SELECTED_BG}%s${RESET}│\n" "$Rfmt"
+        elif (( Rsection )); then
+            printf "${DIM}%s${RESET}│\n" "$Rfmt"
         else
             printf "%s│\n" "$Rfmt"
         fi
@@ -2718,8 +3153,10 @@ draw_interface() {
 
     # Footer (each line exactly 80 chars, ASCII only)
     printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
-    if [ $CATEGORY_CURSOR -eq 11 ]; then
+    if [ $CATEGORY_CURSOR -eq 12 ]; then
         printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit          │"
+    elif [ $CATEGORY_CURSOR -eq 5 ]; then
+        printf '%s\n' "│          Arrows:Navigate  Space:Edit  R:Reset  Enter:Confirm  Q:Quit         │"
     else
         printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
     fi
@@ -2782,6 +3219,15 @@ handle_input() {
                         # Right panel - navigate items
                         if [ $ITEM_CURSOR -gt 0 ]; then
                             ((ITEM_CURSOR--))
+                            # Skip headers in Keybind Editor
+                            if [ $CATEGORY_CURSOR -eq 5 ]; then
+                                while [ $ITEM_CURSOR -gt 0 ] && is_binding_header $ITEM_CURSOR; do
+                                    ((ITEM_CURSOR--))
+                                done
+                                if is_binding_header $ITEM_CURSOR; then
+                                    ((ITEM_CURSOR++))
+                                fi
+                            fi
                         fi
                     fi
                     ;;
@@ -2801,12 +3247,24 @@ handle_input() {
                         # Right panel - navigate items
                         if [ $ITEM_CURSOR -lt $((item_count - 1)) ]; then
                             ((ITEM_CURSOR++))
+                            # Skip headers in Keybind Editor
+                            if [ $CATEGORY_CURSOR -eq 5 ]; then
+                                while [ $ITEM_CURSOR -lt $((item_count - 1)) ] && is_binding_header $ITEM_CURSOR; do
+                                    ((ITEM_CURSOR++))
+                                done
+                            fi
                         fi
                     fi
                     ;;
                 '[C')  # Right arrow - switch to right panel
                     if [ $CURRENT_PANEL -eq 0 ] && [ $item_count -gt 0 ]; then
                         CURRENT_PANEL=1
+                        # Skip headers in Keybind Editor
+                        if [ $CATEGORY_CURSOR -eq 5 ] && is_binding_header $ITEM_CURSOR; then
+                            while [ $ITEM_CURSOR -lt $((item_count - 1)) ] && is_binding_header $ITEM_CURSOR; do
+                                ((ITEM_CURSOR++))
+                            done
+                        fi
                     fi
                     ;;
                 '[D')  # Left arrow - switch to left panel
@@ -2825,8 +3283,13 @@ handle_input() {
             return 1
             ;;
         'a'|'A')  # Select all / deselect all (Extra Themes only)
-            if [ $CATEGORY_CURSOR -eq 11 ]; then
+            if [ $CATEGORY_CURSOR -eq 12 ]; then
                 toggle_all_themes
+            fi
+            ;;
+        'r'|'R')  # Reset pending edit (Keybind Editor only)
+            if [ $CATEGORY_CURSOR -eq 5 ] && [ $CURRENT_PANEL -eq 1 ]; then
+                unset 'BINDING_EDITS[$ITEM_CURSOR]'
             fi
             ;;
         'q'|'Q')  # Quit
@@ -2888,14 +3351,14 @@ toggle_current_item() {
                 WEBAPP_SELECTIONS[$webapp]=0
             fi
             ;;
-        4|5|6|7|8)  # Toggle items (Keybindings, Display, System, Appearance, Keyboard)
+        4|6|7|8|9)  # Toggle items (Keybindings, Display, System, Appearance, Keyboard)
             local items_var=""
             case $CATEGORY_CURSOR in
                 4) items_var="KEYBINDINGS_ITEMS" ;;
-                5) items_var="DISPLAY_ITEMS" ;;
-                6) items_var="SYSTEM_ITEMS" ;;
-                7) items_var="APPEARANCE_ITEMS" ;;
-                8) items_var="KEYBOARD_ITEMS" ;;
+                6) items_var="DISPLAY_ITEMS" ;;
+                7) items_var="SYSTEM_ITEMS" ;;
+                8) items_var="APPEARANCE_ITEMS" ;;
+                9) items_var="KEYBOARD_ITEMS" ;;
             esac
             local -n items_arr="$items_var"
             local item="${items_arr[$ITEM_CURSOR]}"
@@ -2911,7 +3374,16 @@ toggle_current_item() {
                 TOGGLE_SELECTIONS[$TOGGLE_ID]=0
             fi
             ;;
-        9)  # Utilities (simple toggle)
+        5)  # Keybind Editor - open edit dialog
+            if ! is_binding_header $ITEM_CURSOR; then
+                stty echo 2>/dev/null
+                tput cnorm
+                edit_binding $ITEM_CURSOR
+                tput civis
+                stty -echo 2>/dev/null
+            fi
+            ;;
+        10)  # Utilities (simple toggle)
             local item="${UTILITIES_ITEMS[$ITEM_CURSOR]}"
             parse_toggle_item "$item"
             local cur="${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}"
@@ -2921,7 +3393,7 @@ toggle_current_item() {
                 TOGGLE_SELECTIONS[$TOGGLE_ID]=0
             fi
             ;;
-        11) # Extra Themes (simple toggle)
+        12) # Extra Themes (simple toggle)
             local entry="${EXTRA_THEMES[$ITEM_CURSOR]}"
             local tname="${entry%%|*}"
             local cur="${THEME_SELECTIONS[$tname]:-0}"
@@ -3161,6 +3633,9 @@ for key in "${!TOGGLE_SELECTIONS[@]}"; do
         break
     fi
 done
+if [ ${#BINDING_EDITS[@]} -gt 0 ]; then
+    has_selection=true
+fi
 
 if [ "$has_selection" = false ]; then
     clear
@@ -3258,6 +3733,9 @@ fi
 if [ "$UNBIND_THEME_MENU" = true ]; then
     unbind_theme_menu
 fi
+
+# Apply keybind editor changes
+apply_binding_edits
 
 if [ "$RESTORE_CAPSLOCK" = true ]; then
     restore_capslock

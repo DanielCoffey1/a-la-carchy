@@ -13,6 +13,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - Interactive checklist of preinstalled packages and webapps
 - Only shows packages and webapps that are currently installed
 - **86 extra community themes** browseable and installable with one click
+- **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
 - **40+ configuration tweaks** for keybindings, display, and system settings
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
@@ -54,8 +55,9 @@ chmod +x a-la-carchy.sh
 2. Use the two-panel interface:
    - **←/→** Switch between the category panel (left) and items panel (right)
    - **↑/↓** Navigate within the current panel
-   - **Space** Select/deselect items (in the right panel)
+   - **Space** Select/deselect items or edit a keybinding (in the right panel)
    - **A** Select/deselect all (Extra Themes only)
+   - **R** Reset a pending keybinding edit (Keybind Editor only)
    - **Enter** Confirm and execute selected actions
    - **Q** Quit
 3. Type `yes` when prompted to confirm
@@ -86,7 +88,7 @@ The script can also remove the following preinstalled Omarchy webapps:
 
 ### Configuration Tweaks
 
-#### Keybinding Management
+#### Keybinding Toggles
 
 | Tweak | Description |
 |-------|-------------|
@@ -96,6 +98,27 @@ The script can also remove the following preinstalled Omarchy webapps:
 | Bind/Unbind theme menu | ALT+T for Omarchy theme selector |
 | Swap Alt and Super keys | macOS-like modifier key layout |
 | Restore Alt/Super keys | Return to default modifier layout |
+
+#### Keybind Editor
+
+A full keybinding editor that loads all active Hyprland bindings from config files and displays them in a scrollable list organized by section (Clipboard, Tiling, Utilities, Media, User Bindings). Modified bindings are marked with a `*` prefix.
+
+**Edit flow** — press Space on any binding to start a guided 3-step rebind:
+
+1. **Modifier selection** — toggle SUPER, SHIFT, CTRL, ALT with Space, navigate with arrows
+2. **Key input** — type a key name (e.g. Q, RETURN, F1) validated against known Hyprland keys
+3. **Preview & confirm** — review the new binding before accepting
+
+Press `R` to reset a pending edit back to its current value.
+
+On confirm, the editor writes `unbind` + `bindd` pairs to `~/.config/hypr/bindings.conf`, following Hyprland's standard override pattern. Existing overrides from previous sessions are detected and applied in-place so the editor always shows the currently active bindings.
+
+**Data sources:**
+- `~/.local/share/omarchy/default/hypr/bindings/clipboard.conf`
+- `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf`
+- `~/.local/share/omarchy/default/hypr/bindings/utilities.conf`
+- `~/.local/share/omarchy/default/hypr/bindings/media.conf`
+- `~/.config/hypr/bindings.conf` (user overrides)
 
 #### Keyboard & Input
 
@@ -375,12 +398,13 @@ The script modifies the following Omarchy configuration files (with automatic ba
 | File | Purpose |
 |------|---------|
 | `~/.config/hypr/monitors.conf` | Monitor scaling |
-| `~/.config/hypr/bindings.conf` | Keybindings |
+| `~/.config/hypr/bindings.conf` | Keybindings (toggles and keybind editor overrides) |
 | `~/.config/hypr/looknfeel.conf` | Rounded corners, window gaps |
 | `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping |
 | `~/.config/waybar/config.jsonc` | Clock format, tray icons |
 | `~/.config/uwsm/default` | Screenshot/recording directories |
 | `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
+| `~/.local/share/omarchy/default/hypr/bindings/*.conf` | Read by keybind editor (not modified) |
 
 ## Troubleshooting
 
