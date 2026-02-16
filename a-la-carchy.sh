@@ -3009,6 +3009,108 @@ disable_media_directories() {
     echo
 }
 
+add_to_omarchy_menu() {
+    echo -e "  ${BOLD}Adding A La Carchy to Omarchy menu...${RESET}"
+    echo
+
+    local ext_dir="$HOME/.config/omarchy/extensions"
+    local ext_file="$ext_dir/menu.sh"
+    local marker_start="# === a-la-carchy menu entry ==="
+    local marker_end="# === end a-la-carchy menu entry ==="
+    local menu_script="$HOME/.local/share/omarchy/bin/omarchy-menu"
+
+    if [ ! -f "$menu_script" ]; then
+        echo -e "  ${DIM}Omarchy menu script not found. Cannot add shortcut.${RESET}"
+        echo
+        SUMMARY_LOG+=("✗  Add menu shortcut -- omarchy-menu not found")
+        return 1
+    fi
+
+    mkdir -p "$ext_dir"
+
+    # Remove existing managed block if present
+    if [ -f "$ext_file" ]; then
+        awk -v start="$marker_start" -v end="$marker_end" '
+            $0 == start { skip=1; next }
+            $0 == end   { skip=0; next }
+            !skip
+        ' "$ext_file" > "${ext_file}.tmp" && mv "${ext_file}.tmp" "$ext_file"
+    fi
+
+    # Extract the original show_main_menu line from omarchy-menu and inject A La Carchy
+    # The menu string looks like: "...\n  About\n  System"
+    # We insert "  A La Carchy\n" before the System entry
+    local original_menu_line
+    original_menu_line=$(grep -m1 'go_to_menu "$(menu "Go"' "$menu_script")
+    if [ -z "$original_menu_line" ]; then
+        echo -e "  ${DIM}Could not parse menu entries from omarchy-menu.${RESET}"
+        echo
+        SUMMARY_LOG+=("✗  Add menu shortcut -- could not parse menu")
+        return 1
+    fi
+
+    # Insert "  A La Carchy\n" before the last entry (System), preserving its icon
+    local modified_menu_line
+    modified_menu_line=$(echo "$original_menu_line" | sed 's|\\n\([^\\]*System\)|\\n  A La Carchy\\n\1|')
+
+    # Extract case entries from the original go_to_menu function
+    local case_entries
+    case_entries=$(sed -n '/^go_to_menu()/,/^}/p' "$menu_script" | sed -n '/^  \*/p')
+
+    # Build the extension file content
+    {
+        echo "$marker_start"
+        echo "show_main_menu() {"
+        echo "$modified_menu_line"
+        echo "}"
+        echo ""
+        echo "_ala_carchy_go_to_menu() {"
+        echo "  case \"\${1,,}\" in"
+        echo "  *carchy*) terminal bash -c \"bash <(curl -fsSL https://raw.githubusercontent.com/DanielCoffey1/a-la-carchy/master/a-la-carchy.sh)\" ;;"
+        echo "$case_entries"
+        echo "  esac"
+        echo "}"
+        echo "go_to_menu() { _ala_carchy_go_to_menu \"\$@\"; }"
+        echo "$marker_end"
+    } >> "$ext_file"
+
+    echo -e "  ${DIM}Created: $ext_file${RESET}"
+    echo
+    SUMMARY_LOG+=("✓  Add menu shortcut -- added A La Carchy to Omarchy menu")
+}
+
+remove_from_omarchy_menu() {
+    echo -e "  ${BOLD}Removing A La Carchy from Omarchy menu...${RESET}"
+    echo
+
+    local ext_file="$HOME/.config/omarchy/extensions/menu.sh"
+    local marker_start="# === a-la-carchy menu entry ==="
+    local marker_end="# === end a-la-carchy menu entry ==="
+
+    if [ ! -f "$ext_file" ]; then
+        echo -e "  ${DIM}Menu shortcut not found. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Remove menu shortcut -- not found")
+        return 0
+    fi
+
+    awk -v start="$marker_start" -v end="$marker_end" '
+        $0 == start { skip=1; next }
+        $0 == end   { skip=0; next }
+        !skip
+    ' "$ext_file" > "${ext_file}.tmp" && mv "${ext_file}.tmp" "$ext_file"
+
+    # Delete file if empty
+    if [ ! -s "$ext_file" ]; then
+        rm -f "$ext_file"
+        echo -e "  ${DIM}Removed: $ext_file${RESET}"
+    else
+        echo -e "  ${DIM}Removed A La Carchy block from: $ext_file${RESET}"
+    fi
+    echo
+    SUMMARY_LOG+=("✓  Remove menu shortcut -- removed A La Carchy from Omarchy menu")
+}
+
 # =============================================================================
 # TWO-PANEL TUI DATA STRUCTURES
 # =============================================================================
@@ -3094,6 +3196,7 @@ declare -a KEYBOARD_ITEMS=(
 
 declare -a UTILITIES_ITEMS=(
     "backup_config|Backup config|[Select]||action|Create a backup of your Omarchy configuration"
+    "menu_shortcut|Menu shortcut|Add|Remove|toggle|Add A La Carchy to the Omarchy menu"
 )
 
 # Extra themes: each entry is "Display Name|github_url"
@@ -3648,7 +3751,11 @@ draw_interface() {
                         R=$(printf "%s%-17s %s" "$be_prefix" "$keycombo" "$be_desc")
                     fi ;;
                 10) parse_toggle_item "${UTILITIES_ITEMS[$idx]}"
-                   [[ "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}" == "1" ]] && R=" [x] $TOGGLE_NAME" || R=" [ ] $TOGGLE_NAME" ;;
+                    if [ "$TOGGLE_TYPE" = "toggle" ]; then
+                        R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
+                    else
+                        [[ "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}" == "1" ]] && R=" [x] $TOGGLE_NAME" || R=" [ ] $TOGGLE_NAME"
+                    fi ;;
                 12|13|14|15)  # Hyprland settings
                     local hypr_arr
                     case $CATEGORY_CURSOR in
@@ -3968,14 +4075,26 @@ toggle_current_item() {
                 stty -echo 2>/dev/null
             fi
             ;;
-        10)  # Utilities (simple toggle)
+        10)  # Utilities
             local item="${UTILITIES_ITEMS[$ITEM_CURSOR]}"
             parse_toggle_item "$item"
             local cur="${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}"
-            if [ "$cur" -eq 0 ]; then
-                TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+            if [ "$TOGGLE_TYPE" = "toggle" ]; then
+                # 3-state cycle: 0 -> 1 -> 2 -> 0
+                if [ "$cur" -eq 0 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+                elif [ "$cur" -eq 1 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=2
+                else
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                fi
             else
-                TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                # Simple action: 0 -> 1 -> 0
+                if [ "$cur" -eq 0 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+                else
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                fi
             fi
             ;;
         12|13|14|15)  # Hyprland settings - open edit dialog
@@ -4222,6 +4341,14 @@ if [ "${TOGGLE_SELECTIONS[backup_config]:-0}" -eq 1 ]; then
     BACKUP_CONFIGS=true
 fi
 
+# menu_shortcut: 1=Add, 2=Remove
+ADD_MENU_SHORTCUT=false
+REMOVE_MENU_SHORTCUT=false
+case "${TOGGLE_SELECTIONS[menu_shortcut]:-0}" in
+    1) ADD_MENU_SHORTCUT=true ;;
+    2) REMOVE_MENU_SHORTCUT=true ;;
+esac
+
 # Check if anything was selected
 has_selection=false
 if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ] || [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ] || [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ]; then
@@ -4448,6 +4575,14 @@ fi
 
 if [ "$HIDE_WINDOW_TITLE" = true ]; then
     hide_window_title
+fi
+
+if [ "$ADD_MENU_SHORTCUT" = true ]; then
+    add_to_omarchy_menu
+fi
+
+if [ "$REMOVE_MENU_SHORTCUT" = true ]; then
+    remove_from_omarchy_menu
 fi
 
 # Run backup after changes if requested

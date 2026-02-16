@@ -452,6 +452,17 @@ Available backups:
 Select a backup to restore (1-2):
 ```
 
+### Menu Shortcut
+
+Adds an "A La Carchy" entry to the Omarchy launcher menu (SUPER+ALT+SPACE) so you can launch the TUI without remembering the curl command.
+
+| Option | Description |
+|--------|-------------|
+| Add | Creates `~/.config/omarchy/extensions/menu.sh` with menu overrides |
+| Remove | Removes the managed block (deletes the file if empty) |
+
+The extension file is generated at runtime by reading the installed `omarchy-menu` script directly, preserving all icons and menu entries. It uses Omarchy's built-in extension mechanism (`~/.config/omarchy/extensions/menu.sh`) which is sourced after the default menu functions, so the overrides take effect immediately.
+
 ## Safety Features
 
 - Never run as root (uses sudo only when needed)
@@ -524,6 +535,7 @@ The script modifies the following Omarchy configuration files (with automatic ba
 | `~/.config/waybar/config.jsonc` | Clock format, tray icons |
 | `~/.config/uwsm/default` | Screenshot/recording directories |
 | `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
+| `~/.config/omarchy/extensions/menu.sh` | Menu shortcut (A La Carchy entry in Omarchy menu) |
 | `~/.local/share/omarchy/default/hypr/bindings/*.conf` | Read by keybind editor (not modified) |
 
 ## Troubleshooting
