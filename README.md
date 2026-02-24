@@ -280,17 +280,18 @@ If 2 or more monitors are detected, press **I** to identify — each monitor fla
 
 Press Space on "Position monitors" to open a guided multi-step editor for arranging your monitor layout. Requires 2+ monitors (auto-detects if not already scanned).
 
-**Step 1 — Select primary monitor:** Choose which monitor sits at the origin (0,0) using arrow keys and Enter.
+**Step 1 — Select primary monitor:** Choose which monitor sits at the origin (0,0) using arrow keys and Enter, then select its rotation (Normal, 90°, 180°, 270°).
 
 **Step 2 — Place each remaining monitor:** For each unplaced monitor:
 1. Select which already-placed monitor to position it relative to (arrow selection)
 2. Choose direction: Right of / Left of / Above / Below (arrow selection)
-3. Position is calculated automatically using **scaled coordinates** (effective width = resolution / scale), matching Hyprland's coordinate system
+3. Select rotation: Normal (landscape), 90° (portrait right), 180° (inverted), 270° (portrait left)
+4. Position is calculated automatically using **scaled coordinates** (effective width = resolution / scale), with width and height swapped for 90°/270° rotations to match the rotated dimensions
 
-**Step 3 — Preview & confirm:** Review all monitors with their calculated positions, then type `yes` to queue the layout.
+**Step 3 — Preview & confirm:** Review all monitors with their calculated positions and rotations, then type `yes` to queue the layout.
 
 On confirm, the layout is written to `~/.config/hypr/monitors.conf` with:
-- One `monitor=<name>,preferred,<x>x<y>,<scale>` line per display
+- One `monitor=<name>,preferred,<x>x<y>,<scale>,transform,<n>` line per display
 - `env = GDK_SCALE` set automatically (1.75 if any monitor scale > 1.5, otherwise 1)
 - A `monitor=,preferred,auto,1` fallback line for hot-plugged displays
 - Timestamped backup of the previous config

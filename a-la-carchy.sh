@@ -1288,19 +1288,19 @@ detect_monitors() {
     local output
     output=$(hyprctl monitors 2>/dev/null) || return 1
 
-    local name="" make="" model="" width="" height="" pos_x="" pos_y="" scale="" desc=""
+    local name="" make="" model="" width="" height="" pos_x="" pos_y="" scale="" desc="" transform=""
     while IFS= read -r line; do
         if [[ "$line" =~ ^Monitor\ ([^ ]+) ]]; then
             # Save previous monitor if any
             if [[ -n "$name" ]]; then
-                DETECTED_MONITORS+=("${name}|${make}|${model}|${width}|${height}|${pos_x}|${pos_y}|${scale}|${desc}")
+                DETECTED_MONITORS+=("${name}|${make}|${model}|${width}|${height}|${pos_x}|${pos_y}|${scale}|${desc}|${transform}")
                 ((MONITOR_COUNT++))
                 if [[ "$name" == eDP-* ]]; then
                     LAPTOP_MONITOR="$name"
                 fi
             fi
             name="${BASH_REMATCH[1]}"
-            make="" model="" width="" height="" pos_x="" pos_y="" scale="" desc=""
+            make="" model="" width="" height="" pos_x="" pos_y="" scale="" desc="" transform="0"
         elif [[ "$line" =~ ([0-9]+)x([0-9]+)@.*\ at\ (-?[0-9]+)x(-?[0-9]+) ]]; then
             width="${BASH_REMATCH[1]}"
             height="${BASH_REMATCH[2]}"
@@ -1308,6 +1308,8 @@ detect_monitors() {
             pos_y="${BASH_REMATCH[4]}"
         elif [[ "$line" =~ scale:\ ([0-9.]+) ]]; then
             scale="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ transform:\ ([0-9]+) ]]; then
+            transform="${BASH_REMATCH[1]}"
         elif [[ "$line" =~ description:\ (.+) ]]; then
             desc="${BASH_REMATCH[1]}"
             # Parse make/model from description (format: "Make Model (name)")
@@ -1321,7 +1323,7 @@ detect_monitors() {
 
     # Save last monitor
     if [[ -n "$name" ]]; then
-        DETECTED_MONITORS+=("${name}|${make}|${model}|${width}|${height}|${pos_x}|${pos_y}|${scale}|${desc}")
+        DETECTED_MONITORS+=("${name}|${make}|${model}|${width}|${height}|${pos_x}|${pos_y}|${scale}|${desc}|${transform}")
         ((MONITOR_COUNT++))
         if [[ "$name" == eDP-* ]]; then
             LAPTOP_MONITOR="$name"
@@ -1359,13 +1361,15 @@ show_monitor_detection_dialog() {
     echo
 
     local i=0
+    local -a transform_labels=("Normal" "90°" "180°" "270°" "Flipped" "Flipped 90°" "Flipped 180°" "Flipped 270°")
     for entry in "${DETECTED_MONITORS[@]}"; do
         ((i++))
-        IFS='|' read -r m_name m_make m_model m_w m_h m_x m_y m_scale m_desc <<< "$entry"
+        IFS='|' read -r m_name m_make m_model m_w m_h m_x m_y m_scale m_desc m_transform <<< "$entry"
         local label=""
         [[ "$m_name" == eDP-* ]] && label=" (laptop)"
+        local rot_label="${transform_labels[${m_transform:-0}]}"
         echo -e "    ${BOLD}$i.${RESET}  $m_name$label"
-        echo -e "       ${DIM}Resolution: ${m_w}x${m_h}  Scale: ${m_scale}  Position: ${m_x},${m_y}${RESET}"
+        echo -e "       ${DIM}Resolution: ${m_w}x${m_h}  Scale: ${m_scale}  Position: ${m_x},${m_y}  Rotation: ${rot_label}${RESET}"
         if [[ -n "$m_desc" ]]; then
             echo -e "       ${DIM}$m_desc${RESET}"
         fi
@@ -1430,15 +1434,74 @@ show_position_editor_dialog() {
         return
     fi
 
-    # Build arrays of monitor names, widths, heights, scales
-    local -a mon_names=() mon_widths=() mon_heights=() mon_scales=()
+    # Build arrays of monitor names, widths, heights, scales, transforms
+    local -a mon_names=() mon_widths=() mon_heights=() mon_scales=() mon_transforms=()
     for entry in "${DETECTED_MONITORS[@]}"; do
-        IFS='|' read -r m_name m_make m_model m_w m_h m_x m_y m_scale m_desc <<< "$entry"
+        IFS='|' read -r m_name m_make m_model m_w m_h m_x m_y m_scale m_desc m_transform <<< "$entry"
         mon_names+=("$m_name")
         mon_widths+=("$m_w")
         mon_heights+=("$m_h")
         mon_scales+=("$m_scale")
+        mon_transforms+=("${m_transform:-0}")
     done
+
+    # Rotation labels and values
+    local -a rot_labels=("Normal (landscape)" "90° (portrait right)" "180° (inverted)" "270° (portrait left)")
+    local -a rot_values=(0 1 2 3)
+
+    # Helper: select rotation for a monitor, returns via rot_result
+    select_rotation() {
+        local mon_idx=$1
+        local step_label="$2"
+        local rot_cursor=0
+        # Default to current transform if it's a simple rotation (0-3)
+        local cur_t="${mon_transforms[$mon_idx]}"
+        (( cur_t >= 0 && cur_t <= 3 )) && rot_cursor=$cur_t
+
+        while true; do
+            clear
+            echo
+            echo
+            echo -e "${BOLD}  Position Monitors - ${step_label}${RESET}"
+            echo
+            local rlabel=""
+            [[ "${mon_names[$mon_idx]}" == eDP-* ]] && rlabel=" (laptop)"
+            echo -e "  ${DIM}Rotation for: ${RESET}${BOLD}${mon_names[$mon_idx]}${rlabel}${RESET}  ${DIM}${mon_widths[$mon_idx]}x${mon_heights[$mon_idx]}${RESET}"
+            echo
+            echo -e "  ${DIM}Select orientation:${RESET}"
+            echo
+
+            for ((r=0; r<4; r++)); do
+                if [ $r -eq $rot_cursor ]; then
+                    echo -e "    ${SELECTED_BG} > ${rot_labels[$r]} ${RESET}"
+                else
+                    echo -e "       ${rot_labels[$r]}"
+                fi
+            done
+
+            echo
+            echo -e "  ${DIM}Up/Down: Select  Enter: Confirm  Esc: Cancel${RESET}"
+
+            IFS= read -rsn1 key < /dev/tty
+            case "$key" in
+                $'\x1b')
+                    read -rsn2 -t 0.1 key
+                    case "$key" in
+                        '[A') ((rot_cursor > 0)) && ((rot_cursor--)) ;;
+                        '[B') ((rot_cursor < 3)) && ((rot_cursor++)) ;;
+                    esac
+                    [[ -z "$key" ]] && return 1  # Bare escape = cancel
+                    ;;
+                '')
+                    rot_result=${rot_values[$rot_cursor]}
+                    return 0
+                    ;;
+                'q'|'Q')
+                    return 1
+                    ;;
+            esac
+        done
+    }
 
     # Step 1: Select primary monitor
     local primary_idx=0
@@ -1447,7 +1510,7 @@ show_position_editor_dialog() {
         clear
         echo
         echo
-        echo -e "${BOLD}  Position Monitors - Step 1/2${RESET}"
+        echo -e "${BOLD}  Position Monitors - Step 1/3${RESET}"
         echo
         echo -e "  ${DIM}Select your primary monitor (placed at origin 0,0):${RESET}"
         echo
@@ -1473,6 +1536,7 @@ show_position_editor_dialog() {
                     '[A') ((cursor > 0)) && ((cursor--)) ;;
                     '[B') ((cursor < MONITOR_COUNT - 1)) && ((cursor++)) ;;
                 esac
+                [[ -z "$key" ]] && return  # Bare escape = cancel
                 ;;
             '')  # Enter
                 primary_idx=$cursor
@@ -1483,6 +1547,11 @@ show_position_editor_dialog() {
                 ;;
         esac
     done
+
+    # Step 1b: Select rotation for primary monitor
+    local rot_result=0
+    select_rotation $primary_idx "Step 1/3" || return
+    mon_transforms[$primary_idx]=$rot_result
 
     # Track placed monitors: index -> "x,y"
     local -A placed_positions=()
@@ -1504,7 +1573,7 @@ show_position_editor_dialog() {
             clear
             echo
             echo
-            echo -e "${BOLD}  Position Monitors - Step 2/2${RESET}"
+            echo -e "${BOLD}  Position Monitors - Step 2/3${RESET}"
             echo
             local rem_label=""
             [[ "${mon_names[$rem_idx]}" == eDP-* ]] && rem_label=" (laptop)"
@@ -1536,6 +1605,7 @@ show_position_editor_dialog() {
                         '[A') ((ref_cursor > 0)) && ((ref_cursor--)) ;;
                         '[B') ((ref_cursor < ${#placed_order[@]} - 1)) && ((ref_cursor++)) ;;
                     esac
+                    [[ -z "$key" ]] && return  # Bare escape = cancel
                     ;;
                 '')
                     ref_idx=${placed_order[$ref_cursor]}
@@ -1554,7 +1624,7 @@ show_position_editor_dialog() {
             clear
             echo
             echo
-            echo -e "${BOLD}  Position Monitors - Step 2/2${RESET}"
+            echo -e "${BOLD}  Position Monitors - Step 2/3${RESET}"
             echo
             local rem_label=""
             [[ "${mon_names[$rem_idx]}" == eDP-* ]] && rem_label=" (laptop)"
@@ -1583,6 +1653,7 @@ show_position_editor_dialog() {
                         '[A') ((dir_cursor > 0)) && ((dir_cursor--)) ;;
                         '[B') ((dir_cursor < 3)) && ((dir_cursor++)) ;;
                     esac
+                    [[ -z "$key" ]] && return  # Bare escape = cancel
                     ;;
                 '')
                     break
@@ -1593,19 +1664,39 @@ show_position_editor_dialog() {
             esac
         done
 
+        # Select rotation for this monitor
+        select_rotation $rem_idx "Step 2/3" || return
+        mon_transforms[$rem_idx]=$rot_result
+
         # Calculate position using Hyprland's snapped scale and rounded dimensions
         # Hyprland snaps scale to nearest 1/120: round(scale*120)/120
         # then computes logical size as round(resolution / snapped_scale)
+        # For 90°/270° rotation (transform 1,3), swap width and height
         local ref_pos="${placed_positions[$ref_idx]}"
         local ref_x="${ref_pos%,*}"
         local ref_y="${ref_pos#*,}"
         local ref_scale="${mon_scales[$ref_idx]}"
         local rem_scale="${mon_scales[$rem_idx]}"
-        local ref_ew ref_eh rem_ew rem_eh
-        ref_ew=$(awk "BEGIN { s=int($ref_scale*120+0.5)/120; printf \"%d\", int(${mon_widths[$ref_idx]}/s+0.5) }")
-        ref_eh=$(awk "BEGIN { s=int($ref_scale*120+0.5)/120; printf \"%d\", int(${mon_heights[$ref_idx]}/s+0.5) }")
-        rem_ew=$(awk "BEGIN { s=int($rem_scale*120+0.5)/120; printf \"%d\", int(${mon_widths[$rem_idx]}/s+0.5) }")
-        rem_eh=$(awk "BEGIN { s=int($rem_scale*120+0.5)/120; printf \"%d\", int(${mon_heights[$rem_idx]}/s+0.5) }")
+        local ref_t="${mon_transforms[$ref_idx]}"
+        local rem_t="${mon_transforms[$rem_idx]}"
+
+        # Get raw logical dimensions (before rotation)
+        local ref_lw ref_lh rem_lw rem_lh
+        ref_lw=$(awk "BEGIN { s=int($ref_scale*120+0.5)/120; printf \"%d\", int(${mon_widths[$ref_idx]}/s+0.5) }")
+        ref_lh=$(awk "BEGIN { s=int($ref_scale*120+0.5)/120; printf \"%d\", int(${mon_heights[$ref_idx]}/s+0.5) }")
+        rem_lw=$(awk "BEGIN { s=int($rem_scale*120+0.5)/120; printf \"%d\", int(${mon_widths[$rem_idx]}/s+0.5) }")
+        rem_lh=$(awk "BEGIN { s=int($rem_scale*120+0.5)/120; printf \"%d\", int(${mon_heights[$rem_idx]}/s+0.5) }")
+
+        # Apply rotation: 90° and 270° swap width/height
+        local ref_ew=$ref_lw ref_eh=$ref_lh rem_ew=$rem_lw rem_eh=$rem_lh
+        if (( ref_t == 1 || ref_t == 3 )); then
+            ref_ew=$ref_lh
+            ref_eh=$ref_lw
+        fi
+        if (( rem_t == 1 || rem_t == 3 )); then
+            rem_ew=$rem_lh
+            rem_eh=$rem_lw
+        fi
 
         local new_x=0 new_y=0
         case $dir_cursor in
@@ -1632,10 +1723,11 @@ show_position_editor_dialog() {
     done
 
     # Step 3: Preview
+    local -a preview_rot_labels=("Normal" "90°" "180°" "270°")
     clear
     echo
     echo
-    echo -e "${BOLD}  Position Monitors - Preview${RESET}"
+    echo -e "${BOLD}  Position Monitors - Step 3/3 Preview${RESET}"
     echo
     echo -e "  ${DIM}Monitor layout:${RESET}"
     echo
@@ -1648,14 +1740,14 @@ show_position_editor_dialog() {
         [[ "${mon_names[$i]}" == eDP-* ]] && label=" (laptop)"
         local primary_tag=""
         [ $i -eq $primary_idx ] && primary_tag=" [primary]"
+        local t="${mon_transforms[$i]}"
+        local rot_info="${preview_rot_labels[$t]}"
         echo -e "    ${BOLD}${mon_names[$i]}${RESET}${label}${primary_tag}"
-        echo -e "      ${DIM}Resolution: ${mon_widths[$i]}x${mon_heights[$i]}  Scale: ${mon_scales[$i]}${RESET}"
+        echo -e "      ${DIM}Resolution: ${mon_widths[$i]}x${mon_heights[$i]}  Scale: ${mon_scales[$i]}  Rotation: ${rot_info}${RESET}"
         echo -e "      ${DIM}Position: ${px}x${py}${RESET}"
         echo
     done
 
-    echo -e "  ${DIM}Hyprland config line format: monitor=name,preferred,XxY,scale${RESET}"
-    echo
     echo -e "  ${DIM}Note: Displays may briefly go black while Hyprland reconfigures.${RESET}"
     echo
     printf "  ${BOLD}Apply this layout?${RESET} ${DIM}(yes/no)${RESET} "
@@ -1664,8 +1756,10 @@ show_position_editor_dialog() {
     if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         # Populate global state
         MONITOR_POSITIONS=()
+        MONITOR_TRANSFORMS=()
         for ((i=0; i<MONITOR_COUNT; i++)); do
             MONITOR_POSITIONS["${mon_names[$i]}"]="${placed_positions[$i]}"
+            MONITOR_TRANSFORMS["${mon_names[$i]}"]="${mon_transforms[$i]}"
         done
         MONITORS_POSITIONED=1
         echo
@@ -1711,21 +1805,22 @@ apply_monitor_positions() {
         fi
     done
 
-    # Apply positions live via hyprctl keyword (avoids black screen from config reload)
+    # Apply positions and transforms live via hyprctl keyword
     for entry in "${DETECTED_MONITORS[@]}"; do
-        IFS='|' read -r m_name _mk _mo _w _h _x _y m_scale _d <<< "$entry"
+        IFS='|' read -r m_name _mk _mo _w _h _x _y m_scale _d _t <<< "$entry"
         local pos="${MONITOR_POSITIONS[$m_name]:-auto}"
+        local transform="${MONITOR_TRANSFORMS[$m_name]:-0}"
         if [[ "$pos" != "auto" ]]; then
             local px="${pos%,*}"
             local py="${pos#*,}"
-            hyprctl keyword monitor "${m_name},preferred,${px}x${py},${m_scale}" &>/dev/null
+            hyprctl keyword monitor "${m_name},preferred,${px}x${py},${m_scale},transform,${transform}" &>/dev/null
         else
-            hyprctl keyword monitor "${m_name},preferred,auto,${m_scale}" &>/dev/null
+            hyprctl keyword monitor "${m_name},preferred,auto,${m_scale},transform,${transform}" &>/dev/null
         fi
     done
-    echo -e "    ${CHECKED}✓${RESET}  Monitor positions applied live"
+    echo -e "    ${CHECKED}✓${RESET}  Monitor layout applied live"
 
-    # Save to config file for persistence (settings already match live state)
+    # Save to config file for persistence
     {
         echo "# See https://wiki.hyprland.org/Configuring/Monitors/"
         echo "# Configured by A La Carchy - multi-monitor layout"
@@ -1734,14 +1829,15 @@ apply_monitor_positions() {
         echo "env = GDK_SCALE,$gdk_scale"
         echo ""
         for entry in "${DETECTED_MONITORS[@]}"; do
-            IFS='|' read -r m_name _mk _mo _w _h _x _y m_scale _d <<< "$entry"
+            IFS='|' read -r m_name _mk _mo _w _h _x _y m_scale _d _t <<< "$entry"
             local pos="${MONITOR_POSITIONS[$m_name]:-auto}"
+            local transform="${MONITOR_TRANSFORMS[$m_name]:-0}"
             if [[ "$pos" != "auto" ]]; then
                 local px="${pos%,*}"
                 local py="${pos#*,}"
-                echo "monitor=${m_name},preferred,${px}x${py},${m_scale}"
+                echo "monitor=${m_name},preferred,${px}x${py},${m_scale},transform,${transform}"
             else
-                echo "monitor=${m_name},preferred,auto,${m_scale}"
+                echo "monitor=${m_name},preferred,auto,${m_scale},transform,${transform}"
             fi
         done
         echo ""
@@ -1750,7 +1846,7 @@ apply_monitor_positions() {
     } > "$MONITORS_CONF"
 
     echo -e "    ${CHECKED}✓${RESET}  Config saved to monitors.conf"
-    SUMMARY_LOG+=("✓  Monitor positions configured")
+    SUMMARY_LOG+=("✓  Monitor layout configured")
     echo
     echo
 }
@@ -4137,8 +4233,9 @@ declare -A WEBAPP_DESCRIPTIONS=(
 )
 
 # Multi-monitor management state
-declare -a DETECTED_MONITORS=()       # "name|make|model|width|height|x|y|scale|desc"
+declare -a DETECTED_MONITORS=()       # "name|make|model|width|height|x|y|scale|desc|transform"
 declare -A MONITOR_POSITIONS=()       # name -> "x,y"
+declare -A MONITOR_TRANSFORMS=()      # name -> transform (0-7)
 declare -i MONITOR_COUNT=0
 declare LAPTOP_MONITOR=""             # eDP-* name if found
 declare -i MONITORS_POSITIONED=0      # 1 if position editor was completed
