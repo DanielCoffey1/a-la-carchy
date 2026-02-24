@@ -89,6 +89,13 @@ LAPTOP_AUTO_MARKER_END="# <<< managed by a-la-carchy laptop-display"
 # Laptop auto-off script path
 LAPTOP_AUTO_SCRIPT="$HOME/.config/hypr/scripts/laptop-display-auto.sh"
 
+# Managed-block markers for power profile
+POWER_PROFILE_MARKER_START="# >>> managed by a-la-carchy power-profile"
+POWER_PROFILE_MARKER_END="# <<< managed by a-la-carchy power-profile"
+
+# Power profile startup script path
+POWER_PROFILE_SCRIPT="$HOME/.config/hypr/scripts/power-profile-default.sh"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -2031,6 +2038,148 @@ remove_laptop_auto_off() {
     echo
 }
 
+# Show power profile selection dialog
+show_power_profile_dialog() {
+    if ! command -v powerprofilesctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Power Profile${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  powerprofilesctl not found."
+        echo -e "  ${DIM}Install power-profiles-daemon to use this feature.${RESET}"
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    # Get current active profile
+    local active_profile
+    active_profile=$(powerprofilesctl get 2>/dev/null)
+
+    # Check if a default is already configured
+    local configured_default=""
+    if [[ -f "$POWER_PROFILE_SCRIPT" ]]; then
+        configured_default=$(grep -oP 'powerprofilesctl set \K\S+' "$POWER_PROFILE_SCRIPT" 2>/dev/null)
+    fi
+
+    local -a profiles=("power-saver" "balanced" "performance")
+    local -a labels=("Power saver" "Balanced" "Performance")
+    local opt_cursor=1  # Default to balanced
+
+    # Set cursor to current active profile
+    for i in "${!profiles[@]}"; do
+        if [[ "${profiles[$i]}" == "$active_profile" ]]; then
+            opt_cursor=$i
+            break
+        fi
+    done
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Power Profile${RESET}"
+        echo -e "  ${DIM}Set default power profile restored on startup${RESET}"
+        echo
+        echo -e "  ${DIM}Select profile (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        for i in "${!profiles[@]}"; do
+            local suffix=""
+            [[ "${profiles[$i]}" == "$active_profile" ]] && suffix=" (active)"
+            [[ "${profiles[$i]}" == "$configured_default" ]] && suffix="${suffix} (default)"
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${labels[$i]}${suffix}${RESET}"
+            else
+                echo -e "      ${labels[$i]}${suffix}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#profiles[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return  # Bare escape = cancel
+                ;;
+            ''|q|Q)  # Enter or Q
+                if [[ -z "$key" ]]; then
+                    # Enter - confirm selection
+                    SELECTED_POWER_PROFILE="${profiles[$opt_cursor]}"
+                    clear
+                    echo
+                    echo -e "  ${BOLD}Power Profile${RESET}"
+                    echo
+                    echo -e "  ${CHECKED}✓${RESET}  ${labels[$opt_cursor]} queued for apply"
+                    echo
+                    echo -e "  ${DIM}Press any key to return...${RESET}"
+                    read -rsn1 < /dev/tty
+                    return
+                else
+                    return  # Q = cancel
+                fi
+                ;;
+        esac
+    done
+}
+
+# Apply the selected power profile and configure startup persistence
+apply_power_profile() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Set Power Profile: $SELECTED_POWER_PROFILE${RESET}"
+    echo
+
+    # Set profile immediately
+    if powerprofilesctl set "$SELECTED_POWER_PROFILE" 2>/dev/null; then
+        echo -e "    ${CHECKED}✓${RESET}  Profile set to $SELECTED_POWER_PROFILE"
+    else
+        echo -e "    ${DIM}✗${RESET}  Failed to set profile"
+        SUMMARY_LOG+=("✗  Power profile -- failed to set")
+        return 1
+    fi
+
+    # Create scripts directory
+    mkdir -p "$(dirname "$POWER_PROFILE_SCRIPT")"
+
+    # Write startup script
+    cat > "$POWER_PROFILE_SCRIPT" << SCRIPTEOF
+#!/bin/bash
+# Managed by A La Carchy - default power profile on startup
+powerprofilesctl set $SELECTED_POWER_PROFILE
+SCRIPTEOF
+
+    chmod +x "$POWER_PROFILE_SCRIPT"
+    echo -e "    ${CHECKED}✓${RESET}  Startup script created: $POWER_PROFILE_SCRIPT"
+
+    # Add/replace managed block in monitors.conf
+    if grep -q "$POWER_PROFILE_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
+        sed -i "/$POWER_PROFILE_MARKER_START/,/$POWER_PROFILE_MARKER_END/d" "$MONITORS_CONF"
+        # Remove trailing blank lines
+        sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$MONITORS_CONF"
+    fi
+
+    {
+        echo ""
+        echo "$POWER_PROFILE_MARKER_START"
+        echo "exec-once = $POWER_PROFILE_SCRIPT"
+        echo "$POWER_PROFILE_MARKER_END"
+    } >> "$MONITORS_CONF"
+    echo -e "    ${CHECKED}✓${RESET}  Added exec-once to monitors.conf"
+
+    SUMMARY_LOG+=("✓  Power profile set to $SELECTED_POWER_PROFILE")
+    echo
+    echo
+}
+
 bind_shutdown() {
     clear
     echo
@@ -3953,6 +4102,7 @@ declare -a SYSTEM_ITEMS=(
     "hibernation|Hibernation|Enable|Disable|toggle|Allow system to hibernate to disk"
     "fingerprint|Fingerprint|Enable|Disable|toggle|Enable fingerprint authentication for login"
     "fido2|FIDO2|Enable|Disable|toggle|Enable FIDO2 security key authentication"
+    "power_profile|Power profile|[Open]||action|Set default power profile for startup"
 )
 
 declare -a APPEARANCE_ITEMS=(
@@ -4239,6 +4389,7 @@ declare -A MONITOR_TRANSFORMS=()      # name -> transform (0-7)
 declare -i MONITOR_COUNT=0
 declare LAPTOP_MONITOR=""             # eDP-* name if found
 declare -i MONITORS_POSITIONED=0      # 1 if position editor was completed
+declare SELECTED_POWER_PROFILE=""     # "", "power-saver", "balanced", "performance"
 
 # Keybind Editor data structures
 declare -a EDIT_BINDINGS_ITEMS=()
@@ -4347,14 +4498,18 @@ get_current_description() {
             local webapp="${INSTALLED_WEBAPPS[$ITEM_CURSOR]}"
             echo "${WEBAPP_DESCRIPTIONS[$webapp]:-}"
             ;;
-        4|7|8|9)  # Toggle items
+        4|8|9)  # Toggle items
             local arr
             case $CATEGORY_CURSOR in
                 4) arr="KEYBINDINGS_ITEMS" ;;
-                7) arr="SYSTEM_ITEMS" ;; 8) arr="APPEARANCE_ITEMS" ;; 9) arr="KEYBOARD_ITEMS" ;;
+                8) arr="APPEARANCE_ITEMS" ;; 9) arr="KEYBOARD_ITEMS" ;;
             esac
             local -n ref="$arr"
             parse_toggle_item "${ref[$ITEM_CURSOR]}"
+            echo "$TOGGLE_DESC"
+            ;;
+        7)  # System (mixed: toggle + action)
+            parse_toggle_item "${SYSTEM_ITEMS[$ITEM_CURSOR]}"
             echo "$TOGGLE_DESC"
             ;;
         5)  # Keybind Editor
@@ -4511,15 +4666,30 @@ draw_interface() {
                    [[ "${PKG_SELECTIONS[$p]:-0}" == "1" ]] && R=" [x] $p" || R=" [ ] $p" ;;
                 2) local w="${INSTALLED_WEBAPPS[$idx]}"
                    [[ "${WEBAPP_SELECTIONS[$w]:-0}" == "1" ]] && R=" [x] $w" || R=" [ ] $w" ;;
-                4|7|8|9)
+                4|8|9)
                     local arr
                     case $CATEGORY_CURSOR in
                         4) arr="KEYBINDINGS_ITEMS" ;;
-                        7) arr="SYSTEM_ITEMS" ;; 8) arr="APPEARANCE_ITEMS" ;; 9) arr="KEYBOARD_ITEMS" ;;
+                        8) arr="APPEARANCE_ITEMS" ;; 9) arr="KEYBOARD_ITEMS" ;;
                     esac
                     local -n ref="$arr"
                     parse_toggle_item "${ref[$idx]}"
                     R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}") ;;
+                7)  # System (mixed: toggle + action)
+                    parse_toggle_item "${SYSTEM_ITEMS[$idx]}"
+                    if [ "$TOGGLE_TYPE" = "action" ]; then
+                        local pp_suffix=""
+                        if [[ -n "$SELECTED_POWER_PROFILE" ]]; then
+                            pp_suffix="$SELECTED_POWER_PROFILE"
+                        fi
+                        if [[ -n "$pp_suffix" ]]; then
+                            R=$(printf " %-24s %s" "$TOGGLE_NAME" "$pp_suffix")
+                        else
+                            R=" $TOGGLE_NAME"
+                        fi
+                    else
+                        R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
+                    fi ;;
                 6)  # Display (mixed: toggle/radio + action)
                     parse_toggle_item "${DISPLAY_ITEMS[$idx]}"
                     if [ "$TOGGLE_TYPE" = "action" ]; then
@@ -4641,7 +4811,7 @@ draw_interface() {
     printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
     if [ $CATEGORY_CURSOR -eq 17 ]; then
         printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit          │"
-    elif [ $CATEGORY_CURSOR -eq 5 ] || [ $CATEGORY_CURSOR -eq 6 ] || [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ]; then
+    elif [ $CATEGORY_CURSOR -eq 5 ] || [ $CATEGORY_CURSOR -eq 6 ] || [ $CATEGORY_CURSOR -eq 7 ] || [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ]; then
         printf '%s\n' "│          Arrows:Navigate  Space:Edit  R:Reset  Enter:Confirm  Q:Quit         │"
     else
         printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
@@ -4848,11 +5018,10 @@ toggle_current_item() {
                 WEBAPP_SELECTIONS[$webapp]=0
             fi
             ;;
-        4|7|8|9)  # Toggle items (Keybindings, System, Appearance, Keyboard)
+        4|8|9)  # Toggle items (Keybindings, Appearance, Keyboard)
             local items_var=""
             case $CATEGORY_CURSOR in
                 4) items_var="KEYBINDINGS_ITEMS" ;;
-                7) items_var="SYSTEM_ITEMS" ;;
                 8) items_var="APPEARANCE_ITEMS" ;;
                 9) items_var="KEYBOARD_ITEMS" ;;
             esac
@@ -4868,6 +5037,30 @@ toggle_current_item() {
                 TOGGLE_SELECTIONS[$TOGGLE_ID]=2
             else
                 TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+            fi
+            ;;
+        7)  # System (mixed: toggle + action)
+            local item="${SYSTEM_ITEMS[$ITEM_CURSOR]}"
+            parse_toggle_item "$item"
+            local cur="${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}"
+            if [ "$TOGGLE_TYPE" = "action" ]; then
+                # Action items open dialogs
+                stty echo 2>/dev/null
+                tput cnorm
+                case "$TOGGLE_ID" in
+                    power_profile) show_power_profile_dialog ;;
+                esac
+                tput civis
+                stty -echo 2>/dev/null
+            else
+                # 3-state cycle: 0 -> 1 -> 2 -> 0
+                if [ "$cur" -eq 0 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+                elif [ "$cur" -eq 1 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=2
+                else
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                fi
             fi
             ;;
         5)  # Keybind Editor - open edit dialog
@@ -5215,6 +5408,9 @@ fi
 if [ "$MONITORS_POSITIONED" -eq 1 ]; then
     has_selection=true
 fi
+if [[ -n "$SELECTED_POWER_PROFILE" ]]; then
+    has_selection=true
+fi
 
 if [ "$has_selection" = false ]; then
     clear
@@ -5303,6 +5499,10 @@ fi
 
 if [ "$LAPTOP_AUTO_NORMAL" = true ]; then
     remove_laptop_auto_off
+fi
+
+if [[ -n "$SELECTED_POWER_PROFILE" ]]; then
+    apply_power_profile
 fi
 
 if [ "$BIND_SHUTDOWN" = true ]; then

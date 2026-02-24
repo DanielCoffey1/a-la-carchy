@@ -51,6 +51,7 @@ chmod +x a-la-carchy.sh
 - An AUR helper (`yay` or `paru`) recommended for full functionality
 - `brightnessctl` for laptop display auto-off (preinstalled on Omarchy)
 - `socat` or `nc` for real-time monitor plug/unplug events (falls back to polling if unavailable)
+- `power-profiles-daemon` for power profile management (optional, shows error if unavailable)
 - No other external dependencies - works out of the box!
 
 ## How to Use
@@ -318,6 +319,23 @@ Toggle "Laptop display" to "Auto off" to automatically disable the laptop screen
 
 Toggle to "Normal" to disable: removes the watcher script, kills any running instance, removes the managed block from config, and re-enables the laptop display with restored brightness.
 
+##### Power Profile
+
+Press Space on "Power profile" to open an arrow-key selection dialog with three options:
+
+- **Power saver** — reduces CPU frequency and brightness for maximum battery life
+- **Balanced** — default profile balancing performance and power consumption
+- **Performance** — maximum CPU performance at the cost of higher power draw
+
+The dialog marks the currently active profile with `(active)` and any previously configured startup default with `(default)`.
+
+On confirm, the selected profile is:
+1. Applied immediately via `powerprofilesctl set`
+2. Persisted across reboots by creating a startup script at `~/.config/hypr/scripts/power-profile-default.sh`
+3. Auto-started on login via an `exec-once` managed block in `~/.config/hypr/monitors.conf`
+
+Requires `power-profiles-daemon` (provides `powerprofilesctl`). If not installed, the dialog shows a graceful error message.
+
 #### Window Management
 
 | Tweak | Description |
@@ -359,6 +377,7 @@ Toggle to "Normal" to disable: removes the watcher script, kills any running ins
 | Disable fingerprint auth | Remove fingerprint authentication |
 | Enable FIDO2 auth | Set up security keys (YubiKey, etc.) |
 | Disable FIDO2 auth | Remove security key authentication |
+| Power profile | Set default power profile (power-saver, balanced, performance) restored on startup |
 
 ### Extra Themes
 
@@ -586,11 +605,12 @@ The script modifies the following Omarchy configuration files (with automatic ba
 
 | File | Purpose |
 |------|---------|
-| `~/.config/hypr/monitors.conf` | Monitor scaling, multi-monitor positions, laptop auto-off exec-once |
+| `~/.config/hypr/monitors.conf` | Monitor scaling, multi-monitor positions, laptop auto-off exec-once, power profile exec-once |
 | `~/.config/hypr/bindings.conf` | Keybindings (toggles and keybind editor overrides) |
 | `~/.config/hypr/looknfeel.conf` | Rounded corners, window gaps, Hyprland General/Decoration/Gestures settings |
 | `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping, Hyprland Input settings |
 | `~/.config/hypr/scripts/laptop-display-auto.sh` | Laptop auto-off watcher script (created/removed by toggle) |
+| `~/.config/hypr/scripts/power-profile-default.sh` | Power profile startup script (sets default profile on login) |
 | `~/.config/waybar/config.jsonc` | Clock format, tray icons |
 | `~/.config/uwsm/default` | Screenshot/recording directories |
 | `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
