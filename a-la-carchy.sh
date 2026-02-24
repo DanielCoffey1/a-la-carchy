@@ -82,6 +82,13 @@ LOOKNFEEL_CONF="$HOME/.config/hypr/looknfeel.conf"
 # UWSM defaults config path
 UWSM_DEFAULT="$HOME/.config/uwsm/default"
 
+# Managed-block markers for laptop auto-off
+LAPTOP_AUTO_MARKER_START="# >>> managed by a-la-carchy laptop-display"
+LAPTOP_AUTO_MARKER_END="# <<< managed by a-la-carchy laptop-display"
+
+# Laptop auto-off script path
+LAPTOP_AUTO_SCRIPT="$HOME/.config/hypr/scripts/laptop-display-auto.sh"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -1165,6 +1172,11 @@ set_monitor_4k() {
         return 1
     fi
 
+    if grep -q "^monitor=[A-Za-z]" "$MONITORS_CONF" 2>/dev/null; then
+        echo -e "  ${DIM}Note: Per-monitor layout detected. This will replace it with generic scaling.${RESET}"
+        echo
+    fi
+
     printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
     read -r < /dev/tty
 
@@ -1221,6 +1233,11 @@ set_monitor_1080_1440() {
         return 1
     fi
 
+    if grep -q "^monitor=[A-Za-z]" "$MONITORS_CONF" 2>/dev/null; then
+        echo -e "  ${DIM}Note: Per-monitor layout detected. This will replace it with generic scaling.${RESET}"
+        echo
+    fi
+
     printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
     read -r < /dev/tty
 
@@ -1254,6 +1271,666 @@ EOF
     SUMMARY_LOG+=("✓  Monitor scaling set to 1080p/1440p")
     echo
     echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+    echo
+}
+
+# Detect connected monitors via hyprctl
+detect_monitors() {
+    DETECTED_MONITORS=()
+    MONITOR_COUNT=0
+    LAPTOP_MONITOR=""
+
+    if ! command -v hyprctl &>/dev/null; then
+        return 1
+    fi
+
+    local output
+    output=$(hyprctl monitors 2>/dev/null) || return 1
+
+    local name="" make="" model="" width="" height="" pos_x="" pos_y="" scale="" desc=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^Monitor\ ([^ ]+) ]]; then
+            # Save previous monitor if any
+            if [[ -n "$name" ]]; then
+                DETECTED_MONITORS+=("${name}|${make}|${model}|${width}|${height}|${pos_x}|${pos_y}|${scale}|${desc}")
+                ((MONITOR_COUNT++))
+                if [[ "$name" == eDP-* ]]; then
+                    LAPTOP_MONITOR="$name"
+                fi
+            fi
+            name="${BASH_REMATCH[1]}"
+            make="" model="" width="" height="" pos_x="" pos_y="" scale="" desc=""
+        elif [[ "$line" =~ ([0-9]+)x([0-9]+)@.*\ at\ (-?[0-9]+)x(-?[0-9]+) ]]; then
+            width="${BASH_REMATCH[1]}"
+            height="${BASH_REMATCH[2]}"
+            pos_x="${BASH_REMATCH[3]}"
+            pos_y="${BASH_REMATCH[4]}"
+        elif [[ "$line" =~ scale:\ ([0-9.]+) ]]; then
+            scale="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ description:\ (.+) ]]; then
+            desc="${BASH_REMATCH[1]}"
+            # Parse make/model from description (format: "Make Model (name)")
+            local desc_clean="${BASH_REMATCH[1]}"
+            desc_clean="${desc_clean% (*}"
+            make="${desc_clean%% *}"
+            model="${desc_clean#* }"
+            [[ "$make" == "$model" ]] && model=""
+        fi
+    done <<< "$output"
+
+    # Save last monitor
+    if [[ -n "$name" ]]; then
+        DETECTED_MONITORS+=("${name}|${make}|${model}|${width}|${height}|${pos_x}|${pos_y}|${scale}|${desc}")
+        ((MONITOR_COUNT++))
+        if [[ "$name" == eDP-* ]]; then
+            LAPTOP_MONITOR="$name"
+        fi
+    fi
+
+    return 0
+}
+
+# Show monitor detection dialog
+show_monitor_detection_dialog() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Detect Monitors${RESET}"
+    echo
+
+    if ! detect_monitors; then
+        echo -e "  ${DIM}✗${RESET}  hyprctl not available. Is Hyprland running?"
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    if [ $MONITOR_COUNT -eq 0 ]; then
+        echo -e "  ${DIM}No monitors detected.${RESET}"
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    echo -e "  ${DIM}Found $MONITOR_COUNT monitor(s):${RESET}"
+    echo
+
+    local i=0
+    for entry in "${DETECTED_MONITORS[@]}"; do
+        ((i++))
+        IFS='|' read -r m_name m_make m_model m_w m_h m_x m_y m_scale m_desc <<< "$entry"
+        local label=""
+        [[ "$m_name" == eDP-* ]] && label=" (laptop)"
+        echo -e "    ${BOLD}$i.${RESET}  $m_name$label"
+        echo -e "       ${DIM}Resolution: ${m_w}x${m_h}  Scale: ${m_scale}  Position: ${m_x},${m_y}${RESET}"
+        if [[ -n "$m_desc" ]]; then
+            echo -e "       ${DIM}$m_desc${RESET}"
+        fi
+        echo
+    done
+
+    if [ $MONITOR_COUNT -ge 2 ]; then
+        echo -e "  ${DIM}Press ${RESET}${BOLD}I${RESET}${DIM} to identify monitors (flash name on each screen)${RESET}"
+    fi
+    echo -e "  ${DIM}Press any other key to return...${RESET}"
+
+    read -rsn1 key < /dev/tty
+    if [[ "$key" == "i" || "$key" == "I" ]] && [ $MONITOR_COUNT -ge 2 ]; then
+        identify_monitors
+    fi
+}
+
+# Flash identification on each monitor
+identify_monitors() {
+    echo
+    echo -e "  ${DIM}Identifying monitors...${RESET}"
+    local i=0
+    for entry in "${DETECTED_MONITORS[@]}"; do
+        ((i++))
+        IFS='|' read -r m_name _rest <<< "$entry"
+        hyprctl dispatch focusmonitor "$m_name" &>/dev/null
+        hyprctl notify 1 2000 "rgb(33ccff)" "fontsize:28 Monitor $i: $m_name" &>/dev/null
+        sleep 2
+    done
+    echo -e "  ${DIM}Done. Press any key to return...${RESET}"
+    read -rsn1 < /dev/tty
+}
+
+# Show position editor dialog
+show_position_editor_dialog() {
+    # Auto-detect if not already done
+    if [ $MONITOR_COUNT -eq 0 ]; then
+        if ! detect_monitors; then
+            clear
+            echo
+            echo
+            echo -e "${BOLD}  Position Monitors${RESET}"
+            echo
+            echo -e "  ${DIM}✗${RESET}  hyprctl not available. Is Hyprland running?"
+            echo
+            echo -e "  ${DIM}Press any key to return...${RESET}"
+            read -rsn1 < /dev/tty
+            return
+        fi
+    fi
+
+    if [ $MONITOR_COUNT -le 1 ]; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Position Monitors${RESET}"
+        echo
+        echo -e "  ${DIM}Only one monitor detected. Nothing to position.${RESET}"
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    # Build arrays of monitor names, widths, heights, scales
+    local -a mon_names=() mon_widths=() mon_heights=() mon_scales=()
+    for entry in "${DETECTED_MONITORS[@]}"; do
+        IFS='|' read -r m_name m_make m_model m_w m_h m_x m_y m_scale m_desc <<< "$entry"
+        mon_names+=("$m_name")
+        mon_widths+=("$m_w")
+        mon_heights+=("$m_h")
+        mon_scales+=("$m_scale")
+    done
+
+    # Step 1: Select primary monitor
+    local primary_idx=0
+    local cursor=0
+    while true; do
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Position Monitors - Step 1/2${RESET}"
+        echo
+        echo -e "  ${DIM}Select your primary monitor (placed at origin 0,0):${RESET}"
+        echo
+
+        for ((i=0; i<MONITOR_COUNT; i++)); do
+            local label=""
+            [[ "${mon_names[$i]}" == eDP-* ]] && label=" (laptop)"
+            if [ $i -eq $cursor ]; then
+                echo -e "    ${SELECTED_BG} > ${mon_names[$i]}${label}  ${mon_widths[$i]}x${mon_heights[$i]} ${RESET}"
+            else
+                echo -e "       ${mon_names[$i]}${label}  ${DIM}${mon_widths[$i]}x${mon_heights[$i]}${RESET}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Up/Down: Select  Enter: Confirm  Esc: Cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') ((cursor > 0)) && ((cursor--)) ;;
+                    '[B') ((cursor < MONITOR_COUNT - 1)) && ((cursor++)) ;;
+                esac
+                ;;
+            '')  # Enter
+                primary_idx=$cursor
+                break
+                ;;
+            'q'|'Q')
+                return
+                ;;
+        esac
+    done
+
+    # Track placed monitors: index -> "x,y"
+    local -A placed_positions=()
+    local -a placed_order=()
+    placed_positions[$primary_idx]="0,0"
+    placed_order+=("$primary_idx")
+
+    # Step 2: Position each remaining monitor
+    local -a remaining=()
+    for ((i=0; i<MONITOR_COUNT; i++)); do
+        [ $i -ne $primary_idx ] && remaining+=("$i")
+    done
+
+    for rem_idx in "${remaining[@]}"; do
+        # Select reference monitor (which placed monitor to position relative to)
+        local ref_cursor=0
+        local ref_idx=${placed_order[0]}
+        while true; do
+            clear
+            echo
+            echo
+            echo -e "${BOLD}  Position Monitors - Step 2/2${RESET}"
+            echo
+            local rem_label=""
+            [[ "${mon_names[$rem_idx]}" == eDP-* ]] && rem_label=" (laptop)"
+            echo -e "  ${DIM}Placing: ${RESET}${BOLD}${mon_names[$rem_idx]}${rem_label}${RESET}  ${DIM}${mon_widths[$rem_idx]}x${mon_heights[$rem_idx]}${RESET}"
+            echo
+            echo -e "  ${DIM}Position relative to which monitor?${RESET}"
+            echo
+
+            for ((p=0; p<${#placed_order[@]}; p++)); do
+                local pi=${placed_order[$p]}
+                local plabel=""
+                [[ "${mon_names[$pi]}" == eDP-* ]] && plabel=" (laptop)"
+                local ppos="${placed_positions[$pi]}"
+                if [ $p -eq $ref_cursor ]; then
+                    echo -e "    ${SELECTED_BG} > ${mon_names[$pi]}${plabel}  at ${ppos} ${RESET}"
+                else
+                    echo -e "       ${mon_names[$pi]}${plabel}  ${DIM}at ${ppos}${RESET}"
+                fi
+            done
+
+            echo
+            echo -e "  ${DIM}Up/Down: Select  Enter: Confirm  Esc: Cancel${RESET}"
+
+            IFS= read -rsn1 key < /dev/tty
+            case "$key" in
+                $'\x1b')
+                    read -rsn2 -t 0.1 key
+                    case "$key" in
+                        '[A') ((ref_cursor > 0)) && ((ref_cursor--)) ;;
+                        '[B') ((ref_cursor < ${#placed_order[@]} - 1)) && ((ref_cursor++)) ;;
+                    esac
+                    ;;
+                '')
+                    ref_idx=${placed_order[$ref_cursor]}
+                    break
+                    ;;
+                'q'|'Q')
+                    return
+                    ;;
+            esac
+        done
+
+        # Select direction
+        local -a directions=("Right of" "Left of" "Above" "Below")
+        local dir_cursor=0
+        while true; do
+            clear
+            echo
+            echo
+            echo -e "${BOLD}  Position Monitors - Step 2/2${RESET}"
+            echo
+            local rem_label=""
+            [[ "${mon_names[$rem_idx]}" == eDP-* ]] && rem_label=" (laptop)"
+            echo -e "  ${DIM}Placing: ${RESET}${BOLD}${mon_names[$rem_idx]}${rem_label}${RESET}"
+            echo -e "  ${DIM}Relative to: ${RESET}${mon_names[$ref_idx]}"
+            echo
+            echo -e "  ${DIM}Which direction?${RESET}"
+            echo
+
+            for ((d=0; d<4; d++)); do
+                if [ $d -eq $dir_cursor ]; then
+                    echo -e "    ${SELECTED_BG} > ${directions[$d]} ${RESET}"
+                else
+                    echo -e "       ${directions[$d]}"
+                fi
+            done
+
+            echo
+            echo -e "  ${DIM}Up/Down: Select  Enter: Confirm  Esc: Cancel${RESET}"
+
+            IFS= read -rsn1 key < /dev/tty
+            case "$key" in
+                $'\x1b')
+                    read -rsn2 -t 0.1 key
+                    case "$key" in
+                        '[A') ((dir_cursor > 0)) && ((dir_cursor--)) ;;
+                        '[B') ((dir_cursor < 3)) && ((dir_cursor++)) ;;
+                    esac
+                    ;;
+                '')
+                    break
+                    ;;
+                'q'|'Q')
+                    return
+                    ;;
+            esac
+        done
+
+        # Calculate position using Hyprland's snapped scale and rounded dimensions
+        # Hyprland snaps scale to nearest 1/120: round(scale*120)/120
+        # then computes logical size as round(resolution / snapped_scale)
+        local ref_pos="${placed_positions[$ref_idx]}"
+        local ref_x="${ref_pos%,*}"
+        local ref_y="${ref_pos#*,}"
+        local ref_scale="${mon_scales[$ref_idx]}"
+        local rem_scale="${mon_scales[$rem_idx]}"
+        local ref_ew ref_eh rem_ew rem_eh
+        ref_ew=$(awk "BEGIN { s=int($ref_scale*120+0.5)/120; printf \"%d\", int(${mon_widths[$ref_idx]}/s+0.5) }")
+        ref_eh=$(awk "BEGIN { s=int($ref_scale*120+0.5)/120; printf \"%d\", int(${mon_heights[$ref_idx]}/s+0.5) }")
+        rem_ew=$(awk "BEGIN { s=int($rem_scale*120+0.5)/120; printf \"%d\", int(${mon_widths[$rem_idx]}/s+0.5) }")
+        rem_eh=$(awk "BEGIN { s=int($rem_scale*120+0.5)/120; printf \"%d\", int(${mon_heights[$rem_idx]}/s+0.5) }")
+
+        local new_x=0 new_y=0
+        case $dir_cursor in
+            0) # Right of
+                new_x=$((ref_x + ref_ew))
+                new_y=$ref_y
+                ;;
+            1) # Left of
+                new_x=$((ref_x - rem_ew))
+                new_y=$ref_y
+                ;;
+            2) # Above
+                new_x=$ref_x
+                new_y=$((ref_y - rem_eh))
+                ;;
+            3) # Below
+                new_x=$ref_x
+                new_y=$((ref_y + ref_eh))
+                ;;
+        esac
+
+        placed_positions[$rem_idx]="${new_x},${new_y}"
+        placed_order+=("$rem_idx")
+    done
+
+    # Step 3: Preview
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Position Monitors - Preview${RESET}"
+    echo
+    echo -e "  ${DIM}Monitor layout:${RESET}"
+    echo
+
+    for ((i=0; i<MONITOR_COUNT; i++)); do
+        local pos="${placed_positions[$i]}"
+        local px="${pos%,*}"
+        local py="${pos#*,}"
+        local label=""
+        [[ "${mon_names[$i]}" == eDP-* ]] && label=" (laptop)"
+        local primary_tag=""
+        [ $i -eq $primary_idx ] && primary_tag=" [primary]"
+        echo -e "    ${BOLD}${mon_names[$i]}${RESET}${label}${primary_tag}"
+        echo -e "      ${DIM}Resolution: ${mon_widths[$i]}x${mon_heights[$i]}  Scale: ${mon_scales[$i]}${RESET}"
+        echo -e "      ${DIM}Position: ${px}x${py}${RESET}"
+        echo
+    done
+
+    echo -e "  ${DIM}Hyprland config line format: monitor=name,preferred,XxY,scale${RESET}"
+    echo
+    echo -e "  ${DIM}Note: Displays may briefly go black while Hyprland reconfigures.${RESET}"
+    echo
+    printf "  ${BOLD}Apply this layout?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        # Populate global state
+        MONITOR_POSITIONS=()
+        for ((i=0; i<MONITOR_COUNT; i++)); do
+            MONITOR_POSITIONS["${mon_names[$i]}"]="${placed_positions[$i]}"
+        done
+        MONITORS_POSITIONED=1
+        echo
+        echo -e "  ${DIM}Layout queued. Will be applied on confirm.${RESET}"
+    else
+        echo
+        echo -e "  ${DIM}Cancelled.${RESET}"
+    fi
+    echo
+    echo -e "  ${DIM}Press any key to return...${RESET}"
+    read -rsn1 < /dev/tty
+}
+
+# Apply monitor positions to monitors.conf
+apply_monitor_positions() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Apply Monitor Positions${RESET}"
+    echo
+
+    if [[ ! -f "$MONITORS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  monitors.conf not found at $MONITORS_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Monitor positions -- failed (config not found)")
+        return 1
+    fi
+
+    echo
+
+    # Create backup
+    local backup_file="${MONITORS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$MONITORS_CONF" "$backup_file"
+    echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
+
+    # Determine GDK_SCALE: use 1.75 if any monitor has scale > 1.5
+    local gdk_scale=1
+    for entry in "${DETECTED_MONITORS[@]}"; do
+        IFS='|' read -r _n _mk _mo _w _h _x _y m_scale _d <<< "$entry"
+        if awk "BEGIN { exit !($m_scale > 1.5) }"; then
+            gdk_scale="1.75"
+            break
+        fi
+    done
+
+    # Apply positions live via hyprctl keyword (avoids black screen from config reload)
+    for entry in "${DETECTED_MONITORS[@]}"; do
+        IFS='|' read -r m_name _mk _mo _w _h _x _y m_scale _d <<< "$entry"
+        local pos="${MONITOR_POSITIONS[$m_name]:-auto}"
+        if [[ "$pos" != "auto" ]]; then
+            local px="${pos%,*}"
+            local py="${pos#*,}"
+            hyprctl keyword monitor "${m_name},preferred,${px}x${py},${m_scale}" &>/dev/null
+        else
+            hyprctl keyword monitor "${m_name},preferred,auto,${m_scale}" &>/dev/null
+        fi
+    done
+    echo -e "    ${CHECKED}✓${RESET}  Monitor positions applied live"
+
+    # Save to config file for persistence (settings already match live state)
+    {
+        echo "# See https://wiki.hyprland.org/Configuring/Monitors/"
+        echo "# Configured by A La Carchy - multi-monitor layout"
+        echo "# Format: monitor = name, resolution, position, scale"
+        echo ""
+        echo "env = GDK_SCALE,$gdk_scale"
+        echo ""
+        for entry in "${DETECTED_MONITORS[@]}"; do
+            IFS='|' read -r m_name _mk _mo _w _h _x _y m_scale _d <<< "$entry"
+            local pos="${MONITOR_POSITIONS[$m_name]:-auto}"
+            if [[ "$pos" != "auto" ]]; then
+                local px="${pos%,*}"
+                local py="${pos#*,}"
+                echo "monitor=${m_name},preferred,${px}x${py},${m_scale}"
+            else
+                echo "monitor=${m_name},preferred,auto,${m_scale}"
+            fi
+        done
+        echo ""
+        echo "# Fallback for hot-plugged displays"
+        echo "monitor=,preferred,auto,1"
+    } > "$MONITORS_CONF"
+
+    echo -e "    ${CHECKED}✓${RESET}  Config saved to monitors.conf"
+    SUMMARY_LOG+=("✓  Monitor positions configured")
+    echo
+    echo
+}
+
+# Enable laptop auto-off (disable laptop screen when external connected)
+setup_laptop_auto_off() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Laptop Display Auto-Off${RESET}"
+    echo
+
+    # Detect laptop monitor if not already found
+    if [[ -z "$LAPTOP_MONITOR" ]]; then
+        detect_monitors
+    fi
+
+    if [[ -z "$LAPTOP_MONITOR" ]]; then
+        echo -e "  ${DIM}✗${RESET}  No laptop display (eDP-*) detected."
+        echo
+        SUMMARY_LOG+=("✗  Laptop auto-off -- no laptop display found")
+        return 1
+    fi
+
+    echo -e "  ${DIM}Laptop display: $LAPTOP_MONITOR${RESET}"
+    echo -e "  ${DIM}Will auto-disable when external display is connected.${RESET}"
+    echo
+
+    # Create scripts directory
+    mkdir -p "$(dirname "$LAPTOP_AUTO_SCRIPT")"
+
+    # Detect the backlight device for this laptop
+    local backlight_dev=""
+    for bl in /sys/class/backlight/*/; do
+        [[ -d "$bl" ]] || continue
+        local bl_name="${bl%/}"
+        bl_name="${bl_name##*/}"
+        backlight_dev="$bl_name"
+        # Prefer intel_backlight over others
+        [[ "$bl_name" == *intel* ]] && break
+    done
+
+    if [[ -z "$backlight_dev" ]]; then
+        echo -e "  ${DIM}✗${RESET}  No backlight device found in /sys/class/backlight/"
+        echo
+        SUMMARY_LOG+=("✗  Laptop auto-off -- no backlight device found")
+        return 1
+    fi
+
+    echo -e "  ${DIM}Backlight device: $backlight_dev${RESET}"
+
+    # Get current brightness to use as default restore value
+    local current_brightness
+    current_brightness=$(brightnessctl -d "$backlight_dev" g 2>/dev/null)
+    [[ -z "$current_brightness" || "$current_brightness" == "0" ]] && current_brightness=9600
+
+    # Write watcher script
+    cat > "$LAPTOP_AUTO_SCRIPT" << SCRIPTEOF
+#!/bin/bash
+# Managed by A La Carchy - auto-disable laptop screen on external display
+LAPTOP="$LAPTOP_MONITOR"
+BACKLIGHT="$backlight_dev"
+DEFAULT_BRIGHTNESS=$current_brightness
+SAVED_BRIGHTNESS=""
+
+handle_change() {
+    sleep 1  # debounce rapid events
+    # Count non-laptop monitors (external displays only)
+    local external_count
+    external_count=\$(hyprctl monitors | grep "^Monitor " | grep -cv "^Monitor eDP")
+
+    if (( external_count >= 1 )); then
+        # External display connected - disable laptop and turn off backlight
+        if [[ -z "\$SAVED_BRIGHTNESS" ]]; then
+            SAVED_BRIGHTNESS=\$(brightnessctl -d "\$BACKLIGHT" g 2>/dev/null)
+            [[ -z "\$SAVED_BRIGHTNESS" || "\$SAVED_BRIGHTNESS" == "0" ]] && SAVED_BRIGHTNESS=\$DEFAULT_BRIGHTNESS
+        fi
+        hyprctl keyword monitor "\$LAPTOP, disable" &>/dev/null
+        brightnessctl -d "\$BACKLIGHT" s 0 &>/dev/null
+    else
+        # No external display - restore laptop
+        brightnessctl -d "\$BACKLIGHT" s "\${SAVED_BRIGHTNESS:-\$DEFAULT_BRIGHTNESS}" &>/dev/null
+        hyprctl keyword monitor "\$LAPTOP, preferred, auto, 1" &>/dev/null
+    fi
+}
+
+# Handle initial state
+handle_change
+
+# Watch for monitor events via Hyprland IPC socket
+SOCKET="\$XDG_RUNTIME_DIR/hypr/\$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+if command -v socat &>/dev/null; then
+    socat -U - UNIX-CONNECT:"\$SOCKET" 2>/dev/null
+elif command -v nc &>/dev/null; then
+    nc -U "\$SOCKET" 2>/dev/null
+else
+    # Fallback: poll every 5 seconds
+    while true; do
+        sleep 5
+        handle_change
+    done &
+    wait
+    exit 0
+fi | while read -r line; do
+    case "\$line" in
+        monitoradded*|monitorremoved*) handle_change ;;
+    esac
+done
+SCRIPTEOF
+
+    chmod +x "$LAPTOP_AUTO_SCRIPT"
+    echo -e "    ${CHECKED}✓${RESET}  Watcher script created: $LAPTOP_AUTO_SCRIPT"
+
+    # Add exec-once to monitors.conf using managed block
+    if ! grep -q "$LAPTOP_AUTO_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
+        {
+            echo ""
+            echo "$LAPTOP_AUTO_MARKER_START"
+            echo "exec-once = $LAPTOP_AUTO_SCRIPT"
+            echo "$LAPTOP_AUTO_MARKER_END"
+        } >> "$MONITORS_CONF"
+        echo -e "    ${CHECKED}✓${RESET}  Added exec-once to monitors.conf"
+    else
+        echo -e "    ${DIM}exec-once already present in monitors.conf${RESET}"
+    fi
+
+    # Start the script now (exec-once only runs at Hyprland startup)
+    pkill -f "laptop-display-auto.sh" 2>/dev/null
+    nohup "$LAPTOP_AUTO_SCRIPT" &>/dev/null &
+    echo -e "    ${CHECKED}✓${RESET}  Watcher started"
+
+    SUMMARY_LOG+=("✓  Laptop display auto-off enabled")
+    echo
+    echo
+}
+
+# Disable laptop auto-off
+remove_laptop_auto_off() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable Laptop Display Auto-Off${RESET}"
+    echo
+
+    # Remove managed block from monitors.conf
+    if [[ -f "$MONITORS_CONF" ]] && grep -q "$LAPTOP_AUTO_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
+        sed -i "/$LAPTOP_AUTO_MARKER_START/,/$LAPTOP_AUTO_MARKER_END/d" "$MONITORS_CONF"
+        # Remove trailing blank lines
+        sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$MONITORS_CONF"
+        echo -e "    ${CHECKED}✓${RESET}  Removed exec-once from monitors.conf"
+    fi
+
+    # Remove script
+    if [[ -f "$LAPTOP_AUTO_SCRIPT" ]]; then
+        rm -f "$LAPTOP_AUTO_SCRIPT"
+        echo -e "    ${CHECKED}✓${RESET}  Removed watcher script"
+    fi
+
+    # Kill any running instance
+    pkill -f "laptop-display-auto.sh" 2>/dev/null
+
+    # Restore backlight (find the backlight device)
+    for bl in /sys/class/backlight/*/; do
+        [[ -d "$bl" ]] || continue
+        local bl_name="${bl%/}"
+        bl_name="${bl_name##*/}"
+        brightnessctl -d "$bl_name" s 9600 &>/dev/null
+        [[ "$bl_name" == *intel* ]] && break
+    done
+
+    # Re-enable laptop monitor if we know its name
+    if [[ -z "$LAPTOP_MONITOR" ]]; then
+        detect_monitors
+    fi
+    if [[ -n "$LAPTOP_MONITOR" ]]; then
+        hyprctl keyword monitor "$LAPTOP_MONITOR, preferred, auto, 1" &>/dev/null
+        echo -e "    ${CHECKED}✓${RESET}  Re-enabled $LAPTOP_MONITOR"
+    fi
+
+    SUMMARY_LOG+=("✓  Laptop display auto-off disabled")
     echo
     echo
 }
@@ -3170,6 +3847,9 @@ declare -a KEYBINDINGS_ITEMS=(
 
 declare -a DISPLAY_ITEMS=(
     "monitor_scale|Monitor scale|4K|1080p/1440p|radio|Set monitor scaling for your resolution"
+    "detect_monitors|Detect monitors|[Open]||action|Detect connected displays and identify them"
+    "position_monitors|Position monitors|[Open]||action|Arrange monitor positions relative to each other"
+    "laptop_display|Laptop display|Auto off|Normal|toggle|Auto-disable laptop screen when external display connected"
 )
 
 declare -a SYSTEM_ITEMS=(
@@ -3456,6 +4136,13 @@ declare -A WEBAPP_DESCRIPTIONS=(
     ["zoom"]="Video conferencing software"
 )
 
+# Multi-monitor management state
+declare -a DETECTED_MONITORS=()       # "name|make|model|width|height|x|y|scale|desc"
+declare -A MONITOR_POSITIONS=()       # name -> "x,y"
+declare -i MONITOR_COUNT=0
+declare LAPTOP_MONITOR=""             # eDP-* name if found
+declare -i MONITORS_POSITIONED=0      # 1 if position editor was completed
+
 # Keybind Editor data structures
 declare -a EDIT_BINDINGS_ITEMS=()
 declare -A BINDING_EDITS=()  # idx -> "new_mods|new_key"
@@ -3563,10 +4250,10 @@ get_current_description() {
             local webapp="${INSTALLED_WEBAPPS[$ITEM_CURSOR]}"
             echo "${WEBAPP_DESCRIPTIONS[$webapp]:-}"
             ;;
-        4|6|7|8|9)  # Toggle items
+        4|7|8|9)  # Toggle items
             local arr
             case $CATEGORY_CURSOR in
-                4) arr="KEYBINDINGS_ITEMS" ;; 6) arr="DISPLAY_ITEMS" ;;
+                4) arr="KEYBINDINGS_ITEMS" ;;
                 7) arr="SYSTEM_ITEMS" ;; 8) arr="APPEARANCE_ITEMS" ;; 9) arr="KEYBOARD_ITEMS" ;;
             esac
             local -n ref="$arr"
@@ -3586,6 +4273,10 @@ get_current_description() {
                     echo "[$base_file] $be_disp"
                 fi
             fi
+            ;;
+        6)  # Display (mixed: toggle/radio + action)
+            parse_toggle_item "${DISPLAY_ITEMS[$ITEM_CURSOR]}"
+            echo "$TOGGLE_DESC"
             ;;
         10)  # Utilities
             parse_toggle_item "${UTILITIES_ITEMS[$ITEM_CURSOR]}"
@@ -3723,15 +4414,32 @@ draw_interface() {
                    [[ "${PKG_SELECTIONS[$p]:-0}" == "1" ]] && R=" [x] $p" || R=" [ ] $p" ;;
                 2) local w="${INSTALLED_WEBAPPS[$idx]}"
                    [[ "${WEBAPP_SELECTIONS[$w]:-0}" == "1" ]] && R=" [x] $w" || R=" [ ] $w" ;;
-                4|6|7|8|9)
+                4|7|8|9)
                     local arr
                     case $CATEGORY_CURSOR in
-                        4) arr="KEYBINDINGS_ITEMS" ;; 6) arr="DISPLAY_ITEMS" ;;
+                        4) arr="KEYBINDINGS_ITEMS" ;;
                         7) arr="SYSTEM_ITEMS" ;; 8) arr="APPEARANCE_ITEMS" ;; 9) arr="KEYBOARD_ITEMS" ;;
                     esac
                     local -n ref="$arr"
                     parse_toggle_item "${ref[$idx]}"
                     R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}") ;;
+                6)  # Display (mixed: toggle/radio + action)
+                    parse_toggle_item "${DISPLAY_ITEMS[$idx]}"
+                    if [ "$TOGGLE_TYPE" = "action" ]; then
+                        local d_suffix=""
+                        if [ "$TOGGLE_ID" = "detect_monitors" ] && [ $MONITOR_COUNT -gt 0 ]; then
+                            d_suffix="$MONITOR_COUNT found"
+                        elif [ "$TOGGLE_ID" = "position_monitors" ] && [ $MONITORS_POSITIONED -eq 1 ]; then
+                            d_suffix="[set]"
+                        fi
+                        if [[ -n "$d_suffix" ]]; then
+                            R=$(printf " %-24s %s" "$TOGGLE_NAME" "$d_suffix")
+                        else
+                            R=" $TOGGLE_NAME"
+                        fi
+                    else
+                        R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
+                    fi ;;
                 5)  # Keybind Editor
                     local be_entry="${EDIT_BINDINGS_ITEMS[$idx]}"
                     if [[ "$be_entry" == HEADER* ]]; then
@@ -3836,7 +4544,7 @@ draw_interface() {
     printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
     if [ $CATEGORY_CURSOR -eq 17 ]; then
         printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit          │"
-    elif [ $CATEGORY_CURSOR -eq 5 ] || [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ]; then
+    elif [ $CATEGORY_CURSOR -eq 5 ] || [ $CATEGORY_CURSOR -eq 6 ] || [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ]; then
         printf '%s\n' "│          Arrows:Navigate  Space:Edit  R:Reset  Enter:Confirm  Q:Quit         │"
     else
         printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
@@ -4043,11 +4751,10 @@ toggle_current_item() {
                 WEBAPP_SELECTIONS[$webapp]=0
             fi
             ;;
-        4|6|7|8|9)  # Toggle items (Keybindings, Display, System, Appearance, Keyboard)
+        4|7|8|9)  # Toggle items (Keybindings, System, Appearance, Keyboard)
             local items_var=""
             case $CATEGORY_CURSOR in
                 4) items_var="KEYBINDINGS_ITEMS" ;;
-                6) items_var="DISPLAY_ITEMS" ;;
                 7) items_var="SYSTEM_ITEMS" ;;
                 8) items_var="APPEARANCE_ITEMS" ;;
                 9) items_var="KEYBOARD_ITEMS" ;;
@@ -4073,6 +4780,40 @@ toggle_current_item() {
                 edit_binding $ITEM_CURSOR
                 tput civis
                 stty -echo 2>/dev/null
+            fi
+            ;;
+        6)  # Display (mixed: toggle/radio + action)
+            local item="${DISPLAY_ITEMS[$ITEM_CURSOR]}"
+            parse_toggle_item "$item"
+            local cur="${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}"
+            if [ "$TOGGLE_TYPE" = "action" ]; then
+                # Action items open dialogs
+                stty echo 2>/dev/null
+                tput cnorm
+                case "$TOGGLE_ID" in
+                    detect_monitors) show_monitor_detection_dialog ;;
+                    position_monitors) show_position_editor_dialog ;;
+                esac
+                tput civis
+                stty -echo 2>/dev/null
+            elif [ "$TOGGLE_TYPE" = "toggle" ]; then
+                # 3-state cycle: 0 -> 1 -> 2 -> 0
+                if [ "$cur" -eq 0 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+                elif [ "$cur" -eq 1 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=2
+                else
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                fi
+            else
+                # Radio: 3-state cycle
+                if [ "$cur" -eq 0 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+                elif [ "$cur" -eq 1 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=2
+                else
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                fi
             fi
             ;;
         10)  # Utilities
@@ -4231,6 +4972,14 @@ case "${TOGGLE_SELECTIONS[monitor_scale]:-0}" in
     2) MONITOR_1080_1440=true ;;
 esac
 
+# laptop_display: 1=Auto off, 2=Normal (remove)
+LAPTOP_AUTO_OFF=false
+LAPTOP_AUTO_NORMAL=false
+case "${TOGGLE_SELECTIONS[laptop_display]:-0}" in
+    1) LAPTOP_AUTO_OFF=true ;;
+    2) LAPTOP_AUTO_NORMAL=true ;;
+esac
+
 # suspend: 1=Enable, 2=Disable
 ENABLE_SUSPEND=false
 DISABLE_SUSPEND=false
@@ -4366,6 +5115,9 @@ fi
 if [ ${#HYPR_EDITS[@]} -gt 0 ]; then
     has_selection=true
 fi
+if [ "$MONITORS_POSITIONED" -eq 1 ]; then
+    has_selection=true
+fi
 
 if [ "$has_selection" = false ]; then
     clear
@@ -4441,6 +5193,19 @@ fi
 
 if [ "$MONITOR_1080_1440" = true ]; then
     set_monitor_1080_1440
+fi
+
+# Apply monitor positions (from position editor)
+if [ "$MONITORS_POSITIONED" -eq 1 ]; then
+    apply_monitor_positions
+fi
+
+if [ "$LAPTOP_AUTO_OFF" = true ]; then
+    setup_laptop_auto_off
+fi
+
+if [ "$LAPTOP_AUTO_NORMAL" = true ]; then
+    remove_laptop_auto_off
 fi
 
 if [ "$BIND_SHUTDOWN" = true ]; then

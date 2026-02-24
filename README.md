@@ -15,6 +15,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - **86 extra community themes** browseable and installable with one click
 - **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
 - **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
+- **Multi-monitor management** with detection, positioning, and laptop auto-off
 - **40+ configuration tweaks** for keybindings, display, and system settings
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
@@ -48,7 +49,9 @@ chmod +x a-la-carchy.sh
 ## Requirements
 
 - An AUR helper (`yay` or `paru`) recommended for full functionality
-- No external dependencies - works out of the box!
+- `brightnessctl` for laptop display auto-off (preinstalled on Omarchy)
+- `socat` or `nc` for real-time monitor plug/unplug events (falls back to polling if unavailable)
+- No other external dependencies - works out of the box!
 
 ## How to Use
 
@@ -255,10 +258,64 @@ Previous settings are detected on subsequent runs so you always see your current
 
 #### Monitor & Display
 
-| Tweak | Description |
-|-------|-------------|
-| Set monitor scaling for 4K | GDK_SCALE=1.75, Hyprland scale 1.666667 |
-| Set monitor scaling for 1080p/1440p | GDK_SCALE=1, no scaling |
+| Tweak | Type | Description |
+|-------|------|-------------|
+| Monitor scale | radio | Set 4K (GDK_SCALE=1.75, scale 1.666667) or 1080p/1440p (GDK_SCALE=1, no scaling) |
+| Detect monitors | action | Scan connected displays and show resolution, scale, position, and make/model |
+| Position monitors | action | Arrange multi-monitor layout with a guided step-by-step editor |
+| Laptop display | toggle | Auto-disable laptop screen when an external display is connected |
+
+##### Detect Monitors
+
+Press Space on "Detect monitors" to open a full-screen dialog that runs `hyprctl monitors` and displays all connected outputs with their details:
+
+- Name (e.g. `eDP-2`, `HDMI-A-1`)
+- Resolution, scale, and current position
+- Make/model description
+- Laptop displays (eDP-*) are tagged with a `(laptop)` label
+
+If 2 or more monitors are detected, press **I** to identify — each monitor flashes its name and number on-screen for 2 seconds using `hyprctl notify`, so you can tell which physical display is which.
+
+##### Position Monitors
+
+Press Space on "Position monitors" to open a guided multi-step editor for arranging your monitor layout. Requires 2+ monitors (auto-detects if not already scanned).
+
+**Step 1 — Select primary monitor:** Choose which monitor sits at the origin (0,0) using arrow keys and Enter.
+
+**Step 2 — Place each remaining monitor:** For each unplaced monitor:
+1. Select which already-placed monitor to position it relative to (arrow selection)
+2. Choose direction: Right of / Left of / Above / Below (arrow selection)
+3. Position is calculated automatically using **scaled coordinates** (effective width = resolution / scale), matching Hyprland's coordinate system
+
+**Step 3 — Preview & confirm:** Review all monitors with their calculated positions, then type `yes` to queue the layout.
+
+On confirm, the layout is written to `~/.config/hypr/monitors.conf` with:
+- One `monitor=<name>,preferred,<x>x<y>,<scale>` line per display
+- `env = GDK_SCALE` set automatically (1.75 if any monitor scale > 1.5, otherwise 1)
+- A `monitor=,preferred,auto,1` fallback line for hot-plugged displays
+- Timestamped backup of the previous config
+
+Supports L-shaped and stacked layouts — each secondary monitor can be placed relative to any already-placed monitor, not just the primary.
+
+If a per-monitor layout already exists and you select the generic "Monitor scale" option (4K or 1080p/1440p), a warning is shown that it will replace the per-monitor config.
+
+##### Laptop Display Auto-Off
+
+Toggle "Laptop display" to "Auto off" to automatically disable the laptop screen whenever an external display is connected, and re-enable it when unplugged.
+
+**How it works:**
+
+1. Creates a watcher script at `~/.config/hypr/scripts/laptop-display-auto.sh` that:
+   - Detects the laptop display (eDP-*) and the backlight device (auto-detected from `/sys/class/backlight/`)
+   - On external display connect: disables the laptop monitor via `hyprctl keyword monitor` and turns off the backlight via `brightnessctl`
+   - On external display disconnect: restores the laptop monitor and brightness
+   - Saves the current brightness level before turning off and restores it exactly
+   - Monitors for plug/unplug events via Hyprland's IPC socket (falls back to `nc`, then 5-second polling if `socat` is unavailable)
+   - Includes a 1-second debounce to prevent rapid event oscillation
+2. Adds an `exec-once` line to `~/.config/hypr/monitors.conf` (managed block) so the watcher starts automatically on login
+3. Starts the watcher immediately (no logout required)
+
+Toggle to "Normal" to disable: removes the watcher script, kills any running instance, removes the managed block from config, and re-enables the laptop display with restored brightness.
 
 #### Window Management
 
@@ -528,10 +585,11 @@ The script modifies the following Omarchy configuration files (with automatic ba
 
 | File | Purpose |
 |------|---------|
-| `~/.config/hypr/monitors.conf` | Monitor scaling |
+| `~/.config/hypr/monitors.conf` | Monitor scaling, multi-monitor positions, laptop auto-off exec-once |
 | `~/.config/hypr/bindings.conf` | Keybindings (toggles and keybind editor overrides) |
 | `~/.config/hypr/looknfeel.conf` | Rounded corners, window gaps, Hyprland General/Decoration/Gestures settings |
 | `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping, Hyprland Input settings |
+| `~/.config/hypr/scripts/laptop-display-auto.sh` | Laptop auto-off watcher script (created/removed by toggle) |
 | `~/.config/waybar/config.jsonc` | Clock format, tray icons |
 | `~/.config/uwsm/default` | Screenshot/recording directories |
 | `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
