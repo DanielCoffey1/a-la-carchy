@@ -96,6 +96,9 @@ POWER_PROFILE_MARKER_END="# <<< managed by a-la-carchy power-profile"
 # Power profile startup script path
 POWER_PROFILE_SCRIPT="$HOME/.config/hypr/scripts/power-profile-default.sh"
 
+# Battery charge limit udev rule path
+BATTERY_LIMIT_UDEV_RULE="/etc/udev/rules.d/99-battery-charge-limit.rules"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -2180,6 +2183,217 @@ SCRIPTEOF
     echo
 }
 
+show_battery_limit_dialog() {
+    # Auto-detect battery device with charge limit support
+    local bat_threshold=""
+    for path in /sys/class/power_supply/BAT*/charge_control_end_threshold; do
+        [[ -f "$path" ]] && { bat_threshold="$path"; break; }
+    done
+
+    if [[ -z "$bat_threshold" ]]; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Battery Charge Limit${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  No battery with charge limit support detected."
+        echo -e "  ${DIM}Your hardware may not expose charge_control_end_threshold.${RESET}"
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    # Read current threshold from sysfs
+    local current_threshold
+    current_threshold=$(cat "$bat_threshold" 2>/dev/null)
+
+    # Check if udev rule already exists (configured default)
+    local configured_default=""
+    if [[ -f "$BATTERY_LIMIT_UDEV_RULE" ]]; then
+        configured_default=$(grep -oP 'charge_control_end_threshold="\K[0-9]+' "$BATTERY_LIMIT_UDEV_RULE" 2>/dev/null)
+    fi
+
+    local -a values=("60" "80" "90" "100")
+    local -a labels=(
+        "60%  — Maximum longevity"
+        "80%  — Recommended"
+        "90%  — Slight protection"
+        "100% — No limit (full charge)"
+    )
+    local opt_cursor=1  # Default to 80%
+
+    # Set cursor to current threshold
+    for i in "${!values[@]}"; do
+        if [[ "${values[$i]}" == "$current_threshold" ]]; then
+            opt_cursor=$i
+            break
+        fi
+    done
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Battery Charge Limit${RESET}"
+        echo -e "  ${DIM}Set maximum charge level to extend battery lifespan${RESET}"
+        echo
+        echo -e "  ${DIM}Select limit (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        for i in "${!values[@]}"; do
+            local suffix=""
+            [[ "${values[$i]}" == "$current_threshold" ]] && suffix=" (current)"
+            [[ "${values[$i]}" == "$configured_default" ]] && suffix="${suffix} (default)"
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${labels[$i]}${suffix}${RESET}"
+            else
+                echo -e "      ${labels[$i]}${suffix}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#values[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return  # Bare escape = cancel
+                ;;
+            ''|q|Q)  # Enter or Q
+                if [[ -z "$key" ]]; then
+                    # Enter - confirm selection
+                    SELECTED_BATTERY_LIMIT="${values[$opt_cursor]}"
+                    clear
+                    echo
+                    echo -e "  ${BOLD}Battery Charge Limit${RESET}"
+                    echo
+                    echo -e "  ${CHECKED}✓${RESET}  ${labels[$opt_cursor]} queued for apply"
+                    echo
+                    echo -e "  ${DIM}Press any key to return...${RESET}"
+                    read -rsn1 < /dev/tty
+                    return
+                else
+                    return  # Q = cancel
+                fi
+                ;;
+        esac
+    done
+}
+
+# Apply the selected battery charge limit and configure udev persistence
+apply_battery_limit() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Set Battery Charge Limit: ${SELECTED_BATTERY_LIMIT}%${RESET}"
+    echo
+
+    # Request sudo credentials
+    if ! sudo -n true 2>/dev/null; then
+        echo -e "  ${DIM}Sudo access required to set charge limit...${RESET}"
+        sudo true || {
+            echo -e "    ${DIM}✗${RESET}  Failed to get sudo access"
+            SUMMARY_LOG+=("✗  Battery charge limit -- failed (no sudo)")
+            return 1
+        }
+    fi
+
+    # Find battery threshold path
+    local bat_threshold=""
+    for path in /sys/class/power_supply/BAT*/charge_control_end_threshold; do
+        [[ -f "$path" ]] && { bat_threshold="$path"; break; }
+    done
+
+    # Apply immediately
+    if echo "$SELECTED_BATTERY_LIMIT" | sudo tee "$bat_threshold" > /dev/null 2>&1; then
+        echo -e "    ${CHECKED}✓${RESET}  Charge limit set to ${SELECTED_BATTERY_LIMIT}%"
+    else
+        echo -e "    ${DIM}✗${RESET}  Failed to set charge limit"
+        SUMMARY_LOG+=("✗  Battery charge limit -- failed to set")
+        return 1
+    fi
+
+    # Handle udev rule for persistence
+    if [[ "$SELECTED_BATTERY_LIMIT" == "100" ]]; then
+        # No limit - remove udev rule if it exists
+        if [[ -f "$BATTERY_LIMIT_UDEV_RULE" ]]; then
+            sudo rm -f "$BATTERY_LIMIT_UDEV_RULE"
+            echo -e "    ${CHECKED}✓${RESET}  Removed udev rule (no limit)"
+        fi
+    else
+        # Write udev rule for persistence
+        printf '# Managed by A La Carchy - battery charge limit\nACTION=="add", SUBSYSTEM=="power_supply", KERNEL=="BAT*", ATTR{charge_control_end_threshold}=="[0-9]*", ATTR{charge_control_end_threshold}="%s"\n' \
+            "$SELECTED_BATTERY_LIMIT" | sudo tee "$BATTERY_LIMIT_UDEV_RULE" > /dev/null
+        echo -e "    ${CHECKED}✓${RESET}  Udev rule written: $BATTERY_LIMIT_UDEV_RULE"
+    fi
+
+    # Reload udev rules
+    sudo udevadm control --reload-rules 2>/dev/null
+    echo -e "    ${CHECKED}✓${RESET}  Udev rules reloaded"
+
+    # Update waybar battery tooltip and format-plugged to show charge limit
+    if [[ -f "$WAYBAR_CONF" ]]; then
+        # Read format-full icon to reuse for format-plugged when limit is active
+        local bat_full_icon
+        bat_full_icon=$(sed -n 's/.*"format-full": "\([^"]*\)".*/\1/p' "$WAYBAR_CONF" | head -1)
+
+        # Save original format-plugged value before first modification
+        # (stored as a comment in the battery section for later restore)
+        if ! grep -q 'a-la-carchy-original-plugged' "$WAYBAR_CONF"; then
+            local orig_plugged
+            orig_plugged=$(sed -n 's/.*"format-plugged": "\([^"]*\)".*/\1/p' "$WAYBAR_CONF" | head -1)
+            sed -i "s|\"format-plugged\":|\\/\\/ a-la-carchy-original-plugged: \"${orig_plugged}\"\n    \"format-plugged\":|" "$WAYBAR_CONF"
+        fi
+
+        # Strip any existing limit annotations from tooltips
+        sed -i 's/ (limit: [0-9]*%)//g' "$WAYBAR_CONF"
+        # Remove tooltip-format-full if added by us (value is "Full" after stripping limit)
+        sed -i '/"tooltip-format-full": "Full"/d' "$WAYBAR_CONF"
+        # Remove tooltip-format-plugged (always managed by us)
+        sed -i '/"tooltip-format-plugged":/d' "$WAYBAR_CONF"
+
+        if [[ "$SELECTED_BATTERY_LIMIT" != "100" ]]; then
+            # Append limit to discharging/charging tooltips
+            sed -i "s/\(\"tooltip-format-discharging\": \"[^\"]*\)\"/\1 (limit: ${SELECTED_BATTERY_LIMIT}%)\"/" "$WAYBAR_CONF"
+            sed -i "s/\(\"tooltip-format-charging\": \"[^\"]*\)\"/\1 (limit: ${SELECTED_BATTERY_LIMIT}%)\"/" "$WAYBAR_CONF"
+
+            # Add or update tooltip-format-full
+            if grep -q '"tooltip-format-full"' "$WAYBAR_CONF"; then
+                sed -i "s/\(\"tooltip-format-full\": \"[^\"]*\)\"/\1 (limit: ${SELECTED_BATTERY_LIMIT}%)\"/" "$WAYBAR_CONF"
+            else
+                sed -i "/\"tooltip-format-charging\"/a\\    \"tooltip-format-full\": \"Full (limit: ${SELECTED_BATTERY_LIMIT}%)\"," "$WAYBAR_CONF"
+            fi
+
+            # Set format-plugged to battery full icon (instead of plug icon)
+            sed -i "s|\"format-plugged\": \"[^\"]*\"|\"format-plugged\": \"${bat_full_icon}\"|" "$WAYBAR_CONF"
+            # Add tooltip for plugged state (at limit, AC connected)
+            sed -i "/\"tooltip-format-full\"/a\\    \"tooltip-format-plugged\": \"{capacity}% plugged (limit: ${SELECTED_BATTERY_LIMIT}%)\"," "$WAYBAR_CONF"
+        else
+            # Restore original format-plugged value
+            local orig_plugged
+            orig_plugged=$(sed -n 's|.*// a-la-carchy-original-plugged: "\([^"]*\)".*|\1|p' "$WAYBAR_CONF" | head -1)
+            sed -i "s|\"format-plugged\": \"[^\"]*\"|\"format-plugged\": \"${orig_plugged}\"|" "$WAYBAR_CONF"
+            # Remove the saved original comment
+            sed -i '/a-la-carchy-original-plugged/d' "$WAYBAR_CONF"
+        fi
+
+        # Restart waybar to apply tooltip changes
+        if command -v omarchy-restart-waybar &>/dev/null; then
+            omarchy-restart-waybar &>/dev/null || true
+        fi
+        echo -e "    ${CHECKED}✓${RESET}  Waybar battery tooltip updated"
+    fi
+
+    SUMMARY_LOG+=("✓  Battery charge limit set to ${SELECTED_BATTERY_LIMIT}%")
+    echo
+    echo
+}
+
 bind_shutdown() {
     clear
     echo
@@ -4103,6 +4317,7 @@ declare -a SYSTEM_ITEMS=(
     "fingerprint|Fingerprint|Enable|Disable|toggle|Enable fingerprint authentication for login"
     "fido2|FIDO2|Enable|Disable|toggle|Enable FIDO2 security key authentication"
     "power_profile|Power profile|[Open]||action|Set default power profile for startup"
+    "battery_limit|Battery limit|[Open]||action|Set maximum battery charge level for longer lifespan"
 )
 
 declare -a APPEARANCE_ITEMS=(
@@ -4390,6 +4605,7 @@ declare -i MONITOR_COUNT=0
 declare LAPTOP_MONITOR=""             # eDP-* name if found
 declare -i MONITORS_POSITIONED=0      # 1 if position editor was completed
 declare SELECTED_POWER_PROFILE=""     # "", "power-saver", "balanced", "performance"
+declare SELECTED_BATTERY_LIMIT=""     # "", "60", "80", "90", "100"
 
 # Keybind Editor data structures
 declare -a EDIT_BINDINGS_ITEMS=()
@@ -4678,12 +4894,14 @@ draw_interface() {
                 7)  # System (mixed: toggle + action)
                     parse_toggle_item "${SYSTEM_ITEMS[$idx]}"
                     if [ "$TOGGLE_TYPE" = "action" ]; then
-                        local pp_suffix=""
-                        if [[ -n "$SELECTED_POWER_PROFILE" ]]; then
-                            pp_suffix="$SELECTED_POWER_PROFILE"
+                        local sys_suffix=""
+                        if [[ "$TOGGLE_ID" == "power_profile" && -n "$SELECTED_POWER_PROFILE" ]]; then
+                            sys_suffix="$SELECTED_POWER_PROFILE"
+                        elif [[ "$TOGGLE_ID" == "battery_limit" && -n "$SELECTED_BATTERY_LIMIT" ]]; then
+                            sys_suffix="${SELECTED_BATTERY_LIMIT}%"
                         fi
-                        if [[ -n "$pp_suffix" ]]; then
-                            R=$(printf " %-24s %s" "$TOGGLE_NAME" "$pp_suffix")
+                        if [[ -n "$sys_suffix" ]]; then
+                            R=$(printf " %-24s %s" "$TOGGLE_NAME" "$sys_suffix")
                         else
                             R=" $TOGGLE_NAME"
                         fi
@@ -5049,6 +5267,7 @@ toggle_current_item() {
                 tput cnorm
                 case "$TOGGLE_ID" in
                     power_profile) show_power_profile_dialog ;;
+                    battery_limit) show_battery_limit_dialog ;;
                 esac
                 tput civis
                 stty -echo 2>/dev/null
@@ -5411,6 +5630,9 @@ fi
 if [[ -n "$SELECTED_POWER_PROFILE" ]]; then
     has_selection=true
 fi
+if [[ -n "$SELECTED_BATTERY_LIMIT" ]]; then
+    has_selection=true
+fi
 
 if [ "$has_selection" = false ]; then
     clear
@@ -5503,6 +5725,10 @@ fi
 
 if [[ -n "$SELECTED_POWER_PROFILE" ]]; then
     apply_power_profile
+fi
+
+if [[ -n "$SELECTED_BATTERY_LIMIT" ]]; then
+    apply_battery_limit
 fi
 
 if [ "$BIND_SHUTDOWN" = true ]; then

@@ -52,6 +52,7 @@ chmod +x a-la-carchy.sh
 - `brightnessctl` for laptop display auto-off (preinstalled on Omarchy)
 - `socat` or `nc` for real-time monitor plug/unplug events (falls back to polling if unavailable)
 - `power-profiles-daemon` for power profile management (optional, shows error if unavailable)
+- Battery with kernel `charge_control_end_threshold` support for battery charge limit (optional, shows error if unavailable)
 - No other external dependencies - works out of the box!
 
 ## How to Use
@@ -336,6 +337,28 @@ On confirm, the selected profile is:
 
 Requires `power-profiles-daemon` (provides `powerprofilesctl`). If not installed, the dialog shows a graceful error message.
 
+##### Battery Charge Limit
+
+Press Space on "Battery limit" to open an arrow-key selection dialog with four presets:
+
+- **60%** — Maximum longevity
+- **80%** — Recommended
+- **90%** — Slight protection
+- **100%** — No limit (full charge)
+
+The dialog marks the current sysfs threshold with `(current)` and any previously configured udev default with `(default)`.
+
+On confirm, the selected limit is:
+1. Applied immediately via `sudo tee` to `/sys/class/power_supply/BAT*/charge_control_end_threshold`
+2. Persisted across reboots by writing a udev rule at `/etc/udev/rules.d/99-battery-charge-limit.rules`
+3. Udev rules reloaded via `udevadm control --reload-rules`
+4. Waybar battery tooltip updated to show the configured limit (e.g. "80% plugged (limit: 80%)")
+5. Waybar plugged icon changed from plug to battery (since the battery stops charging at the limit)
+
+Setting 100% (no limit) removes the udev rule and restores original waybar icon and tooltips.
+
+Requires a battery with kernel-exposed `charge_control_end_threshold` support. If not available, the dialog shows a graceful error message.
+
 #### Window Management
 
 | Tweak | Description |
@@ -378,6 +401,7 @@ Requires `power-profiles-daemon` (provides `powerprofilesctl`). If not installed
 | Enable FIDO2 auth | Set up security keys (YubiKey, etc.) |
 | Disable FIDO2 auth | Remove security key authentication |
 | Power profile | Set default power profile (power-saver, balanced, performance) restored on startup |
+| Battery limit | Set maximum battery charge level (60%/80%/90%/100%) for longer lifespan |
 
 ### Extra Themes
 
@@ -611,7 +635,8 @@ The script modifies the following Omarchy configuration files (with automatic ba
 | `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping, Hyprland Input settings |
 | `~/.config/hypr/scripts/laptop-display-auto.sh` | Laptop auto-off watcher script (created/removed by toggle) |
 | `~/.config/hypr/scripts/power-profile-default.sh` | Power profile startup script (sets default profile on login) |
-| `~/.config/waybar/config.jsonc` | Clock format, tray icons |
+| `/etc/udev/rules.d/99-battery-charge-limit.rules` | Battery charge limit persistence (created/removed by battery limit) |
+| `~/.config/waybar/config.jsonc` | Clock format, tray icons, battery charge limit tooltip |
 | `~/.config/uwsm/default` | Screenshot/recording directories |
 | `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
 | `~/.config/omarchy/extensions/menu.sh` | Menu shortcut (A La Carchy entry in Omarchy menu) |
