@@ -1979,11 +1979,16 @@ SAVED_BRIGHTNESS=""
 
 handle_change() {
     sleep 1  # debounce rapid events
-    # Count non-laptop monitors (external displays only)
-    local external_count
+
+    # Check actual monitor state (not a flag) to handle external config reloads
+    local external_count laptop_active
     external_count=\$(hyprctl monitors | grep "^Monitor " | grep -cv "^Monitor eDP")
+    laptop_active=\$(hyprctl monitors | grep -c "^Monitor eDP")
 
     if (( external_count >= 1 )); then
+        # Skip if laptop is already off (avoids cascade from monitorremoved event)
+        (( laptop_active == 0 )) && return
+
         # External display connected - disable laptop and turn off backlight
         if [[ -z "\$SAVED_BRIGHTNESS" ]]; then
             SAVED_BRIGHTNESS=\$(brightnessctl -d "\$BACKLIGHT" g 2>/dev/null)
@@ -1996,9 +2001,11 @@ handle_change() {
         ext_mon=\$(hyprctl monitors -j | grep -oP '"name":\s*"\K[^"]+' | grep -v "^eDP" | head -1)
         if [[ -n "\$ext_mon" ]]; then
             hyprctl dispatch moveworkspacetomonitor 1 "\$ext_mon" &>/dev/null
-            hyprctl dispatch workspace 1 &>/dev/null
         fi
     else
+        # Skip if laptop is already the only display
+        (( laptop_active >= 1 )) && return
+
         # No external display - restore laptop
         brightnessctl -d "\$BACKLIGHT" s "\${SAVED_BRIGHTNESS:-\$DEFAULT_BRIGHTNESS}" &>/dev/null
         hyprctl keyword monitor "\$LAPTOP, preferred, auto, 1" &>/dev/null
@@ -2037,6 +2044,7 @@ SCRIPTEOF
         {
             echo ""
             echo "$LAPTOP_AUTO_MARKER_START"
+            echo "monitor=$LAPTOP_MONITOR,disable"
             echo "exec-once = $LAPTOP_AUTO_SCRIPT"
             echo "$LAPTOP_AUTO_MARKER_END"
         } >> "$MONITORS_CONF"
