@@ -94,6 +94,10 @@ LAPTOP_AUTO_SCRIPT="$HOME/.config/hypr/scripts/laptop-display-auto.sh"
 POWER_PROFILE_MARKER_START="# >>> managed by a-la-carchy power-profile"
 POWER_PROFILE_MARKER_END="# <<< managed by a-la-carchy power-profile"
 
+# Managed-block markers for primary monitor
+PRIMARY_MONITOR_MARKER_START="# >>> managed by a-la-carchy primary-monitor"
+PRIMARY_MONITOR_MARKER_END="# <<< managed by a-la-carchy primary-monitor"
+
 # Power profile startup script path
 POWER_PROFILE_SCRIPT="$HOME/.config/hypr/scripts/power-profile-default.sh"
 
@@ -119,6 +123,7 @@ save_managed_blocks() {
     local markers=(
         "$POWER_PROFILE_MARKER_START|$POWER_PROFILE_MARKER_END"
         "$LAPTOP_AUTO_MARKER_START|$LAPTOP_AUTO_MARKER_END"
+        "$PRIMARY_MONITOR_MARKER_START|$PRIMARY_MONITOR_MARKER_END"
     )
     for pair in "${markers[@]}"; do
         local start="${pair%%|*}"
@@ -1986,6 +1991,13 @@ handle_change() {
         fi
         hyprctl keyword monitor "\$LAPTOP, disable" &>/dev/null
         brightnessctl -d "\$BACKLIGHT" s 0 &>/dev/null
+        # Move workspace 1 to the remaining external monitor
+        local ext_mon
+        ext_mon=\$(hyprctl monitors -j | grep -oP '"name":\s*"\K[^"]+' | grep -v "^eDP" | head -1)
+        if [[ -n "\$ext_mon" ]]; then
+            hyprctl dispatch moveworkspacetomonitor 1 "\$ext_mon" &>/dev/null
+            hyprctl dispatch workspace 1 &>/dev/null
+        fi
     else
         # No external display - restore laptop
         brightnessctl -d "\$BACKLIGHT" s "\${SAVED_BRIGHTNESS:-\$DEFAULT_BRIGHTNESS}" &>/dev/null
@@ -2087,6 +2099,133 @@ remove_laptop_auto_off() {
     fi
 
     SUMMARY_LOG+=("✓  Laptop display auto-off disabled")
+    echo
+    echo
+}
+
+# Show primary monitor selection dialog
+show_primary_monitor_dialog() {
+    # Auto-detect monitors if not already done
+    if [ $MONITOR_COUNT -eq 0 ]; then
+        detect_monitors 2>/dev/null
+    fi
+
+    if [ $MONITOR_COUNT -eq 0 ]; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Primary Monitor${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  No monitors detected."
+        echo -e "  ${DIM}Is Hyprland running?${RESET}"
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    # Check if a primary monitor is already configured in monitors.conf
+    local configured_primary=""
+    if [[ -f "$MONITORS_CONF" ]] && grep -q "$PRIMARY_MONITOR_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
+        configured_primary=$(awk -v s="$PRIMARY_MONITOR_MARKER_START" -v e="$PRIMARY_MONITOR_MARKER_END" \
+            '$0==s{f=1;next} $0==e{f=0} f && /workspace/' "$MONITORS_CONF" | \
+            grep -oP 'monitor:\K[^,]+')
+    fi
+
+    local opt_cursor=0
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Primary Monitor${RESET}"
+        echo -e "  ${DIM}Set which monitor gets workspace 1 by default${RESET}"
+        echo
+        echo -e "  ${DIM}Select monitor (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        for i in "${!DETECTED_MONITORS[@]}"; do
+            IFS='|' read -r m_name m_make m_model m_width m_height _ _ _ _ _ <<< "${DETECTED_MONITORS[$i]}"
+            local label="$m_name"
+            [[ -n "$m_make" ]] && label+=" - $m_make"
+            [[ -n "$m_model" ]] && label+=" $m_model"
+            label+=" (${m_width}x${m_height})"
+            [[ "$m_name" == eDP-* ]] && label+=" [laptop]"
+            local suffix=""
+            [[ "$m_name" == "$configured_primary" ]] && suffix=" (current)"
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${label}${suffix}${RESET}"
+            else
+                echo -e "      ${label}${suffix}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#DETECTED_MONITORS[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return  # Bare escape = cancel
+                ;;
+            ''|q|Q)  # Enter or Q
+                if [[ -z "$key" ]]; then
+                    # Enter - confirm selection
+                    IFS='|' read -r sel_name _ <<< "${DETECTED_MONITORS[$opt_cursor]}"
+                    SELECTED_PRIMARY_MONITOR="$sel_name"
+                    clear
+                    echo
+                    echo -e "  ${BOLD}Primary Monitor${RESET}"
+                    echo
+                    echo -e "  ${CHECKED}✓${RESET}  $sel_name queued for apply"
+                    echo
+                    echo -e "  ${DIM}Press any key to return...${RESET}"
+                    read -rsn1 < /dev/tty
+                    return
+                else
+                    return  # Q = cancel
+                fi
+                ;;
+        esac
+    done
+}
+
+# Apply the selected primary monitor workspace rule
+apply_primary_monitor() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Set Primary Monitor: $SELECTED_PRIMARY_MONITOR${RESET}"
+    echo
+
+    # Apply live: move workspace 1 to selected monitor
+    if hyprctl dispatch moveworkspacetomonitor 1 "$SELECTED_PRIMARY_MONITOR" &>/dev/null; then
+        hyprctl dispatch workspace 1 &>/dev/null
+        echo -e "    ${CHECKED}✓${RESET}  Workspace 1 moved to $SELECTED_PRIMARY_MONITOR"
+    else
+        echo -e "    ${DIM}✗${RESET}  Failed to move workspace"
+    fi
+
+    # Write managed block to monitors.conf
+    if grep -q "$PRIMARY_MONITOR_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
+        sed -i "/$PRIMARY_MONITOR_MARKER_START/,/$PRIMARY_MONITOR_MARKER_END/d" "$MONITORS_CONF"
+        # Remove trailing blank lines
+        sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$MONITORS_CONF"
+    fi
+
+    {
+        echo ""
+        echo "$PRIMARY_MONITOR_MARKER_START"
+        echo "workspace = 1, monitor:$SELECTED_PRIMARY_MONITOR, default:true"
+        echo "$PRIMARY_MONITOR_MARKER_END"
+    } >> "$MONITORS_CONF"
+    echo -e "    ${CHECKED}✓${RESET}  Workspace rule written to monitors.conf"
+
+    SUMMARY_LOG+=("✓  Primary monitor set to $SELECTED_PRIMARY_MONITOR")
     echo
     echo
 }
@@ -4653,6 +4792,7 @@ declare -a DISPLAY_ITEMS=(
     "detect_monitors|Detect monitors|[Open]||action|Detect connected displays and identify them"
     "position_monitors|Position monitors|[Open]||action|Arrange monitor positions relative to each other"
     "laptop_display|Laptop display|Auto off|Normal|toggle|Auto-disable laptop screen when external display connected"
+    "primary_monitor|Primary monitor|[Open]||action|Set which monitor gets workspace 1 by default"
 )
 
 declare -a SYSTEM_ITEMS=(
@@ -4951,6 +5091,7 @@ declare LAPTOP_MONITOR=""             # eDP-* name if found
 declare -i MONITORS_POSITIONED=0      # 1 if position editor was completed
 declare SELECTED_POWER_PROFILE=""     # "", "power-saver", "balanced", "performance"
 declare SELECTED_BATTERY_LIMIT=""     # "", "60", "80", "90", "100"
+declare SELECTED_PRIMARY_MONITOR=""  # "", monitor name (e.g. "HDMI-A-1")
 
 # Keybind Editor data structures
 declare -a EDIT_BINDINGS_ITEMS=()
@@ -5261,6 +5402,8 @@ draw_interface() {
                             d_suffix="$MONITOR_COUNT found"
                         elif [ "$TOGGLE_ID" = "position_monitors" ] && [ $MONITORS_POSITIONED -eq 1 ]; then
                             d_suffix="[set]"
+                        elif [[ "$TOGGLE_ID" == "primary_monitor" && -n "$SELECTED_PRIMARY_MONITOR" ]]; then
+                            d_suffix="$SELECTED_PRIMARY_MONITOR"
                         fi
                         if [[ -n "$d_suffix" ]]; then
                             R=$(printf " %-24s %s" "$TOGGLE_NAME" "$d_suffix")
@@ -5647,6 +5790,7 @@ toggle_current_item() {
                 case "$TOGGLE_ID" in
                     detect_monitors) show_monitor_detection_dialog ;;
                     position_monitors) show_position_editor_dialog ;;
+                    primary_monitor) show_primary_monitor_dialog ;;
                 esac
                 tput civis
                 stty -echo 2>/dev/null
@@ -5986,6 +6130,9 @@ fi
 if [[ -n "$SELECTED_BATTERY_LIMIT" ]]; then
     has_selection=true
 fi
+if [[ -n "$SELECTED_PRIMARY_MONITOR" ]]; then
+    has_selection=true
+fi
 
 if [ "$has_selection" = false ]; then
     clear
@@ -6082,6 +6229,10 @@ fi
 
 if [[ -n "$SELECTED_BATTERY_LIMIT" ]]; then
     apply_battery_limit
+fi
+
+if [[ -n "$SELECTED_PRIMARY_MONITOR" ]]; then
+    apply_primary_monitor
 fi
 
 if [ "$BIND_SHUTDOWN" = true ]; then
