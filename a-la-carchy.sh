@@ -100,6 +100,10 @@ POWER_PROFILE_SCRIPT="$HOME/.config/hypr/scripts/power-profile-default.sh"
 # Battery charge limit udev rule path
 BATTERY_LIMIT_UDEV_RULE="/etc/udev/rules.d/99-battery-charge-limit.rules"
 
+# Omarchy default window/browser config paths (for transparency toggle)
+WINDOWS_CONF="$HOME/.local/share/omarchy/default/hypr/windows.conf"
+BROWSER_CONF="$HOME/.local/share/omarchy/default/hypr/apps/browser.conf"
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
     echo "Error: Do not run this script as root!"
@@ -3823,6 +3827,183 @@ restore_window_gaps() {
     echo
 }
 
+remove_transparency() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Remove Transparency${RESET}"
+    echo
+    echo -e "  ${DIM}Removes all opacity/transparency effects from windows${RESET}"
+    echo -e "  ${DIM}and menus. Everything will be fully opaque.${RESET}"
+    echo
+    echo
+
+    local missing=false
+    if [[ ! -f "$WINDOWS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  windows.conf not found at $WINDOWS_CONF"
+        missing=true
+    fi
+    if [[ ! -f "$BROWSER_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  browser.conf not found at $BROWSER_CONF"
+        missing=true
+    fi
+    if [[ "$missing" = true ]]; then
+        echo
+        SUMMARY_LOG+=("✗  Remove transparency -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if already removed (commented out)
+    local walker_css="$HOME/.local/share/omarchy/default/walker/themes/omarchy-default/style.css"
+    if ! grep -q "^windowrule = opacity 0.97 0.9, match:class \.\*" "$WINDOWS_CONF" && \
+       ! grep -q "^windowrule = opacity 1 0.97, match:tag chromium-based-browser" "$BROWSER_CONF"; then
+        echo -e "  ${DIM}Transparency already removed. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Remove transparency -- already removed")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Remove transparency -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backups
+    local backup_win="${WINDOWS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WINDOWS_CONF" "$backup_win"
+    echo -e "  ${DIM}Backup: $backup_win${RESET}"
+
+    local backup_browser="${BROWSER_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BROWSER_CONF" "$backup_browser"
+    echo -e "  ${DIM}Backup: $backup_browser${RESET}"
+
+    # Comment out opacity window rules
+    sed -i 's/^windowrule = opacity 0.97 0.9, match:class \.\*/# &/' "$WINDOWS_CONF"
+    sed -i 's/^windowrule = opacity 1 0.97, match:tag chromium-based-browser/# &/' "$BROWSER_CONF"
+    sed -i 's/^windowrule = opacity 1 0.97, match:tag firefox-based-browser/# &/' "$BROWSER_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Hyprland windows — opaque"
+
+    # Walker menu background: alpha(@base, 0.95) -> @base
+    if [[ -f "$walker_css" ]]; then
+        if grep -q 'alpha(@base, 0\.95)' "$walker_css"; then
+            local backup_walker="${walker_css}.backup.$(date +%Y%m%d_%H%M%S)"
+            cp "$walker_css" "$backup_walker"
+            echo -e "  ${DIM}Backup: $backup_walker${RESET}"
+            sed -i '/\.box-wrapper {/,/}/ s/background: alpha(@base, 0\.95);/background: @base;/' "$walker_css"
+            echo -e "  ${CHECKED}✓${RESET}  Walker menus — opaque"
+        fi
+    fi
+
+    SUMMARY_LOG+=("✓  Removed transparency")
+    echo
+
+    # Restart walker if running
+    if command -v walker &>/dev/null && pgrep -x walker &>/dev/null; then
+        pkill -x walker 2>/dev/null
+    fi
+
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
+restore_transparency() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Restore Transparency${RESET}"
+    echo
+    echo -e "  ${DIM}Restores default opacity/transparency effects.${RESET}"
+    echo -e "  ${DIM}Active: 0.97, inactive: 0.9, browsers: 1.0/0.97, menus: 0.95.${RESET}"
+    echo
+    echo
+
+    local missing=false
+    if [[ ! -f "$WINDOWS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  windows.conf not found at $WINDOWS_CONF"
+        missing=true
+    fi
+    if [[ ! -f "$BROWSER_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  browser.conf not found at $BROWSER_CONF"
+        missing=true
+    fi
+    if [[ "$missing" = true ]]; then
+        echo
+        SUMMARY_LOG+=("✗  Restore transparency -- failed (config not found)")
+        return 1
+    fi
+
+    # Check if transparency is already active (uncommented)
+    local walker_css="$HOME/.local/share/omarchy/default/walker/themes/omarchy-default/style.css"
+    if grep -q "^windowrule = opacity 0.97 0.9, match:class \.\*" "$WINDOWS_CONF" && \
+       grep -q "^windowrule = opacity 1 0.97, match:tag chromium-based-browser" "$BROWSER_CONF"; then
+        echo -e "  ${DIM}Transparency already restored. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Restore transparency -- already restored")
+        return 0
+    fi
+
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Restore transparency -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    # Create backups
+    local backup_win="${WINDOWS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WINDOWS_CONF" "$backup_win"
+    echo -e "  ${DIM}Backup: $backup_win${RESET}"
+
+    local backup_browser="${BROWSER_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BROWSER_CONF" "$backup_browser"
+    echo -e "  ${DIM}Backup: $backup_browser${RESET}"
+
+    # Uncomment opacity window rules
+    sed -i 's/^# \(windowrule = opacity 0.97 0.9, match:class \.\*\)/\1/' "$WINDOWS_CONF"
+    sed -i 's/^# \(windowrule = opacity 1 0.97, match:tag chromium-based-browser\)/\1/' "$BROWSER_CONF"
+    sed -i 's/^# \(windowrule = opacity 1 0.97, match:tag firefox-based-browser\)/\1/' "$BROWSER_CONF"
+
+    echo -e "  ${CHECKED}✓${RESET}  Hyprland windows — transparent"
+
+    # Walker menu background: @base -> alpha(@base, 0.95)
+    if [[ -f "$walker_css" ]]; then
+        if grep -q '\.box-wrapper' "$walker_css" && \
+           ! grep -q 'alpha(@base, 0\.95)' "$walker_css"; then
+            local backup_walker="${walker_css}.backup.$(date +%Y%m%d_%H%M%S)"
+            cp "$walker_css" "$backup_walker"
+            echo -e "  ${DIM}Backup: $backup_walker${RESET}"
+            sed -i '/\.box-wrapper {/,/}/ s/background: @base;/background: alpha(@base, 0.95);/' "$walker_css"
+            echo -e "  ${CHECKED}✓${RESET}  Walker menus — transparent"
+        fi
+    fi
+
+    SUMMARY_LOG+=("✓  Restored transparency")
+    echo
+
+    # Restart walker if running
+    if command -v walker &>/dev/null && pgrep -x walker &>/dev/null; then
+        pkill -x walker 2>/dev/null
+    fi
+
+    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+    echo
+}
+
 enable_12h_clock() {
     clear
     echo
@@ -4486,6 +4667,7 @@ declare -a SYSTEM_ITEMS=(
 declare -a APPEARANCE_ITEMS=(
     "rounded_corners|Rounded corners|Enable|Disable|toggle|Round or square corners on windows, menus, notifications, and UI"
     "window_gaps|Window gaps|Remove|Restore|toggle|Remove or restore gaps between tiled windows"
+    "transparency|Transparency|Remove|Restore|toggle|Remove or restore window transparency effects"
     "tray_icons|Tray icons|Show all|Hide|toggle|Show all system tray icons or hide extras"
     "clock_format|Clock format|12h|24h|radio|Set waybar clock to 12-hour or 24-hour format"
     "clock_date|Clock date|Show|Hide|toggle|Show or hide the day name on the waybar clock"
@@ -5700,6 +5882,14 @@ case "${TOGGLE_SELECTIONS[window_gaps]:-0}" in
     2) RESTORE_WINDOW_GAPS=true ;;
 esac
 
+# transparency: 1=Remove, 2=Restore
+REMOVE_TRANSPARENCY=false
+RESTORE_TRANSPARENCY=false
+case "${TOGGLE_SELECTIONS[transparency]:-0}" in
+    1) REMOVE_TRANSPARENCY=true ;;
+    2) RESTORE_TRANSPARENCY=true ;;
+esac
+
 # tray_icons: 1=Show all, 2=Hide
 SHOW_ALL_TRAY_ICONS=false
 HIDE_TRAY_ICONS=false
@@ -5994,6 +6184,14 @@ fi
 
 if [ "$RESTORE_WINDOW_GAPS" = true ]; then
     restore_window_gaps
+fi
+
+if [ "$REMOVE_TRANSPARENCY" = true ]; then
+    remove_transparency
+fi
+
+if [ "$RESTORE_TRANSPARENCY" = true ]; then
+    restore_transparency
 fi
 
 if [ "$ENABLE_12H_CLOCK" = true ]; then

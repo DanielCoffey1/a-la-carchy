@@ -641,8 +641,10 @@ The script modifies the following Omarchy configuration files (with automatic ba
 | `~/.config/waybar/style.css` | Rounded corners on waybar tooltips |
 | `~/.config/swayosd/style.css` | Rounded corners on volume/brightness overlay |
 | `~/.config/uwsm/default` | Screenshot/recording directories |
-| `~/.local/share/omarchy/default/walker/themes/omarchy-default/style.css` | Rounded corners on Walker launcher/menus |
+| `~/.local/share/omarchy/default/walker/themes/omarchy-default/style.css` | Rounded corners, transparency on Walker launcher/menus |
 | `~/.local/share/omarchy/default/mako/core.ini` | Rounded corners on notifications |
+| `~/.local/share/omarchy/default/hypr/windows.conf` | Window transparency (global opacity rule) |
+| `~/.local/share/omarchy/default/hypr/apps/browser.conf` | Browser transparency (chromium/firefox opacity rules) |
 | `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
 | `~/.config/omarchy/extensions/menu.sh` | Menu shortcut (A La Carchy entry in Omarchy menu) |
 | `~/.local/share/omarchy/default/hypr/bindings/*.conf` | Read by keybind editor (not modified) |
