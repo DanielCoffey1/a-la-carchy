@@ -2128,7 +2128,7 @@ show_primary_monitor_dialog() {
     local configured_primary=""
     if [[ -f "$MONITORS_CONF" ]] && grep -q "$PRIMARY_MONITOR_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
         configured_primary=$(awk -v s="$PRIMARY_MONITOR_MARKER_START" -v e="$PRIMARY_MONITOR_MARKER_END" \
-            '$0==s{f=1;next} $0==e{f=0} f && /workspace/' "$MONITORS_CONF" | \
+            '$0==s{f=1;next} $0==e{f=0} f && /workspace = 1,/' "$MONITORS_CONF" | \
             grep -oP 'monitor:\K[^,]+')
     fi
 
@@ -2202,6 +2202,11 @@ apply_primary_monitor() {
     echo -e "${BOLD}  Set Primary Monitor: $SELECTED_PRIMARY_MONITOR${RESET}"
     echo
 
+    # Ensure monitors are detected for workspace assignment
+    if [ $MONITOR_COUNT -eq 0 ]; then
+        detect_monitors 2>/dev/null
+    fi
+
     # Apply live: move workspace 1 to selected monitor
     if hyprctl dispatch moveworkspacetomonitor 1 "$SELECTED_PRIMARY_MONITOR" &>/dev/null; then
         hyprctl dispatch workspace 1 &>/dev/null
@@ -2209,6 +2214,18 @@ apply_primary_monitor() {
     else
         echo -e "    ${DIM}✗${RESET}  Failed to move workspace"
     fi
+
+    # Apply live: assign default workspaces to non-primary monitors
+    local ws=2
+    for entry in "${DETECTED_MONITORS[@]}"; do
+        IFS='|' read -r m_name _ <<< "$entry"
+        if [[ "$m_name" != "$SELECTED_PRIMARY_MONITOR" ]]; then
+            if hyprctl dispatch moveworkspacetomonitor "$ws" "$m_name" &>/dev/null; then
+                echo -e "    ${CHECKED}✓${RESET}  Workspace $ws moved to $m_name"
+            fi
+            ((ws++))
+        fi
+    done
 
     # Write managed block to monitors.conf
     if grep -q "$PRIMARY_MONITOR_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
@@ -2221,9 +2238,26 @@ apply_primary_monitor() {
         echo ""
         echo "$PRIMARY_MONITOR_MARKER_START"
         echo "workspace = 1, monitor:$SELECTED_PRIMARY_MONITOR, default:true"
+        # Assign incrementing workspaces to non-primary monitors
+        local ws=2
+        for entry in "${DETECTED_MONITORS[@]}"; do
+            IFS='|' read -r m_name _ <<< "$entry"
+            if [[ "$m_name" != "$SELECTED_PRIMARY_MONITOR" ]]; then
+                echo "workspace = $ws, monitor:$m_name, default:true"
+                ((ws++))
+            fi
+        done
         echo "$PRIMARY_MONITOR_MARKER_END"
     } >> "$MONITORS_CONF"
-    echo -e "    ${CHECKED}✓${RESET}  Workspace rule written to monitors.conf"
+    echo -e "    ${CHECKED}✓${RESET}  Workspace rules written to monitors.conf"
+
+    # Restart wallpaper daemon to fix layer positioning after workspace moves
+    if pgrep -x swaybg &>/dev/null; then
+        pkill swaybg
+        sleep 0.3
+        swaybg -i "$HOME/.config/omarchy/current/background" -m fill &>/dev/null & disown
+        echo -e "    ${CHECKED}✓${RESET}  Wallpaper reloaded"
+    fi
 
     SUMMARY_LOG+=("✓  Primary monitor set to $SELECTED_PRIMARY_MONITOR")
     echo
