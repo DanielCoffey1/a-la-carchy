@@ -363,8 +363,8 @@ Requires a battery with kernel-exposed `charge_control_end_threshold` support. I
 
 | Tweak | Description |
 |-------|-------------|
-| Enable rounded corners | Adds rounded corners to windows |
-| Disable rounded corners | Square window corners |
+| Enable rounded corners | Adds rounded corners to windows, Walker menus, SwayOSD, hyprlock, mako notifications, and waybar tooltips |
+| Disable rounded corners | Returns all UI elements to sharp/square corners |
 | Remove window gaps | Maximize screen real estate |
 | Restore window gaps | Return to default window spacing |
 
@@ -632,12 +632,17 @@ The script modifies the following Omarchy configuration files (with automatic ba
 | `~/.config/hypr/monitors.conf` | Monitor scaling, multi-monitor positions, laptop auto-off exec-once, power profile exec-once |
 | `~/.config/hypr/bindings.conf` | Keybindings (toggles and keybind editor overrides) |
 | `~/.config/hypr/looknfeel.conf` | Rounded corners, window gaps, Hyprland General/Decoration/Gestures settings |
+| `~/.config/hypr/hyprlock.conf` | Rounded corners on lock screen password input |
 | `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping, Hyprland Input settings |
 | `~/.config/hypr/scripts/laptop-display-auto.sh` | Laptop auto-off watcher script (created/removed by toggle) |
 | `~/.config/hypr/scripts/power-profile-default.sh` | Power profile startup script (sets default profile on login) |
 | `/etc/udev/rules.d/99-battery-charge-limit.rules` | Battery charge limit persistence (created/removed by battery limit) |
 | `~/.config/waybar/config.jsonc` | Clock format, tray icons, battery charge limit tooltip |
+| `~/.config/waybar/style.css` | Rounded corners on waybar tooltips |
+| `~/.config/swayosd/style.css` | Rounded corners on volume/brightness overlay |
 | `~/.config/uwsm/default` | Screenshot/recording directories |
+| `~/.local/share/omarchy/default/walker/themes/omarchy-default/style.css` | Rounded corners on Walker launcher/menus |
+| `~/.local/share/omarchy/default/mako/core.ini` | Rounded corners on notifications |
 | `~/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf` | Close window binding |
 | `~/.config/omarchy/extensions/menu.sh` | Menu shortcut (A La Carchy entry in Omarchy menu) |
 | `~/.local/share/omarchy/default/hypr/bindings/*.conf` | Read by keybind editor (not modified) |

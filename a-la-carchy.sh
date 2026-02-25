@@ -73,8 +73,9 @@ INPUT_CONF="$HOME/.config/hypr/input.conf"
 # Suspend state file path
 SUSPEND_STATE="$HOME/.local/state/omarchy/toggles/suspend-on"
 
-# Waybar config path
+# Waybar config paths
 WAYBAR_CONF="$HOME/.config/waybar/config.jsonc"
+WAYBAR_CONF_STYLE="$HOME/.config/waybar/style.css"
 
 # Hyprland looknfeel config path
 LOOKNFEEL_CONF="$HOME/.config/hypr/looknfeel.conf"
@@ -3431,9 +3432,10 @@ enable_rounded_corners() {
     clear
     echo
     echo
-    echo -e "${BOLD}  Enable Rounded Window Corners${RESET}"
+    echo -e "${BOLD}  Enable Rounded Corners${RESET}"
     echo
-    echo -e "  ${DIM}Adds rounded corners to all windows (rounding = 8).${RESET}"
+    echo -e "  ${DIM}Adds rounded corners to windows, menus, notifications,${RESET}"
+    echo -e "  ${DIM}and other UI elements (rounding = 8).${RESET}"
     echo
     echo
 
@@ -3481,10 +3483,72 @@ enable_rounded_corners() {
     # Uncomment the rounding line
     sed -i 's/^[[:space:]]*#[[:space:]]*\(rounding = .*\)/    \1/' "$LOOKNFEEL_CONF"
 
-    echo -e "  ${CHECKED}✓${RESET}  Rounded window corners enabled"
-    SUMMARY_LOG+=("✓  Enabled rounded window corners")
+    echo -e "  ${CHECKED}✓${RESET}  Hyprland windows — rounded"
+    SUMMARY_LOG+=("✓  Enabled rounded corners")
+
+    # Walker (launcher/menus)
+    local walker_css="$HOME/.local/share/omarchy/default/walker/themes/omarchy-default/style.css"
+    if [[ -f "$walker_css" ]]; then
+        if ! grep -q 'border-radius' "$walker_css"; then
+            sed -i '/\.box-wrapper {/,/}/ s/border: 2px solid @border;/border: 2px solid @border;\n  border-radius: 8px;/' "$walker_css"
+            echo -e "  ${CHECKED}✓${RESET}  Walker menus — rounded"
+        fi
+    fi
+
+    # SwayOSD (volume/brightness overlay)
+    local swayosd_css="$HOME/.config/swayosd/style.css"
+    if [[ -f "$swayosd_css" ]]; then
+        sed -i '/^window {/,/}/ s/border-radius: 0;/border-radius: 8px;/' "$swayosd_css"
+        sed -i '/^progressbar {/,/}/ s/border-radius: 0;/border-radius: 8px;/' "$swayosd_css"
+        echo -e "  ${CHECKED}✓${RESET}  SwayOSD overlay — rounded"
+    fi
+
+    # Hyprlock (lock screen password input)
+    local hyprlock_conf="$HOME/.config/hypr/hyprlock.conf"
+    if [[ -f "$hyprlock_conf" ]]; then
+        sed -i '/^input-field {/,/}/ s/rounding = 0/rounding = 8/' "$hyprlock_conf"
+        echo -e "  ${CHECKED}✓${RESET}  Hyprlock password field — rounded"
+    fi
+
+    # Mako (notifications)
+    local mako_ini="$HOME/.local/share/omarchy/default/mako/core.ini"
+    if [[ -f "$mako_ini" ]]; then
+        if ! grep -q 'border-radius' "$mako_ini"; then
+            sed -i '/^border-size=/a border-radius=8' "$mako_ini"
+            echo -e "  ${CHECKED}✓${RESET}  Mako notifications — rounded"
+        fi
+    fi
+
+    # Waybar tooltips (need both tooltip and tooltip * to override global * border-radius: 0)
+    if [[ -f "$WAYBAR_CONF_STYLE" ]]; then
+        if ! grep -q 'tooltip.*border-radius' "$WAYBAR_CONF_STYLE"; then
+            sed -i '/^tooltip {/,/}/ s/padding: 2px;/padding: 2px;\n  border-radius: 8px;/' "$WAYBAR_CONF_STYLE"
+        fi
+        if ! grep -q '^tooltip \*' "$WAYBAR_CONF_STYLE"; then
+            sed -i '/^tooltip {/,/^}/ { /^}/a\
+\
+tooltip * {\
+  border-radius: 8px;\
+}
+            }' "$WAYBAR_CONF_STYLE"
+        fi
+        echo -e "  ${CHECKED}✓${RESET}  Waybar tooltips — rounded"
+    fi
+
     echo
-    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+
+    # Restart services that need it
+    if command -v walker &>/dev/null && pgrep -x walker &>/dev/null; then
+        pkill -x walker 2>/dev/null
+    fi
+    if command -v makoctl &>/dev/null; then
+        makoctl reload 2>/dev/null
+    fi
+    if pgrep -x waybar &>/dev/null; then
+        pkill -x waybar && sleep 0.3 && uwsm app -- waybar &>/dev/null &
+    fi
+
+    echo -e "  ${DIM}Hyprland will auto-reload. Services restarted.${RESET}"
     echo
 }
 
@@ -3492,9 +3556,10 @@ disable_rounded_corners() {
     clear
     echo
     echo
-    echo -e "${BOLD}  Disable Rounded Window Corners${RESET}"
+    echo -e "${BOLD}  Disable Rounded Corners${RESET}"
     echo
-    echo -e "  ${DIM}Returns to sharp/square window corners (Omarchy default).${RESET}"
+    echo -e "  ${DIM}Returns to sharp/square corners on windows, menus,${RESET}"
+    echo -e "  ${DIM}notifications, and other UI elements.${RESET}"
     echo
     echo
 
@@ -3534,10 +3599,63 @@ disable_rounded_corners() {
     # Comment out the rounding line
     sed -i 's/^[[:space:]]*\(rounding = .*\)/    # \1/' "$LOOKNFEEL_CONF"
 
-    echo -e "  ${CHECKED}✓${RESET}  Rounded window corners disabled"
-    SUMMARY_LOG+=("✓  Disabled rounded window corners")
+    echo -e "  ${CHECKED}✓${RESET}  Hyprland windows — square"
+    SUMMARY_LOG+=("✓  Disabled rounded corners")
+
+    # Walker (launcher/menus)
+    local walker_css="$HOME/.local/share/omarchy/default/walker/themes/omarchy-default/style.css"
+    if [[ -f "$walker_css" ]]; then
+        if grep -q 'border-radius' "$walker_css"; then
+            sed -i '/\.box-wrapper {/,/}/ { /border-radius/d; }' "$walker_css"
+            echo -e "  ${CHECKED}✓${RESET}  Walker menus — square"
+        fi
+    fi
+
+    # SwayOSD (volume/brightness overlay)
+    local swayosd_css="$HOME/.config/swayosd/style.css"
+    if [[ -f "$swayosd_css" ]]; then
+        sed -i '/^window {/,/}/ s/border-radius: 8px;/border-radius: 0;/' "$swayosd_css"
+        sed -i '/^progressbar {/,/}/ s/border-radius: 8px;/border-radius: 0;/' "$swayosd_css"
+        echo -e "  ${CHECKED}✓${RESET}  SwayOSD overlay — square"
+    fi
+
+    # Hyprlock (lock screen password input)
+    local hyprlock_conf="$HOME/.config/hypr/hyprlock.conf"
+    if [[ -f "$hyprlock_conf" ]]; then
+        sed -i '/^input-field {/,/}/ s/rounding = 8/rounding = 0/' "$hyprlock_conf"
+        echo -e "  ${CHECKED}✓${RESET}  Hyprlock password field — square"
+    fi
+
+    # Mako (notifications)
+    local mako_ini="$HOME/.local/share/omarchy/default/mako/core.ini"
+    if [[ -f "$mako_ini" ]]; then
+        if grep -q 'border-radius' "$mako_ini"; then
+            sed -i '/^border-radius=/d' "$mako_ini"
+            echo -e "  ${CHECKED}✓${RESET}  Mako notifications — square"
+        fi
+    fi
+
+    # Waybar tooltips (remove both tooltip border-radius and tooltip * block)
+    if [[ -f "$WAYBAR_CONF_STYLE" ]]; then
+        sed -i '/^tooltip {/,/}/ { /border-radius/d; }' "$WAYBAR_CONF_STYLE"
+        sed -i '/^tooltip \* {/,/^}/d' "$WAYBAR_CONF_STYLE"
+        echo -e "  ${CHECKED}✓${RESET}  Waybar tooltips — square"
+    fi
+
     echo
-    echo -e "  ${DIM}Hyprland will auto-reload the config.${RESET}"
+
+    # Restart services that need it
+    if command -v walker &>/dev/null && pgrep -x walker &>/dev/null; then
+        pkill -x walker 2>/dev/null
+    fi
+    if command -v makoctl &>/dev/null; then
+        makoctl reload 2>/dev/null
+    fi
+    if pgrep -x waybar &>/dev/null; then
+        pkill -x waybar && sleep 0.3 && uwsm app -- waybar &>/dev/null &
+    fi
+
+    echo -e "  ${DIM}Hyprland will auto-reload. Services restarted.${RESET}"
     echo
 }
 
@@ -4321,7 +4439,7 @@ declare -a SYSTEM_ITEMS=(
 )
 
 declare -a APPEARANCE_ITEMS=(
-    "rounded_corners|Rounded corners|Enable|Disable|toggle|Enable or disable rounded window corners"
+    "rounded_corners|Rounded corners|Enable|Disable|toggle|Round or square corners on windows, menus, notifications, and UI"
     "window_gaps|Window gaps|Remove|Restore|toggle|Remove or restore gaps between tiled windows"
     "tray_icons|Tray icons|Show all|Hide|toggle|Show all system tray icons or hide extras"
     "clock_format|Clock format|12h|24h|radio|Set waybar clock to 12-hour or 24-hour format"
