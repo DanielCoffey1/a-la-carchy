@@ -12,7 +12,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - **Description bar** showing context for the currently highlighted item
 - Interactive checklist of preinstalled packages and webapps
 - Only shows packages and webapps that are currently installed
-- **86 extra community themes** browseable and installable with one click
+- **103 extra community themes** browseable and installable with one click
 - **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
 - **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
 - **Multi-monitor management** with detection, positioning, and laptop auto-off
@@ -405,7 +405,7 @@ Requires a battery with kernel-exposed `charge_control_end_threshold` support. I
 
 ### Extra Themes
 
-Browse and install 86 community-made themes directly from the TUI. Themes are sourced from the [Omarchy Extra Themes](https://learn.omacom.io/2/the-omarchy-manual/90/extra-themes) directory and installed via `omarchy-theme-install`.
+Browse and install 103 community-made themes directly from the TUI. Themes are sourced from the [Omarchy Extra Themes](https://learn.omacom.io/2/the-omarchy-manual/90/extra-themes) directory and installed via `omarchy-theme-install`.
 
 - Already-installed themes are marked with `(installed)` and skipped during installation
 - The last theme installed becomes the active theme
@@ -414,7 +414,7 @@ Browse and install 86 community-made themes directly from the TUI. Themes are so
 - Themes that require GitHub authentication are automatically skipped after a timeout
 
 <details>
-<summary>Available themes (86)</summary>
+<summary>Available themes (103)</summary>
 
 | Theme | Repository |
 |-------|------------|
@@ -424,11 +424,14 @@ Browse and install 86 community-made themes directly from the TUI. Themes are so
 | Arc Blueberry | vale-c/omarchy-arc-blueberry |
 | Archwave | davidguttman/archwave |
 | Artzen | tahfizhabib/omarchy-artzen-theme |
+| Atelier | atif-1402/omarchy-atelier-theme |
 | Ash | bjarneo/omarchy-ash-theme |
 | Aura | bjarneo/omarchy-aura-theme |
 | Ayaka | abhijeet-swami/omarchy-ayaka-theme |
 | Azure Glow | Hydradevx/omarchy-azure-glow-theme |
+| Batou | HANCORE-linux/omarchy-batou-theme |
 | Bauhaus | somerocketeer/omarchy-bauhaus-theme |
+| Biscuit de Mar Dark | OldJobobo/omarchy-biscuit-de-mar-dark-theme |
 | Black Arch | ankur311sudo/black_arch |
 | Black Gold | HANCORE-linux/omarchy-blackgold-theme |
 | Black Turq | HANCORE-linux/omarchy-blackturq-theme |
@@ -437,25 +440,34 @@ Browse and install 86 community-made themes directly from the TUI. Themes are so
 | bluedotrb | dotsilva/omarchy-bluedotrb-theme |
 | Catppuccin Mocha Dark | Luquatic/omarchy-catppuccin-dark |
 | Citrus Cynapse | Grey-007/citrus-cynapse |
+| City-783 | OldJobobo/omarchy-city-783-theme |
 | Cobalt2 | hoblin/omarchy-cobalt2-theme |
+| CpUnk | stannorbvb-cmd/cpunk |
 | Darcula | noahljungberg/omarchy-darcula-theme |
 | Demon | HANCORE-linux/omarchy-demon-theme |
 | Dotrb | dotsilva/omarchy-dotrb-theme |
 | Drac | ShehabShaef/omarchy-drac-theme |
 | Dracula | catlee/omarchy-dracula-theme |
 | Eldritch | eldritch-theme/omarchy |
+| Event Horizon | OldJobobo/omarchy-event-horizon-theme |
 | Evergarden | celsobenedetti/omarchy-evergarden |
 | Felix | TyRichards/omarchy-felix-theme |
 | Fireside | bjarneo/omarchy-fireside-theme |
+| Flat Dracula | OldJobobo/omarchy-flat-dracula-theme |
 | Flexoki Dark | euandeas/omarchy-flexoki-dark-theme |
 | Forest Green | abhijeet-swami/omarchy-forest-green-theme |
 | Frost | bjarneo/omarchy-frost-theme |
 | Futurism | bjarneo/omarchy-futurism-theme |
+| Ghost Pastel | row-huh/omarchy-ghost-pastel-theme |
 | Gold Rush | tahayvr/omarchy-gold-rush-theme |
 | Green Garden | kalk-ak/omarchy-green-garden-theme |
 | Green Hakkar | joaquinmeza/omarchy-hakker-green-theme |
 | Gruvu | ankur311sudo/gruvu |
+| Harbor | HANCORE-linux/omarchy-harbor-theme |
+| Harbor Dark | HANCORE-linux/omarchy-harbordark-theme |
+| Hinterlands | OldJobobo/omarchy-hinterlands-theme |
 | Infernium | RiO7MAKK3R/omarchy-infernium-dark-theme |
+| Last Horizon | HANCORE-linux/omarchy-lasthorizon-theme |
 | Map Quest | ItsABigIgloo/omarchy-mapquest-theme |
 | Mars | steve-lohmeyer/omarchy-mars-theme |
 | Mechanoonna | HANCORE-linux/omarchy-mechanoonna-theme |
@@ -470,6 +482,7 @@ Browse and install 86 community-made themes directly from the TUI. Themes are so
 | NES | bjarneo/omarchy-nes-theme |
 | Omacarchy | RiO7MAKK3R/omarchy-omacarchy-theme |
 | One Dark Pro | sc0ttman/omarchy-one-dark-pro-theme |
+| Oxo Carbon | HANCORE-linux/omarchy-oxocarbon-theme |
 | Pandora | imbypass/omarchy-pandora-theme |
 | Pina | bjarneo/omarchy-pina-theme |
 | Pink Blood | ITSZXY/pink-blood-omarchy-theme |
@@ -477,7 +490,9 @@ Browse and install 86 community-made themes directly from the TUI. Themes are so
 | Purple Moon | Grey-007/purple-moon |
 | Purplewave | dotsilva/omarchy-purplewave-theme |
 | Rainy Night | atif-1402/omarchy-rainynight-theme |
+| Red Monarch | kamatealif/omarchy-red-monarch-theme |
 | RetroPC | rondilley/omarchy-retropc-theme |
+| RobZee84 | robzolkos/omarchy-robzee84-theme |
 | Rose of Dune | HANCORE-linux/omarchy-roseofdune-theme |
 | Rose Pine Dark | guilhermetk/omarchy-rose-pine-dark |
 | Sakura | bjarneo/omarchy-sakura-theme |
@@ -499,9 +514,11 @@ Browse and install 86 community-made themes directly from the TUI. Themes are so
 | Torrentz Hydra | monoooki/omarchy-torrentz-hydra-theme |
 | Tycho | leonardobetti/omarchy-tycho |
 | Van Gogh | Nirmal314/omarchy-van-gogh-theme |
+| Velvet Night | HANCORE-linux/omarchy-velvetnight-theme |
 | Vesper | thmoee/omarchy-vesper-theme |
 | VHS 80 | tahayvr/omarchy-vhs80-theme |
 | Void | vyrx-dev/omarchy-void-theme |
+| Waffle Cat | OldJobobo/omarchy-waffle-cat-theme |
 | Waveform Dark | hipsterusername/omarchy-waveform-dark-theme |
 | White Gold | HANCORE-linux/omarchy-whitegold-theme |
 
