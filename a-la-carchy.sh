@@ -107,6 +107,33 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
+# Extract managed blocks from monitors.conf so they survive full rewrites
+# Stores result in MONITORS_MANAGED_BLOCKS variable
+save_managed_blocks() {
+    MONITORS_MANAGED_BLOCKS=""
+    [[ -f "$MONITORS_CONF" ]] || return
+    local markers=(
+        "$POWER_PROFILE_MARKER_START|$POWER_PROFILE_MARKER_END"
+        "$LAPTOP_AUTO_MARKER_START|$LAPTOP_AUTO_MARKER_END"
+    )
+    for pair in "${markers[@]}"; do
+        local start="${pair%%|*}"
+        local end="${pair##*|}"
+        local block
+        block=$(awk -v s="$start" -v e="$end" '$0==s{f=1} f{print} $0==e{f=0}' "$MONITORS_CONF")
+        if [[ -n "$block" ]]; then
+            MONITORS_MANAGED_BLOCKS+=$'\n'"$block"
+        fi
+    done
+}
+
+# Re-append saved managed blocks to monitors.conf after a rewrite
+restore_managed_blocks() {
+    if [[ -n "${MONITORS_MANAGED_BLOCKS:-}" ]]; then
+        echo "$MONITORS_MANAGED_BLOCKS" >> "$MONITORS_CONF"
+    fi
+}
+
 # Function to check if package is installed
 is_package_installed() {
     pacman -Qi "$1" &>/dev/null
@@ -1206,6 +1233,9 @@ set_monitor_4k() {
     cp "$MONITORS_CONF" "$backup_file"
     echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
 
+    # Preserve managed blocks before overwriting
+    save_managed_blocks
+
     # Write new config
     cat > "$MONITORS_CONF" << 'EOF'
 # See https://wiki.hyprland.org/Configuring/Monitors/
@@ -1216,6 +1246,9 @@ set_monitor_4k() {
 env = GDK_SCALE,1.75
 monitor=,preferred,auto,1.666667
 EOF
+
+    # Restore managed blocks (power-profile, laptop-auto-off, etc.)
+    restore_managed_blocks
 
     echo -e "    ${CHECKED}✓${RESET}  Monitor scaling set to 4K"
     SUMMARY_LOG+=("✓  Monitor scaling set to 4K")
@@ -1267,6 +1300,9 @@ set_monitor_1080_1440() {
     cp "$MONITORS_CONF" "$backup_file"
     echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
 
+    # Preserve managed blocks before overwriting
+    save_managed_blocks
+
     # Write new config
     cat > "$MONITORS_CONF" << 'EOF'
 # See https://wiki.hyprland.org/Configuring/Monitors/
@@ -1277,6 +1313,9 @@ set_monitor_1080_1440() {
 env = GDK_SCALE,1
 monitor=,preferred,auto,1
 EOF
+
+    # Restore managed blocks (power-profile, laptop-auto-off, etc.)
+    restore_managed_blocks
 
     echo -e "    ${CHECKED}✓${RESET}  Monitor scaling set to 1080p/1440p"
     SUMMARY_LOG+=("✓  Monitor scaling set to 1080p/1440p")
@@ -1831,6 +1870,9 @@ apply_monitor_positions() {
     done
     echo -e "    ${CHECKED}✓${RESET}  Monitor layout applied live"
 
+    # Preserve managed blocks before overwriting
+    save_managed_blocks
+
     # Save to config file for persistence
     {
         echo "# See https://wiki.hyprland.org/Configuring/Monitors/"
@@ -1855,6 +1897,9 @@ apply_monitor_positions() {
         echo "# Fallback for hot-plugged displays"
         echo "monitor=,preferred,auto,1"
     } > "$MONITORS_CONF"
+
+    # Restore managed blocks (power-profile, laptop-auto-off, etc.)
+    restore_managed_blocks
 
     echo -e "    ${CHECKED}✓${RESET}  Config saved to monitors.conf"
     SUMMARY_LOG+=("✓  Monitor layout configured")
@@ -2328,7 +2373,7 @@ apply_battery_limit() {
         fi
     else
         # Write udev rule for persistence
-        printf '# Managed by A La Carchy - battery charge limit\nACTION=="add", SUBSYSTEM=="power_supply", KERNEL=="BAT*", ATTR{charge_control_end_threshold}=="[0-9]*", ATTR{charge_control_end_threshold}="%s"\n' \
+        printf '# Managed by A La Carchy - battery charge limit\nSUBSYSTEM=="power_supply", KERNEL=="BAT*", ATTR{charge_control_end_threshold}="%s"\n' \
             "$SELECTED_BATTERY_LIMIT" | sudo tee "$BATTERY_LIMIT_UDEV_RULE" > /dev/null
         echo -e "    ${CHECKED}✓${RESET}  Udev rule written: $BATTERY_LIMIT_UDEV_RULE"
     fi
