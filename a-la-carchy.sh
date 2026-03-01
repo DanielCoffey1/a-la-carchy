@@ -55,6 +55,9 @@ DEFAULT_WEBAPPS=(
 # Summary log for tracking completed actions
 declare -a SUMMARY_LOG=()
 
+# When true, skip individual confirmation prompts (user chose "Apply all")
+CONFIRM_ALL=false
+
 # Hyprland tiling config path
 TILING_CONF="$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf"
 
@@ -757,10 +760,12 @@ apply_hypr_edits() {
     echo
     echo
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -901,10 +906,12 @@ apply_binding_edits() {
     echo
     echo
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -974,10 +981,12 @@ rebind_close_window() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -1029,10 +1038,12 @@ restore_close_window() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -1107,10 +1118,12 @@ backup_configs() {
     echo
     echo
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -1224,10 +1237,12 @@ set_monitor_4k() {
         echo
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -1291,10 +1306,12 @@ set_monitor_1080_1440() {
         echo
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -2649,10 +2666,12 @@ bind_shutdown() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -2698,10 +2717,12 @@ bind_restart() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -2747,10 +2768,12 @@ unbind_shutdown() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -2795,10 +2818,12 @@ unbind_restart() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -2843,10 +2868,12 @@ bind_theme_menu() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -2892,10 +2919,12 @@ unbind_theme_menu() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -2954,10 +2983,12 @@ restore_capslock() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3018,10 +3049,12 @@ use_capslock_compose() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3085,10 +3118,12 @@ swap_alt_super() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3139,10 +3174,12 @@ restore_alt_super() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3186,10 +3223,12 @@ enable_suspend() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3226,10 +3265,12 @@ disable_suspend() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3268,10 +3309,12 @@ enable_hibernation() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3315,10 +3358,12 @@ disable_hibernation() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3365,10 +3410,12 @@ enable_fingerprint() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3411,10 +3458,12 @@ disable_fingerprint() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3461,10 +3510,12 @@ enable_fido2() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3507,10 +3558,12 @@ disable_fido2() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3562,10 +3615,12 @@ show_all_tray_icons() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3627,10 +3682,12 @@ hide_tray_icons() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3692,10 +3749,12 @@ enable_rounded_corners() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3808,10 +3867,12 @@ disable_rounded_corners() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3923,10 +3984,12 @@ remove_window_gaps() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -3978,10 +4041,12 @@ restore_window_gaps() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4044,10 +4109,12 @@ remove_transparency() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4132,10 +4199,12 @@ restore_transparency() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4219,10 +4288,12 @@ enable_12h_clock() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4276,10 +4347,12 @@ disable_12h_clock() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4332,10 +4405,12 @@ show_window_title() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4391,10 +4466,12 @@ hide_window_title() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4454,10 +4531,12 @@ show_clock_date() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4511,10 +4590,12 @@ hide_clock_date() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4579,10 +4660,12 @@ enable_media_directories() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -4641,10 +4724,12 @@ disable_media_directories() {
         return 0
     fi
 
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Cancelled."
         echo
@@ -6245,6 +6330,93 @@ if [ "$BACKUP_CONFIGS" = true ]; then
     fi
 fi
 
+# =============================================================================
+# MASTER CONFIRMATION — apply all at once or confirm each individually
+# =============================================================================
+clear
+echo
+echo
+echo -e "${BOLD}  Confirm Actions${RESET}"
+echo
+
+declare -a ACTION_SUMMARY=()
+
+[ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ] && ACTION_SUMMARY+=("Remove ${#SELECTED_PACKAGES_FINAL[@]} package(s)")
+[ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ] && ACTION_SUMMARY+=("Remove ${#SELECTED_WEBAPPS_FINAL[@]} web app(s)")
+[ "$RESET_KEYBINDS" = true ] && ACTION_SUMMARY+=("Rebind close window to SUPER+Q")
+[ "$RESTORE_KEYBINDS" = true ] && ACTION_SUMMARY+=("Restore close window to SUPER+W")
+[ "$BIND_SHUTDOWN" = true ] && ACTION_SUMMARY+=("Bind shutdown to SUPER+ALT+S")
+[ "$UNBIND_SHUTDOWN" = true ] && ACTION_SUMMARY+=("Unbind shutdown")
+[ "$BIND_RESTART" = true ] && ACTION_SUMMARY+=("Bind restart to SUPER+ALT+R")
+[ "$UNBIND_RESTART" = true ] && ACTION_SUMMARY+=("Unbind restart")
+[ "$BIND_THEME_MENU" = true ] && ACTION_SUMMARY+=("Bind theme menu to ALT+T")
+[ "$UNBIND_THEME_MENU" = true ] && ACTION_SUMMARY+=("Unbind theme menu")
+[ ${#BINDING_EDITS[@]} -gt 0 ] && ACTION_SUMMARY+=("Apply ${#BINDING_EDITS[@]} keybinding edit(s)")
+[ ${#HYPR_EDITS[@]} -gt 0 ] && ACTION_SUMMARY+=("Apply ${#HYPR_EDITS[@]} Hyprland setting(s)")
+[ "$RESTORE_CAPSLOCK" = true ] && ACTION_SUMMARY+=("Restore Caps Lock")
+[ "$USE_CAPSLOCK_COMPOSE" = true ] && ACTION_SUMMARY+=("Use Caps Lock for compose")
+[ "$SWAP_ALT_SUPER" = true ] && ACTION_SUMMARY+=("Swap Alt and Super keys")
+[ "$RESTORE_ALT_SUPER" = true ] && ACTION_SUMMARY+=("Restore Alt/Super keys")
+[ "$MONITOR_4K" = true ] && ACTION_SUMMARY+=("Set monitor scaling: 4K")
+[ "$MONITOR_1080_1440" = true ] && ACTION_SUMMARY+=("Set monitor scaling: 1080p/1440p")
+[ "$MONITORS_POSITIONED" -eq 1 ] 2>/dev/null && ACTION_SUMMARY+=("Apply monitor positions")
+[ "$LAPTOP_AUTO_OFF" = true ] && ACTION_SUMMARY+=("Enable laptop display auto-off")
+[ "$LAPTOP_AUTO_NORMAL" = true ] && ACTION_SUMMARY+=("Disable laptop display auto-off")
+[[ -n "$SELECTED_POWER_PROFILE" ]] && ACTION_SUMMARY+=("Set power profile: $SELECTED_POWER_PROFILE")
+[[ -n "$SELECTED_BATTERY_LIMIT" ]] && ACTION_SUMMARY+=("Set battery limit: ${SELECTED_BATTERY_LIMIT}%")
+[[ -n "$SELECTED_PRIMARY_MONITOR" ]] && ACTION_SUMMARY+=("Set primary monitor: $SELECTED_PRIMARY_MONITOR")
+[ "$ENABLE_SUSPEND" = true ] && ACTION_SUMMARY+=("Enable suspend")
+[ "$DISABLE_SUSPEND" = true ] && ACTION_SUMMARY+=("Disable suspend")
+[ "$ENABLE_HIBERNATION" = true ] && ACTION_SUMMARY+=("Enable hibernation")
+[ "$DISABLE_HIBERNATION" = true ] && ACTION_SUMMARY+=("Disable hibernation")
+[ "$ENABLE_FINGERPRINT" = true ] && ACTION_SUMMARY+=("Enable fingerprint auth")
+[ "$DISABLE_FINGERPRINT" = true ] && ACTION_SUMMARY+=("Disable fingerprint auth")
+[ "$ENABLE_FIDO2" = true ] && ACTION_SUMMARY+=("Enable FIDO2 auth")
+[ "$DISABLE_FIDO2" = true ] && ACTION_SUMMARY+=("Disable FIDO2 auth")
+[ "$SHOW_ALL_TRAY_ICONS" = true ] && ACTION_SUMMARY+=("Show all tray icons")
+[ "$HIDE_TRAY_ICONS" = true ] && ACTION_SUMMARY+=("Hide tray icons")
+[ "$ENABLE_ROUNDED_CORNERS" = true ] && ACTION_SUMMARY+=("Enable rounded corners")
+[ "$DISABLE_ROUNDED_CORNERS" = true ] && ACTION_SUMMARY+=("Disable rounded corners")
+[ "$REMOVE_WINDOW_GAPS" = true ] && ACTION_SUMMARY+=("Remove window gaps")
+[ "$RESTORE_WINDOW_GAPS" = true ] && ACTION_SUMMARY+=("Restore window gaps")
+[ "$REMOVE_TRANSPARENCY" = true ] && ACTION_SUMMARY+=("Remove transparency")
+[ "$RESTORE_TRANSPARENCY" = true ] && ACTION_SUMMARY+=("Restore transparency")
+[ "$ENABLE_12H_CLOCK" = true ] && ACTION_SUMMARY+=("Enable 12-hour clock")
+[ "$DISABLE_12H_CLOCK" = true ] && ACTION_SUMMARY+=("Disable 12-hour clock")
+[ "$SHOW_CLOCK_DATE" = true ] && ACTION_SUMMARY+=("Show clock date")
+[ "$HIDE_CLOCK_DATE" = true ] && ACTION_SUMMARY+=("Hide clock date")
+[ "$SHOW_WINDOW_TITLE" = true ] && ACTION_SUMMARY+=("Show window title")
+[ "$HIDE_WINDOW_TITLE" = true ] && ACTION_SUMMARY+=("Hide window title")
+[ "$ENABLE_MEDIA_DIRECTORIES" = true ] && ACTION_SUMMARY+=("Enable media directories")
+[ "$DISABLE_MEDIA_DIRECTORIES" = true ] && ACTION_SUMMARY+=("Disable media directories")
+[ "$ADD_MENU_SHORTCUT" = true ] && ACTION_SUMMARY+=("Add menu shortcut")
+[ "$REMOVE_MENU_SHORTCUT" = true ] && ACTION_SUMMARY+=("Remove menu shortcut")
+[ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ] && ACTION_SUMMARY+=("Install ${#SELECTED_THEMES_FINAL[@]} theme(s)")
+[ "$BACKUP_BEFORE" = true ] && ACTION_SUMMARY+=("Backup config (before changes)")
+[ "$BACKUP_AFTER" = true ] && ACTION_SUMMARY+=("Backup config (after changes)")
+
+for item in "${ACTION_SUMMARY[@]}"; do
+    echo -e "    ${DIM}•${RESET}  $item"
+done
+
+echo
+echo
+echo -e "    ${BOLD}1)${RESET}  Apply all       ${DIM}(no further prompts)${RESET}"
+echo -e "    ${BOLD}2)${RESET}  Confirm each    ${DIM}(review each action individually)${RESET}"
+echo -e "    ${BOLD}3)${RESET}  Cancel"
+echo
+
+while true; do
+    printf "  ${BOLD}Select (1-3):${RESET} "
+    read -r < /dev/tty
+    case "$REPLY" in
+        1) CONFIRM_ALL=true; break ;;
+        2) break ;;
+        3) echo; echo "  Cancelled."; echo; exit 0 ;;
+        *) echo -e "  ${DIM}Invalid selection. Please enter 1, 2, or 3.${RESET}" ;;
+    esac
+done
+
 # Run backup before changes if requested
 if [ "$BACKUP_BEFORE" = true ]; then
     backup_configs
@@ -6467,10 +6639,12 @@ if [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ]; then
     echo -e "${DIM}  The last theme installed will become the active theme.${RESET}"
     echo
     echo
-    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-    read -r < /dev/tty
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
 
-    if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ "$CONFIRM_ALL" == true ]] || [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         echo
         echo "  Installing themes..."
         echo
@@ -6553,10 +6727,12 @@ if [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ]; then
 fi
 echo
 echo
-printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
-read -r < /dev/tty
+if [[ "$CONFIRM_ALL" != true ]]; then
+    printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+fi
 
-if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
     echo
     echo "  Cancelled."
     echo
