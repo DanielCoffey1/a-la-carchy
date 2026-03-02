@@ -15,8 +15,8 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - **103 extra community themes** browseable and installable with one click
 - **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
 - **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
-- **Multi-monitor management** with detection, positioning, and laptop auto-off
-- **40+ configuration tweaks** for keybindings, display, and system settings
+- **Multi-monitor management** with detection, positioning, primary monitor, and laptop auto-off
+- **27 configuration tweaks** for keybindings, display, system, appearance, keyboard, and utilities
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
 - Safe removal with confirmation prompts
@@ -67,6 +67,7 @@ chmod +x a-la-carchy.sh
    - **Enter** Confirm and execute selected actions
    - **Q** Quit
 3. Type `yes` when prompted to confirm
+4. Choose **Apply all** at the master confirmation to skip individual prompts, or confirm each action one by one
 
 ## What It Does
 
@@ -266,6 +267,7 @@ Previous settings are detected on subsequent runs so you always see your current
 | Detect monitors | action | Scan connected displays and show resolution, scale, position, and make/model |
 | Position monitors | action | Arrange multi-monitor layout with a guided step-by-step editor |
 | Laptop display | toggle | Auto-disable laptop screen when an external display is connected |
+| Primary monitor | action | Set which monitor gets workspace 1 by default |
 
 ##### Detect Monitors
 
@@ -319,6 +321,56 @@ Toggle "Laptop display" to "Auto off" to automatically disable the laptop screen
 3. Starts the watcher immediately (no logout required)
 
 Toggle to "Normal" to disable: removes the watcher script, kills any running instance, removes the managed block from config, and re-enables the laptop display with restored brightness.
+
+##### Primary Monitor
+
+Press Space on "Primary monitor" to open an arrow-key selection dialog listing all connected monitors. Select which monitor should own workspace 1 (the default workspace).
+
+On confirm:
+1. Workspace 1 is moved to the selected monitor immediately via `hyprctl dispatch`
+2. All other monitors are assigned incrementing workspaces (2, 3, ...) both live and persisted
+3. The selection is persisted in `~/.config/hypr/monitors.conf` via a managed block so it survives reboots
+4. Wallpaper layers are restarted (`swaybg`) to fix positioning after workspace moves
+
+Requires 2+ monitors. If only one monitor is detected, the dialog shows a message and returns.
+
+#### Appearance
+
+All items below are in the **Appearance** category in the TUI.
+
+| Tweak | Description |
+|-------|-------------|
+| Enable rounded corners | Adds rounded corners to windows, Walker menus, SwayOSD, hyprlock, mako notifications, and waybar tooltips |
+| Disable rounded corners | Returns all UI elements to sharp/square corners |
+| Remove window gaps | Maximize screen real estate |
+| Restore window gaps | Return to default window spacing |
+| Remove transparency | Remove window transparency effects (makes all windows fully opaque) |
+| Restore transparency | Restore default window transparency rules |
+| Show all tray icons | All system tray icons always visible |
+| Hide tray icons | Use expander for cleaner bar |
+| Enable 12-hour clock | Clock displays with AM/PM |
+| Disable 12-hour clock | 24-hour format |
+| Show clock date | Display day name on clock (e.g. "Sunday 10:55 AM") |
+| Hide clock date | Show time only (e.g. "10:55 AM") |
+| Show window title | Display active window name next to workspaces |
+| Hide window title | Remove active window name from waybar |
+| Enable media directories | Screenshots → `~/Pictures/Screenshots`, Recordings → `~/Videos/Screencasts` |
+| Disable media directories | Use default `~/Pictures` and `~/Videos` |
+
+#### System Features
+
+| Tweak | Description |
+|-------|-------------|
+| Enable suspend | Show suspend option in system menu |
+| Disable suspend | Hide suspend from system menu |
+| Enable hibernation | Creates swap subvolume matching RAM size |
+| Disable hibernation | Removes hibernation support |
+| Enable fingerprint auth | Set up fingerprint for sudo/login |
+| Disable fingerprint auth | Remove fingerprint authentication |
+| Enable FIDO2 auth | Set up security keys (YubiKey, etc.) |
+| Disable FIDO2 auth | Remove security key authentication |
+| Power profile | Set default power profile (power-saver, balanced, performance) restored on startup |
+| Battery limit | Set maximum battery charge level (60%/70%/80%/90%/100%) with walker power menu integration |
 
 ##### Power Profile
 
@@ -378,56 +430,19 @@ When a battery charge limit is set (any value other than 100%), the Omarchy powe
 └─────────────────────────────┘
 ```
 
-- A visual bar using `█` (filled) and `░` (empty) blocks shows the current limit scaled to the 60–100% range
+- A visual bar using `█` (filled) and `░` (empty) blocks shows the current limit
 - Selecting the charge limit line opens a sub-menu with all five percentage options
 - The sub-menu pre-selects the current value
 - Changing the limit uses `pkexec` for authentication (GUI-friendly, no terminal needed)
 - A desktop notification confirms the change
 - Waybar tooltips are updated and waybar is restarted automatically
 
-#### Window Management
+#### Utilities
 
-| Tweak | Description |
-|-------|-------------|
-| Enable rounded corners | Adds rounded corners to windows, Walker menus, SwayOSD, hyprlock, mako notifications, and waybar tooltips |
-| Disable rounded corners | Returns all UI elements to sharp/square corners |
-| Remove window gaps | Maximize screen real estate |
-| Restore window gaps | Return to default window spacing |
-
-#### Visual Customization
-
-| Tweak | Description |
-|-------|-------------|
-| Show all tray icons | All system tray icons always visible |
-| Hide tray icons | Use expander for cleaner bar |
-| Enable 12-hour clock | Clock displays with AM/PM |
-| Disable 12-hour clock | 24-hour format |
-| Show clock date | Display day name on clock (e.g. "Sunday 10:55 AM") |
-| Hide clock date | Show time only (e.g. "10:55 AM") |
-| Show window title | Display active window name next to workspaces |
-| Hide window title | Remove active window name from waybar |
-
-#### Media Organization
-
-| Tweak | Description |
-|-------|-------------|
-| Enable media directories | Screenshots → `~/Pictures/Screenshots`, Recordings → `~/Videos/Screencasts` |
-| Disable media directories | Use default `~/Pictures` and `~/Videos` |
-
-#### System Features
-
-| Tweak | Description |
-|-------|-------------|
-| Enable suspend | Show suspend option in system menu |
-| Disable suspend | Hide suspend from system menu |
-| Enable hibernation | Creates swap subvolume matching RAM size |
-| Disable hibernation | Removes hibernation support |
-| Enable fingerprint auth | Set up fingerprint for sudo/login |
-| Disable fingerprint auth | Remove fingerprint authentication |
-| Enable FIDO2 auth | Set up security keys (YubiKey, etc.) |
-| Disable FIDO2 auth | Remove security key authentication |
-| Power profile | Set default power profile (power-saver, balanced, performance) restored on startup |
-| Battery limit | Set maximum battery charge level (60%/70%/80%/90%/100%) with walker power menu integration |
+| Tweak | Type | Description |
+|-------|------|-------------|
+| Backup config | action | Create a timestamped backup of your Omarchy configuration |
+| Menu shortcut | toggle | Add or remove A La Carchy from the Omarchy launcher menu |
 
 ### Extra Themes
 
