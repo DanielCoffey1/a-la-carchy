@@ -2055,7 +2055,7 @@ else
     exit 0
 fi | while read -r line; do
     case "\$line" in
-        monitoradded*|monitorremoved*) handle_change ;;
+        monitoradded*|monitorremoved*|configreloaded*) handle_change ;;
     esac
 done
 SCRIPTEOF
@@ -2068,7 +2068,6 @@ SCRIPTEOF
         {
             echo ""
             echo "$LAPTOP_AUTO_MARKER_START"
-            echo "monitor=$LAPTOP_MONITOR,disable"
             echo "exec-once = $LAPTOP_AUTO_SCRIPT"
             echo "$LAPTOP_AUTO_MARKER_END"
         } >> "$MONITORS_CONF"
