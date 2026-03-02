@@ -107,6 +107,13 @@ POWER_PROFILE_SCRIPT="$HOME/.config/hypr/scripts/power-profile-default.sh"
 # Battery charge limit udev rule path
 BATTERY_LIMIT_UDEV_RULE="/etc/udev/rules.d/99-battery-charge-limit.rules"
 
+# Managed-block markers for power menu charge limit override
+POWER_MENU_MARKER_START="# === a-la-carchy power-menu charge-limit ==="
+POWER_MENU_MARKER_END="# === end a-la-carchy power-menu charge-limit ==="
+
+# Battery limit helper script path (called from walker menu, uses pkexec)
+BATTERY_LIMIT_HELPER="$HOME/.config/hypr/scripts/omarchy-battery-limit.sh"
+
 # Omarchy default window/browser config paths (for transparency toggle)
 WINDOWS_CONF="$HOME/.local/share/omarchy/default/hypr/windows.conf"
 BROWSER_CONF="$HOME/.local/share/omarchy/default/hypr/apps/browser.conf"
@@ -2462,14 +2469,15 @@ show_battery_limit_dialog() {
         configured_default=$(grep -oP 'charge_control_end_threshold="\K[0-9]+' "$BATTERY_LIMIT_UDEV_RULE" 2>/dev/null)
     fi
 
-    local -a values=("60" "80" "90" "100")
+    local -a values=("60" "70" "80" "90" "100")
     local -a labels=(
         "60%  — Maximum longevity"
+        "70%  — Good balance"
         "80%  — Recommended"
         "90%  — Slight protection"
         "100% — No limit (full charge)"
     )
-    local opt_cursor=1  # Default to 80%
+    local opt_cursor=2  # Default to 80% (index 2)
 
     # Set cursor to current threshold
     for i in "${!values[@]}"; do
@@ -2573,6 +2581,28 @@ apply_battery_limit() {
             sudo rm -f "$BATTERY_LIMIT_UDEV_RULE"
             echo -e "    ${CHECKED}✓${RESET}  Removed udev rule (no limit)"
         fi
+
+        # Remove battery limit helper script
+        if [[ -f "$BATTERY_LIMIT_HELPER" ]]; then
+            rm -f "$BATTERY_LIMIT_HELPER"
+            echo -e "    ${CHECKED}✓${RESET}  Removed battery limit helper script"
+        fi
+
+        # Remove power menu override managed block
+        local ext_file="$HOME/.config/omarchy/extensions/menu.sh"
+        if [[ -f "$ext_file" ]] && grep -q "$POWER_MENU_MARKER_START" "$ext_file"; then
+            awk -v start="$POWER_MENU_MARKER_START" -v end="$POWER_MENU_MARKER_END" '
+                $0 == start { skip=1; next }
+                $0 == end   { skip=0; next }
+                !skip
+            ' "$ext_file" > "${ext_file}.tmp" && mv "${ext_file}.tmp" "$ext_file"
+
+            # Delete file if empty
+            if [[ ! -s "$ext_file" ]]; then
+                rm -f "$ext_file"
+            fi
+            echo -e "    ${CHECKED}✓${RESET}  Removed power menu charge limit override"
+        fi
     else
         # Write udev rule for persistence
         printf '# Managed by A La Carchy - battery charge limit\nSUBSYSTEM=="power_supply", KERNEL=="BAT*", ATTR{charge_control_end_threshold}="%s"\n' \
@@ -2637,9 +2667,224 @@ apply_battery_limit() {
         echo -e "    ${CHECKED}✓${RESET}  Waybar battery tooltip updated"
     fi
 
+    # Install helper script and power menu override for walker integration
+    if [[ "$SELECTED_BATTERY_LIMIT" != "100" ]]; then
+        install_battery_limit_helper
+        install_power_menu_override
+    fi
+
     SUMMARY_LOG+=("✓  Battery charge limit set to ${SELECTED_BATTERY_LIMIT}%")
     echo
     echo
+}
+
+# Install standalone helper script for setting battery limit from walker power menu.
+# Uses pkexec (not sudo) since it runs from a GUI context with no terminal.
+install_battery_limit_helper() {
+    local script_dir
+    script_dir="$(dirname "$BATTERY_LIMIT_HELPER")"
+    mkdir -p "$script_dir"
+
+    cat > "$BATTERY_LIMIT_HELPER" << 'HELPEREOF'
+#!/bin/bash
+# Battery charge limit helper for Omarchy power menu
+# Managed by A La Carchy - do not edit manually
+
+LIMIT="${1:-80}"
+WAYBAR_CONF="$HOME/.config/waybar/config.jsonc"
+UDEV_RULE="/etc/udev/rules.d/99-battery-charge-limit.rules"
+
+# Find battery threshold path
+BAT_THRESHOLD=""
+for p in /sys/class/power_supply/BAT*/charge_control_end_threshold; do
+    [[ -f "$p" ]] && { BAT_THRESHOLD="$p"; break; }
+done
+
+if [[ -z "$BAT_THRESHOLD" ]]; then
+    notify-send "Battery Limit" "No supported battery found" -i dialog-error
+    exit 1
+fi
+
+# Single pkexec call: write sysfs + udev rule + reload
+if [[ "$LIMIT" == "100" ]]; then
+    pkexec bash -c "
+        echo 100 > '$BAT_THRESHOLD' &&
+        rm -f '$UDEV_RULE' &&
+        udevadm control --reload-rules
+    "
+else
+    pkexec bash -c "
+        echo '$LIMIT' > '$BAT_THRESHOLD' &&
+        printf '# Managed by A La Carchy - battery charge limit\nSUBSYSTEM==\"power_supply\", KERNEL==\"BAT*\", ATTR{charge_control_end_threshold}=\"$LIMIT\"\n' > '$UDEV_RULE' &&
+        udevadm control --reload-rules
+    "
+fi
+
+if [[ $? -ne 0 ]]; then
+    notify-send "Battery Limit" "Failed to set charge limit" -i dialog-error
+    exit 1
+fi
+
+# Update waybar battery tooltips
+if [[ -f "$WAYBAR_CONF" ]]; then
+    # Read format-full icon to reuse for format-plugged when limit is active
+    bat_full_icon=$(sed -n 's/.*"format-full": "\([^"]*\)".*/\1/p' "$WAYBAR_CONF" | head -1)
+
+    # Save original format-plugged value before first modification
+    if ! grep -q 'a-la-carchy-original-plugged' "$WAYBAR_CONF"; then
+        orig_plugged=$(sed -n 's/.*"format-plugged": "\([^"]*\)".*/\1/p' "$WAYBAR_CONF" | head -1)
+        sed -i "s|\"format-plugged\":|\\/\\/ a-la-carchy-original-plugged: \"${orig_plugged}\"\n    \"format-plugged\":|" "$WAYBAR_CONF"
+    fi
+
+    # Strip existing limit annotations
+    sed -i 's/ (limit: [0-9]*%)//g' "$WAYBAR_CONF"
+    sed -i '/"tooltip-format-full": "Full"/d' "$WAYBAR_CONF"
+    sed -i '/"tooltip-format-plugged":/d' "$WAYBAR_CONF"
+
+    if [[ "$LIMIT" != "100" ]]; then
+        sed -i "s/\(\"tooltip-format-discharging\": \"[^\"]*\)\"/\1 (limit: ${LIMIT}%)\"/" "$WAYBAR_CONF"
+        sed -i "s/\(\"tooltip-format-charging\": \"[^\"]*\)\"/\1 (limit: ${LIMIT}%)\"/" "$WAYBAR_CONF"
+
+        if grep -q '"tooltip-format-full"' "$WAYBAR_CONF"; then
+            sed -i "s/\(\"tooltip-format-full\": \"[^\"]*\)\"/\1 (limit: ${LIMIT}%)\"/" "$WAYBAR_CONF"
+        else
+            sed -i "/\"tooltip-format-charging\"/a\\    \"tooltip-format-full\": \"Full (limit: ${LIMIT}%)\"," "$WAYBAR_CONF"
+        fi
+
+        sed -i "s|\"format-plugged\": \"[^\"]*\"|\"format-plugged\": \"${bat_full_icon}\"|" "$WAYBAR_CONF"
+        sed -i "/\"tooltip-format-full\"/a\\    \"tooltip-format-plugged\": \"{capacity}% plugged (limit: ${LIMIT}%)\"," "$WAYBAR_CONF"
+    else
+        orig_plugged=$(sed -n 's|.*// a-la-carchy-original-plugged: "\([^"]*\)".*|\1|p' "$WAYBAR_CONF" | head -1)
+        sed -i "s|\"format-plugged\": \"[^\"]*\"|\"format-plugged\": \"${orig_plugged}\"|" "$WAYBAR_CONF"
+        sed -i '/a-la-carchy-original-plugged/d' "$WAYBAR_CONF"
+    fi
+
+    # Restart waybar to apply tooltip changes
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+fi
+
+notify-send "Battery Limit" "Charge limit set to ${LIMIT}%" -i battery
+HELPEREOF
+
+    chmod +x "$BATTERY_LIMIT_HELPER"
+    echo -e "    ${CHECKED}✓${RESET}  Battery limit helper installed: $BATTERY_LIMIT_HELPER"
+}
+
+# Install power menu override that adds charge limit slider to the walker power profile menu.
+# Writes a managed block into ~/.config/omarchy/extensions/menu.sh.
+install_power_menu_override() {
+    local ext_file="$HOME/.config/omarchy/extensions/menu.sh"
+    local ext_dir
+    ext_dir="$(dirname "$ext_file")"
+    mkdir -p "$ext_dir"
+
+    # Remove existing managed block if present
+    if [ -f "$ext_file" ]; then
+        awk -v start="$POWER_MENU_MARKER_START" -v end="$POWER_MENU_MARKER_END" '
+            $0 == start { skip=1; next }
+            $0 == end   { skip=0; next }
+            !skip
+        ' "$ext_file" > "${ext_file}.tmp" && mv "${ext_file}.tmp" "$ext_file"
+    fi
+
+    # Append the power menu override block
+    {
+        echo "$POWER_MENU_MARKER_START"
+
+        # Helper: generate a 20-char visual bar for charge percentage (scaled to 60-100 range)
+        cat << 'PMEOF'
+_alc_charge_bar() {
+  local pct="${1:-80}"
+  local bar_len=20
+  local filled=$(( pct * bar_len / 100 ))
+  [[ $filled -lt 0 ]] && filled=0
+  [[ $filled -gt $bar_len ]] && filled=$bar_len
+  local empty=$((bar_len - filled))
+  local bar=""
+  for ((i=0; i<filled; i++)); do bar+="█"; done
+  for ((i=0; i<empty; i++)); do bar+="░"; done
+  echo "  ${bar}  ${pct}%"
+}
+
+_alc_show_charge_limit_submenu() {
+  local current_limit
+  current_limit=$(cat /sys/class/power_supply/BAT*/charge_control_end_threshold 2>/dev/null | head -1)
+  [[ -z "$current_limit" ]] && current_limit=100
+
+  local options="60%  — Max longevity\n70%\n80%  — Recommended\n90%\n100% — No limit"
+
+  # Pre-select current value
+  local preselect=""
+  case "$current_limit" in
+    60) preselect="60%  — Max longevity" ;;
+    70) preselect="70%" ;;
+    80) preselect="80%  — Recommended" ;;
+    90) preselect="90%" ;;
+    *)  preselect="100% — No limit" ;;
+  esac
+
+  local choice
+  choice=$(menu "Charge Limit" "$options" "" "$preselect")
+
+  if [[ "$choice" == "CNCLD" || -z "$choice" ]]; then
+    show_setup_power_menu
+    return
+  fi
+
+  # Extract percentage number from choice
+  local pct
+  pct=$(echo "$choice" | grep -oP '^\d+')
+  [[ -z "$pct" ]] && return
+
+  "$HOME/.config/hypr/scripts/omarchy-battery-limit.sh" "$pct"
+}
+
+show_setup_power_menu() {
+  local profiles
+  profiles=$(omarchy-powerprofiles-list)
+  local current_profile
+  current_profile=$(powerprofilesctl get)
+
+  # Check for battery hardware
+  local bat_threshold=""
+  for p in /sys/class/power_supply/BAT*/charge_control_end_threshold; do
+    [[ -f "$p" ]] && { bat_threshold="$p"; break; }
+  done
+
+  local options="$profiles"
+  local preselect="$current_profile"
+
+  if [[ -n "$bat_threshold" ]]; then
+    local current_limit
+    current_limit=$(cat "$bat_threshold" 2>/dev/null)
+    [[ -z "$current_limit" ]] && current_limit=100
+    local bar
+    bar=$(_alc_charge_bar "$current_limit")
+    options="${options}\n─────────────────\n󰁹 Charge limit: ${current_limit}%\n${bar}"
+  fi
+
+  local choice
+  choice=$(menu "Power" "$options" "" "$preselect")
+
+  if [[ "$choice" == "CNCLD" || -z "$choice" ]]; then
+    back_to show_setup_menu
+    return
+  fi
+
+  case "$choice" in
+    ─*) show_setup_power_menu ;;
+    *"Charge limit"*|*█*|*░*) _alc_show_charge_limit_submenu ;;
+    *) powerprofilesctl set "$choice" ;;
+  esac
+}
+PMEOF
+
+        echo "$POWER_MENU_MARKER_END"
+    } >> "$ext_file"
+
+    echo -e "    ${CHECKED}✓${RESET}  Power menu charge limit override installed"
 }
 
 bind_shutdown() {
@@ -5234,7 +5479,7 @@ declare -i MONITOR_COUNT=0
 declare LAPTOP_MONITOR=""             # eDP-* name if found
 declare -i MONITORS_POSITIONED=0      # 1 if position editor was completed
 declare SELECTED_POWER_PROFILE=""     # "", "power-saver", "balanced", "performance"
-declare SELECTED_BATTERY_LIMIT=""     # "", "60", "80", "90", "100"
+declare SELECTED_BATTERY_LIMIT=""     # "", "60", "70", "80", "90", "100"
 declare SELECTED_PRIMARY_MONITOR=""  # "", monitor name (e.g. "HDMI-A-1")
 
 # Keybind Editor data structures

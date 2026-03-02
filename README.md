@@ -339,9 +339,10 @@ Requires `power-profiles-daemon` (provides `powerprofilesctl`). If not installed
 
 ##### Battery Charge Limit
 
-Press Space on "Battery limit" to open an arrow-key selection dialog with four presets:
+Press Space on "Battery limit" to open an arrow-key selection dialog with five presets:
 
 - **60%** — Maximum longevity
+- **70%** — Good balance
 - **80%** — Recommended
 - **90%** — Slight protection
 - **100%** — No limit (full charge)
@@ -354,10 +355,35 @@ On confirm, the selected limit is:
 3. Udev rules reloaded via `udevadm control --reload-rules`
 4. Waybar battery tooltip updated to show the configured limit (e.g. "80% plugged (limit: 80%)")
 5. Waybar plugged icon changed from plug to battery (since the battery stops charging at the limit)
+6. Battery limit helper script installed at `~/.config/hypr/scripts/omarchy-battery-limit.sh`
+7. Walker power menu override installed in `~/.config/omarchy/extensions/menu.sh`
 
-Setting 100% (no limit) removes the udev rule and restores original waybar icon and tooltips.
+Setting 100% (no limit) removes the udev rule, helper script, and power menu override, and restores original waybar icon and tooltips.
 
 Requires a battery with kernel-exposed `charge_control_end_threshold` support. If not available, the dialog shows a graceful error message.
+
+##### Walker Power Menu Integration
+
+When a battery charge limit is set (any value other than 100%), the Omarchy power profile menu (accessed by clicking the battery icon in waybar) is enhanced with a charge limit display:
+
+```
+┌─────────────────────────────┐
+│ Power…                      │
+│   performance               │
+│   balanced        ← current │
+│   power-saver               │
+│   ─────────────────         │
+│   󰁹 Charge limit: 80%      │
+│   ████████████████░░░░  80% │
+└─────────────────────────────┘
+```
+
+- A visual bar using `█` (filled) and `░` (empty) blocks shows the current limit scaled to the 60–100% range
+- Selecting the charge limit line opens a sub-menu with all five percentage options
+- The sub-menu pre-selects the current value
+- Changing the limit uses `pkexec` for authentication (GUI-friendly, no terminal needed)
+- A desktop notification confirms the change
+- Waybar tooltips are updated and waybar is restarted automatically
 
 #### Window Management
 
@@ -401,7 +427,7 @@ Requires a battery with kernel-exposed `charge_control_end_threshold` support. I
 | Enable FIDO2 auth | Set up security keys (YubiKey, etc.) |
 | Disable FIDO2 auth | Remove security key authentication |
 | Power profile | Set default power profile (power-saver, balanced, performance) restored on startup |
-| Battery limit | Set maximum battery charge level (60%/80%/90%/100%) for longer lifespan |
+| Battery limit | Set maximum battery charge level (60%/70%/80%/90%/100%) with walker power menu integration |
 
 ### Extra Themes
 
@@ -653,6 +679,7 @@ The script modifies the following Omarchy configuration files (with automatic ba
 | `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping, Hyprland Input settings |
 | `~/.config/hypr/scripts/laptop-display-auto.sh` | Laptop auto-off watcher script (created/removed by toggle) |
 | `~/.config/hypr/scripts/power-profile-default.sh` | Power profile startup script (sets default profile on login) |
+| `~/.config/hypr/scripts/omarchy-battery-limit.sh` | Battery limit helper for walker power menu (uses pkexec, created/removed by battery limit) |
 | `/etc/udev/rules.d/99-battery-charge-limit.rules` | Battery charge limit persistence (created/removed by battery limit) |
 | `~/.config/waybar/config.jsonc` | Clock format, tray icons, battery charge limit tooltip |
 | `~/.config/waybar/style.css` | Rounded corners on waybar tooltips |
