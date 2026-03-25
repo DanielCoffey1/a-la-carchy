@@ -2886,6 +2886,786 @@ PMEOF
     echo -e "    ${CHECKED}✓${RESET}  Power menu charge limit override installed"
 }
 
+# =============================================================================
+# ROG HARDWARE CONTROL (asusctl)
+# =============================================================================
+
+# Global state for ROG dialog selections
+SELECTED_ROG_PROFILE=""
+SELECTED_ROG_KBD_LEDS=""
+SELECTED_ROG_AURA_EFFECT=""
+SELECTED_ROG_AURA_COLOR=""
+SELECTED_ROG_AURA_COLOR2=""
+SELECTED_ROG_AURA_SPEED=""
+SELECTED_ROG_AURA_DIRECTION=""
+SELECTED_ROG_SLASH_MODE=""
+SELECTED_ROG_SLASH_BRIGHT=""
+ROG_SLASH_ENABLE=""
+
+show_rog_profile_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  ROG Platform Profile${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo -e "  ${DIM}Install asusctl to use this feature.${RESET}"
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local active_profile
+    active_profile=$(asusctl profile get 2>/dev/null | head -1 | sed 's/Active profile: //')
+
+    local -a profiles=("Quiet" "Balanced" "Performance")
+    local opt_cursor=1
+
+    for i in "${!profiles[@]}"; do
+        if [[ "${profiles[$i]}" == "$active_profile" ]]; then
+            opt_cursor=$i
+            break
+        fi
+    done
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}ROG Platform Profile${RESET}"
+        echo -e "  ${DIM}Set ASUS performance profile via asusctl${RESET}"
+        echo
+        echo -e "  ${DIM}Select profile (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        for i in "${!profiles[@]}"; do
+            local suffix=""
+            [[ "${profiles[$i]}" == "$active_profile" ]] && suffix=" (active)"
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${profiles[$i]}${suffix}${RESET}"
+            else
+                echo -e "      ${profiles[$i]}${suffix}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#profiles[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    SELECTED_ROG_PROFILE="${profiles[$opt_cursor]}"
+                    clear
+                    echo
+                    echo -e "  ${BOLD}ROG Platform Profile${RESET}"
+                    echo
+                    echo -e "  ${CHECKED}✓${RESET}  ${profiles[$opt_cursor]} queued for apply"
+                    echo
+                    echo -e "  ${DIM}Press any key to return...${RESET}"
+                    read -rsn1 < /dev/tty
+                    return
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_profile() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Set ROG Profile: $SELECTED_ROG_PROFILE${RESET}"
+    echo
+
+    if asusctl profile set "$SELECTED_ROG_PROFILE" 2>/dev/null; then
+        echo -e "    ${CHECKED}✓${RESET}  Profile set to $SELECTED_ROG_PROFILE"
+        SUMMARY_LOG+=("✓  ROG profile set to $SELECTED_ROG_PROFILE")
+    else
+        echo -e "    ${DIM}✗${RESET}  Failed to set profile"
+        SUMMARY_LOG+=("✗  ROG profile -- failed to set")
+    fi
+    echo
+    echo
+}
+
+show_rog_kbd_leds_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Keyboard LEDs${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local current_level
+    current_level=$(asusctl leds get 2>/dev/null | grep -oiE '(off|low|med|high)' | tr '[:upper:]' '[:lower:]')
+
+    local -a levels=("off" "low" "med" "high")
+    local -a labels=("Off" "Low" "Medium" "High")
+    local opt_cursor=2
+
+    for i in "${!levels[@]}"; do
+        if [[ "${levels[$i]}" == "$current_level" ]]; then
+            opt_cursor=$i
+            break
+        fi
+    done
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Keyboard LED Brightness${RESET}"
+        echo -e "  ${DIM}Set keyboard backlight brightness${RESET}"
+        echo
+        echo -e "  ${DIM}Select level (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        for i in "${!levels[@]}"; do
+            local suffix=""
+            [[ "${levels[$i]}" == "$current_level" ]] && suffix=" (current)"
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${labels[$i]}${suffix}${RESET}"
+            else
+                echo -e "      ${labels[$i]}${suffix}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#levels[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    SELECTED_ROG_KBD_LEDS="${levels[$opt_cursor]}"
+                    clear
+                    echo
+                    echo -e "  ${BOLD}Keyboard LED Brightness${RESET}"
+                    echo
+                    echo -e "  ${CHECKED}✓${RESET}  ${labels[$opt_cursor]} queued for apply"
+                    echo
+                    echo -e "  ${DIM}Press any key to return...${RESET}"
+                    read -rsn1 < /dev/tty
+                    return
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_kbd_leds() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Set Keyboard LEDs: $SELECTED_ROG_KBD_LEDS${RESET}"
+    echo
+
+    if asusctl leds set "$SELECTED_ROG_KBD_LEDS" 2>/dev/null; then
+        echo -e "    ${CHECKED}✓${RESET}  Keyboard brightness set to $SELECTED_ROG_KBD_LEDS"
+        SUMMARY_LOG+=("✓  Keyboard LEDs set to $SELECTED_ROG_KBD_LEDS")
+    else
+        echo -e "    ${DIM}✗${RESET}  Failed to set keyboard brightness"
+        SUMMARY_LOG+=("✗  Keyboard LEDs -- failed to set")
+    fi
+    echo
+    echo
+}
+
+# Aura effect parameter requirements:
+#   color-only:       static, pulse, comet, flash          (-c)
+#   color+speed:      highlight, laser, ripple              (-c, --speed)
+#   two-color+speed:  breathe, stars                        (--colour, --colour2, --speed)
+#   speed-only:       rainbow-cycle, rain                   (--speed)
+#   direction+speed:  rainbow-wave                          (--direction, --speed)
+
+_aura_prompt_color() {
+    local label="$1" var_name="$2"
+    echo
+    echo -e "  ${DIM}Enter hex color for ${label} (e.g. ff0000 for red):${RESET}"
+    echo
+    printf "    Color: "
+    local input=""
+    read -r input < /dev/tty
+    input=$(echo "$input" | tr -d '#' | tr '[:upper:]' '[:lower:]')
+    if [[ "$input" =~ ^[0-9a-f]{6}$ ]]; then
+        printf -v "$var_name" '%s' "$input"
+        return 0
+    else
+        echo
+        echo -e "  ${DIM}✗${RESET}  Invalid hex color. Must be 6 hex digits."
+        return 1
+    fi
+}
+
+_aura_prompt_speed() {
+    local -a speeds=("low" "med" "high")
+    local -a slabels=("Low" "Medium" "High")
+    local sc=1  # default medium
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Aura Speed${RESET}"
+        echo -e "  ${DIM}Select animation speed:${RESET}"
+        echo
+
+        for i in "${!speeds[@]}"; do
+            if [[ $i -eq $sc ]]; then
+                echo -e "    ${SELECTED_BG}> ${slabels[$i]}${RESET}"
+            else
+                echo -e "      ${slabels[$i]}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( sc > 0 )) && ((sc--)) ;;
+                    '[B') (( sc < 2 )) && ((sc++)) ;;
+                esac
+                [[ -z "$key" ]] && return 1
+                ;;
+            '')
+                SELECTED_ROG_AURA_SPEED="${speeds[$sc]}"
+                return 0
+                ;;
+            q|Q) return 1 ;;
+        esac
+    done
+}
+
+_aura_prompt_direction() {
+    local -a dirs=("up" "down" "left" "right")
+    local -a dlabels=("Up" "Down" "Left" "Right")
+    local dc=2  # default left
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Aura Direction${RESET}"
+        echo -e "  ${DIM}Select wave direction:${RESET}"
+        echo
+
+        for i in "${!dirs[@]}"; do
+            if [[ $i -eq $dc ]]; then
+                echo -e "    ${SELECTED_BG}> ${dlabels[$i]}${RESET}"
+            else
+                echo -e "      ${dlabels[$i]}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( dc > 0 )) && ((dc--)) ;;
+                    '[B') (( dc < 3 )) && ((dc++)) ;;
+                esac
+                [[ -z "$key" ]] && return 1
+                ;;
+            '')
+                SELECTED_ROG_AURA_DIRECTION="${dirs[$dc]}"
+                return 0
+                ;;
+            q|Q) return 1 ;;
+        esac
+    done
+}
+
+show_rog_aura_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Aura RGB Effect${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local -a effects=("static" "breathe" "rainbow-cycle" "rainbow-wave" "stars" "rain" "highlight" "laser" "ripple" "pulse" "comet" "flash")
+    local -a labels=("Static" "Breathe" "Rainbow Cycle" "Rainbow Wave" "Stars" "Rain" "Highlight" "Laser" "Ripple" "Pulse" "Comet" "Flash")
+    local opt_cursor=0
+    local scroll_offset=0
+    local visible_rows=8
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Aura RGB Effect${RESET}"
+        echo -e "  ${DIM}Set keyboard RGB lighting effect${RESET}"
+        echo
+        echo -e "  ${DIM}Select effect (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        (( opt_cursor < scroll_offset )) && scroll_offset=$opt_cursor
+        (( opt_cursor >= scroll_offset + visible_rows )) && scroll_offset=$((opt_cursor - visible_rows + 1))
+
+        for (( i=scroll_offset; i < scroll_offset + visible_rows && i < ${#effects[@]}; i++ )); do
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${labels[$i]}${RESET}"
+            else
+                echo -e "      ${labels[$i]}"
+            fi
+        done
+
+        if (( ${#effects[@]} > visible_rows )); then
+            echo -e "  ${DIM}  ($((opt_cursor+1))/${#effects[@]})${RESET}"
+        fi
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#effects[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    local selected_effect="${effects[$opt_cursor]}"
+                    local selected_label="${labels[$opt_cursor]}"
+
+                    # Reset all aura params
+                    SELECTED_ROG_AURA_COLOR=""
+                    SELECTED_ROG_AURA_COLOR2=""
+                    SELECTED_ROG_AURA_SPEED=""
+                    SELECTED_ROG_AURA_DIRECTION=""
+
+                    case "$selected_effect" in
+                        static|pulse|comet|flash)
+                            # Color only
+                            clear
+                            echo
+                            echo -e "  ${BOLD}Aura RGB — ${selected_label}${RESET}"
+                            if ! _aura_prompt_color "color" SELECTED_ROG_AURA_COLOR; then
+                                echo -e "  ${DIM}Press any key to return...${RESET}"
+                                read -rsn1 < /dev/tty
+                                return
+                            fi
+                            ;;
+                        highlight|laser|ripple)
+                            # Color + speed
+                            clear
+                            echo
+                            echo -e "  ${BOLD}Aura RGB — ${selected_label}${RESET}"
+                            if ! _aura_prompt_color "color" SELECTED_ROG_AURA_COLOR; then
+                                echo -e "  ${DIM}Press any key to return...${RESET}"
+                                read -rsn1 < /dev/tty
+                                return
+                            fi
+                            _aura_prompt_speed || return
+                            ;;
+                        breathe|stars)
+                            # Two colors + speed
+                            clear
+                            echo
+                            echo -e "  ${BOLD}Aura RGB — ${selected_label}${RESET}"
+                            if ! _aura_prompt_color "primary color" SELECTED_ROG_AURA_COLOR; then
+                                echo -e "  ${DIM}Press any key to return...${RESET}"
+                                read -rsn1 < /dev/tty
+                                return
+                            fi
+                            echo
+                            if ! _aura_prompt_color "secondary color" SELECTED_ROG_AURA_COLOR2; then
+                                echo -e "  ${DIM}Press any key to return...${RESET}"
+                                read -rsn1 < /dev/tty
+                                return
+                            fi
+                            _aura_prompt_speed || return
+                            ;;
+                        rainbow-cycle|rain)
+                            # Speed only
+                            _aura_prompt_speed || return
+                            ;;
+                        rainbow-wave)
+                            # Direction + speed
+                            _aura_prompt_direction || return
+                            _aura_prompt_speed || return
+                            ;;
+                    esac
+
+                    SELECTED_ROG_AURA_EFFECT="$selected_effect"
+                    clear
+                    echo
+                    echo -e "  ${BOLD}Aura RGB Effect${RESET}"
+                    echo
+                    echo -e "  ${CHECKED}✓${RESET}  ${selected_label} queued for apply"
+                    echo
+                    echo -e "  ${DIM}Press any key to return...${RESET}"
+                    read -rsn1 < /dev/tty
+                    return
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_aura() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Set Aura RGB: $SELECTED_ROG_AURA_EFFECT${RESET}"
+    echo
+
+    local -a cmd=(asusctl aura effect "$SELECTED_ROG_AURA_EFFECT")
+
+    case "$SELECTED_ROG_AURA_EFFECT" in
+        static|pulse|comet|flash)
+            cmd+=(-c "$SELECTED_ROG_AURA_COLOR")
+            ;;
+        highlight|laser|ripple)
+            cmd+=(-c "$SELECTED_ROG_AURA_COLOR" --speed "$SELECTED_ROG_AURA_SPEED")
+            ;;
+        breathe|stars)
+            cmd+=(--colour "$SELECTED_ROG_AURA_COLOR" --colour2 "$SELECTED_ROG_AURA_COLOR2" --speed "$SELECTED_ROG_AURA_SPEED")
+            ;;
+        rainbow-cycle|rain)
+            cmd+=(--speed "$SELECTED_ROG_AURA_SPEED")
+            ;;
+        rainbow-wave)
+            cmd+=(--direction "$SELECTED_ROG_AURA_DIRECTION" --speed "$SELECTED_ROG_AURA_SPEED")
+            ;;
+    esac
+
+    local summary_detail="$SELECTED_ROG_AURA_EFFECT"
+    [[ -n "$SELECTED_ROG_AURA_COLOR" ]] && summary_detail+=" (#${SELECTED_ROG_AURA_COLOR})"
+
+    if "${cmd[@]}" 2>/dev/null; then
+        echo -e "    ${CHECKED}✓${RESET}  Effect set to $summary_detail"
+        SUMMARY_LOG+=("✓  Aura RGB set to $summary_detail")
+    else
+        echo -e "    ${DIM}✗${RESET}  Failed to set aura effect"
+        SUMMARY_LOG+=("✗  Aura RGB -- failed to set")
+    fi
+    echo
+    echo
+}
+
+show_rog_slash_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Slash Ledbar${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local -a modes
+    mapfile -t modes < <(asusctl slash --list 2>/dev/null | tr -d '"')
+
+    if [[ ${#modes[@]} -eq 0 ]]; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Slash Ledbar${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  No Slash Ledbar detected on this device."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    # Build combined options: Enable/Disable + mode selection
+    local -a options=("Enable Slash" "Disable Slash")
+    for m in "${modes[@]}"; do
+        [[ -n "$m" ]] && options+=("Mode: $m")
+    done
+
+    local opt_cursor=0
+    local scroll_offset=0
+    local visible_rows=10
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Slash Ledbar${RESET}"
+        echo -e "  ${DIM}Configure the Slash LED bar${RESET}"
+        echo
+        echo -e "  ${DIM}Select option (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        (( opt_cursor < scroll_offset )) && scroll_offset=$opt_cursor
+        (( opt_cursor >= scroll_offset + visible_rows )) && scroll_offset=$((opt_cursor - visible_rows + 1))
+
+        for (( i=scroll_offset; i < scroll_offset + visible_rows && i < ${#options[@]}; i++ )); do
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${options[$i]}${RESET}"
+            else
+                echo -e "      ${options[$i]}"
+            fi
+        done
+
+        if (( ${#options[@]} > visible_rows )); then
+            echo -e "  ${DIM}  ($((opt_cursor+1))/${#options[@]})${RESET}"
+        fi
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#options[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    local selection="${options[$opt_cursor]}"
+                    if [[ "$selection" == "Enable Slash" ]]; then
+                        ROG_SLASH_ENABLE="enable"
+                        SELECTED_ROG_SLASH_MODE=""
+                    elif [[ "$selection" == "Disable Slash" ]]; then
+                        ROG_SLASH_ENABLE="disable"
+                        SELECTED_ROG_SLASH_MODE=""
+                    else
+                        SELECTED_ROG_SLASH_MODE="${selection#Mode: }"
+                        ROG_SLASH_ENABLE=""
+                    fi
+
+                    # Ask for brightness if enabling or setting mode
+                    if [[ "$ROG_SLASH_ENABLE" == "enable" || -n "$SELECTED_ROG_SLASH_MODE" ]]; then
+                        clear
+                        echo
+                        echo -e "  ${BOLD}Slash Brightness${RESET}"
+                        echo
+                        echo -e "  ${DIM}Enter brightness (0-255, or press Enter for default):${RESET}"
+                        echo
+                        printf "    Brightness: "
+                        local bright_input=""
+                        read -r bright_input < /dev/tty
+                        if [[ "$bright_input" =~ ^[0-9]+$ ]] && (( bright_input >= 0 && bright_input <= 255 )); then
+                            SELECTED_ROG_SLASH_BRIGHT="$bright_input"
+                        else
+                            SELECTED_ROG_SLASH_BRIGHT=""
+                        fi
+                    fi
+
+                    clear
+                    echo
+                    echo -e "  ${BOLD}Slash Ledbar${RESET}"
+                    echo
+                    echo -e "  ${CHECKED}✓${RESET}  ${selection} queued for apply"
+                    echo
+                    echo -e "  ${DIM}Press any key to return...${RESET}"
+                    read -rsn1 < /dev/tty
+                    return
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_slash() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Configure Slash Ledbar${RESET}"
+    echo
+
+    if [[ "$ROG_SLASH_ENABLE" == "enable" ]]; then
+        if asusctl slash --enable 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash Ledbar enabled"
+            SUMMARY_LOG+=("✓  Slash Ledbar enabled")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to enable Slash Ledbar"
+            SUMMARY_LOG+=("✗  Slash Ledbar -- failed to enable")
+        fi
+    elif [[ "$ROG_SLASH_ENABLE" == "disable" ]]; then
+        if asusctl slash --disable 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash Ledbar disabled"
+            SUMMARY_LOG+=("✓  Slash Ledbar disabled")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to disable Slash Ledbar"
+            SUMMARY_LOG+=("✗  Slash Ledbar -- failed to disable")
+        fi
+    fi
+
+    if [[ -n "$SELECTED_ROG_SLASH_MODE" ]]; then
+        if asusctl slash --mode "$SELECTED_ROG_SLASH_MODE" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash mode set to $SELECTED_ROG_SLASH_MODE"
+            SUMMARY_LOG+=("✓  Slash mode set to $SELECTED_ROG_SLASH_MODE")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set Slash mode"
+            SUMMARY_LOG+=("✗  Slash mode -- failed to set")
+        fi
+    fi
+
+    if [[ -n "$SELECTED_ROG_SLASH_BRIGHT" ]]; then
+        if asusctl slash -l "$SELECTED_ROG_SLASH_BRIGHT" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash brightness set to $SELECTED_ROG_SLASH_BRIGHT"
+            SUMMARY_LOG+=("✓  Slash brightness set to $SELECTED_ROG_SLASH_BRIGHT")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set Slash brightness"
+            SUMMARY_LOG+=("✗  Slash brightness -- failed to set")
+        fi
+    fi
+    echo
+    echo
+}
+
+apply_rog_armoury_toggle() {
+    local attr="$1"
+    local label="$2"
+    local value="$3"
+    local display_val="$4"
+
+    if asusctl armoury set "$attr" "$value" 2>/dev/null; then
+        echo -e "    ${CHECKED}✓${RESET}  $label set to $display_val"
+        SUMMARY_LOG+=("✓  $label set to $display_val")
+    else
+        echo -e "    ${DIM}✗${RESET}  Failed to set $label"
+        SUMMARY_LOG+=("✗  $label -- failed to set")
+    fi
+}
+
+apply_rog_hardware_toggles() {
+    local has_change=false
+    [[ "$ROG_ENABLE_FAN_CURVES" == true || "$ROG_DISABLE_FAN_CURVES" == true ]] && has_change=true
+    [[ "$ROG_ENABLE_BOOT_SOUND" == true || "$ROG_DISABLE_BOOT_SOUND" == true ]] && has_change=true
+    [[ "$ROG_ENABLE_PANEL_OD" == true || "$ROG_DISABLE_PANEL_OD" == true ]] && has_change=true
+    [[ "$ROG_ENABLE_DGPU" == true || "$ROG_DISABLE_DGPU" == true ]] && has_change=true
+    [[ "$ROG_DGPU_MUX" == true || "$ROG_HYBRID_MUX" == true ]] && has_change=true
+    [[ "$ROG_ENABLE_ANIME" == true || "$ROG_DISABLE_ANIME" == true ]] && has_change=true
+
+    [[ "$has_change" != true ]] && return
+
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  ROG Hardware Settings${RESET}"
+    echo
+
+    if [[ "$ROG_ENABLE_BOOT_SOUND" == true ]]; then
+        apply_rog_armoury_toggle "boot_sound" "Boot sound" "1" "enabled"
+    fi
+    if [[ "$ROG_DISABLE_BOOT_SOUND" == true ]]; then
+        apply_rog_armoury_toggle "boot_sound" "Boot sound" "0" "disabled"
+    fi
+
+    if [[ "$ROG_ENABLE_PANEL_OD" == true ]]; then
+        apply_rog_armoury_toggle "panel_overdrive" "Panel overdrive" "1" "enabled"
+    fi
+    if [[ "$ROG_DISABLE_PANEL_OD" == true ]]; then
+        apply_rog_armoury_toggle "panel_overdrive" "Panel overdrive" "0" "disabled"
+    fi
+
+    if [[ "$ROG_ENABLE_DGPU" == true ]]; then
+        apply_rog_armoury_toggle "dgpu_disable" "Discrete GPU" "0" "enabled"
+    fi
+    if [[ "$ROG_DISABLE_DGPU" == true ]]; then
+        apply_rog_armoury_toggle "dgpu_disable" "Discrete GPU" "1" "disabled"
+    fi
+
+    if [[ "$ROG_DGPU_MUX" == true ]]; then
+        apply_rog_armoury_toggle "gpu_mux_mode" "GPU MUX" "0" "dGPU direct (reboot required)"
+    fi
+    if [[ "$ROG_HYBRID_MUX" == true ]]; then
+        apply_rog_armoury_toggle "gpu_mux_mode" "GPU MUX" "1" "hybrid"
+    fi
+
+    if [[ "$ROG_ENABLE_FAN_CURVES" == true ]]; then
+        local profile
+        profile=$(asusctl profile get 2>/dev/null | head -1 | sed 's/Active profile: //')
+        if asusctl fan-curve --enable-fan-curves true --mod-profile "$profile" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Fan curves enabled for $profile"
+            SUMMARY_LOG+=("✓  Fan curves enabled for $profile")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to enable fan curves"
+            SUMMARY_LOG+=("✗  Fan curves -- failed to enable")
+        fi
+    fi
+    if [[ "$ROG_DISABLE_FAN_CURVES" == true ]]; then
+        local profile
+        profile=$(asusctl profile get 2>/dev/null | head -1 | sed 's/Active profile: //')
+        if asusctl fan-curve --enable-fan-curves false --mod-profile "$profile" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Fan curves disabled for $profile"
+            SUMMARY_LOG+=("✓  Fan curves disabled for $profile")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to disable fan curves"
+            SUMMARY_LOG+=("✗  Fan curves -- failed to disable")
+        fi
+    fi
+
+    if [[ "$ROG_ENABLE_ANIME" == true ]]; then
+        if asusctl anime --enable-display true 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  AniMe Matrix enabled"
+            SUMMARY_LOG+=("✓  AniMe Matrix enabled")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to enable AniMe Matrix"
+            SUMMARY_LOG+=("✗  AniMe Matrix -- failed to enable")
+        fi
+    fi
+    if [[ "$ROG_DISABLE_ANIME" == true ]]; then
+        if asusctl anime --enable-display false 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  AniMe Matrix disabled"
+            SUMMARY_LOG+=("✓  AniMe Matrix disabled")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to disable AniMe Matrix"
+            SUMMARY_LOG+=("✗  AniMe Matrix -- failed to disable")
+        fi
+    fi
+
+    echo
+    echo
+}
+
 bind_shutdown() {
     clear
     echo
@@ -5123,6 +5903,9 @@ declare -a CATEGORIES=(
     "  Decoration"
     "  Input"
     "  Gestures"
+    "--- ROG ---"
+    "  Hardware"
+    "  Lighting"
     "--- Install ---"
     "  Extra Themes"
 )
@@ -5194,6 +5977,22 @@ declare -a KEYBOARD_ITEMS=(
 declare -a UTILITIES_ITEMS=(
     "backup_config|Backup config|[Select]||action|Create a backup of your Omarchy configuration"
     "menu_shortcut|Menu shortcut|Add|Remove|toggle|Add A La Carchy to the Omarchy menu"
+)
+
+declare -a ROG_HARDWARE_ITEMS=(
+    "rog_profile|Platform profile|[Open]||action|Set ASUS performance profile (Quiet/Balanced/Performance)"
+    "rog_fan_curves|Fan curves|Enable|Disable|toggle|Enable custom fan curves for the active profile"
+    "rog_boot_sound|Boot sound|Enable|Disable|toggle|Play the POST boot sound on startup"
+    "rog_panel_od|Panel overdrive|Enable|Disable|toggle|Reduce display ghosting with panel overdrive"
+    "rog_dgpu|Discrete GPU|Enable|Disable|toggle|Enable or disable the dedicated NVIDIA GPU"
+    "rog_gpu_mux|GPU MUX|dGPU|Hybrid|radio|Direct display to dGPU or hybrid mode (reboot required)"
+)
+
+declare -a ROG_LIGHTING_ITEMS=(
+    "rog_kbd_leds|Keyboard LEDs|[Open]||action|Set keyboard backlight brightness (off/low/med/high)"
+    "rog_aura|Aura RGB effect|[Open]||action|Set keyboard RGB lighting effect and color"
+    "rog_slash|Slash Ledbar|[Open]||action|Configure the Slash LED bar animations"
+    "rog_anime|AniMe Matrix|Enable|Disable|toggle|Enable or disable the AniMe Matrix display"
 )
 
 # Extra themes: each entry is "Display Name|github_url"
@@ -5539,7 +6338,9 @@ get_category_items() {
         13) echo "HYPR_DECORATION" ;;
         14) echo "HYPR_INPUT" ;;
         15) echo "HYPR_GESTURES" ;;
-        17) echo "EXTRA_THEMES" ;;
+        17) echo "ROG_HARDWARE" ;;
+        18) echo "ROG_LIGHTING" ;;
+        20) echo "EXTRA_THEMES" ;;
     esac
 }
 
@@ -5547,7 +6348,7 @@ get_category_items() {
 get_current_item_count() {
     # Section headers (0, 3, 11, 15) return 0
     case $CATEGORY_CURSOR in
-        0|3|11|16) echo 0 ;;
+        0|3|11|16|19) echo 0 ;;
         1) echo ${#INSTALLED_PACKAGES[@]} ;;
         2) echo ${#INSTALLED_WEBAPPS[@]} ;;
         4) echo ${#KEYBINDINGS_ITEMS[@]} ;;
@@ -5561,7 +6362,9 @@ get_current_item_count() {
         13) echo ${#HYPR_DECORATION_ITEMS[@]} ;;
         14) echo ${#HYPR_INPUT_ITEMS[@]} ;;
         15) echo ${#HYPR_GESTURES_ITEMS[@]} ;;
-        17) echo ${#EXTRA_THEMES[@]} ;;
+        17) echo ${#ROG_HARDWARE_ITEMS[@]} ;;
+        18) echo ${#ROG_LIGHTING_ITEMS[@]} ;;
+        20) echo ${#EXTRA_THEMES[@]} ;;
     esac
 }
 
@@ -5636,7 +6439,17 @@ get_current_description() {
             parse_hypr_item "${hypr_ref[$ITEM_CURSOR]}"
             echo "$HYPR_DESC"
             ;;
-        17) # Extra Themes
+        17|18)  # ROG items (mixed: toggle + action)
+            local rog_arr
+            case $CATEGORY_CURSOR in
+                17) rog_arr="ROG_HARDWARE_ITEMS" ;;
+                18) rog_arr="ROG_LIGHTING_ITEMS" ;;
+            esac
+            local -n rog_ref="$rog_arr"
+            parse_toggle_item "${rog_ref[$ITEM_CURSOR]}"
+            echo "$TOGGLE_DESC"
+            ;;
+        20) # Extra Themes
             local entry="${EXTRA_THEMES[$ITEM_CURSOR]}"
             local theme_url="${entry#*|}"
             local repo_name="${theme_url##*/}"
@@ -5855,7 +6668,36 @@ draw_interface() {
                         fi
                         R=$(printf " %-24s %s" "$HYPR_LABEL" "$h_val")
                     fi ;;
-                17) local entry="${EXTRA_THEMES[$idx]}"
+                17|18)  # ROG items (mixed: toggle + action)
+                    local rog_arr
+                    case $CATEGORY_CURSOR in
+                        17) rog_arr="ROG_HARDWARE_ITEMS" ;;
+                        18) rog_arr="ROG_LIGHTING_ITEMS" ;;
+                    esac
+                    local -n rog_ref="$rog_arr"
+                    parse_toggle_item "${rog_ref[$idx]}"
+                    if [ "$TOGGLE_TYPE" = "action" ]; then
+                        local rog_suffix=""
+                        if [[ "$TOGGLE_ID" == "rog_profile" && -n "$SELECTED_ROG_PROFILE" ]]; then
+                            rog_suffix="$SELECTED_ROG_PROFILE"
+                        elif [[ "$TOGGLE_ID" == "rog_kbd_leds" && -n "$SELECTED_ROG_KBD_LEDS" ]]; then
+                            rog_suffix="$SELECTED_ROG_KBD_LEDS"
+                        elif [[ "$TOGGLE_ID" == "rog_aura" && -n "$SELECTED_ROG_AURA_EFFECT" ]]; then
+                            rog_suffix="$SELECTED_ROG_AURA_EFFECT"
+                        elif [[ "$TOGGLE_ID" == "rog_slash" && -n "$ROG_SLASH_ENABLE" ]]; then
+                            rog_suffix="$ROG_SLASH_ENABLE"
+                        elif [[ "$TOGGLE_ID" == "rog_slash" && -n "$SELECTED_ROG_SLASH_MODE" ]]; then
+                            rog_suffix="$SELECTED_ROG_SLASH_MODE"
+                        fi
+                        if [[ -n "$rog_suffix" ]]; then
+                            R=$(printf " %-24s %s" "$TOGGLE_NAME" "$rog_suffix")
+                        else
+                            R=" $TOGGLE_NAME"
+                        fi
+                    else
+                        R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
+                    fi ;;
+                20) local entry="${EXTRA_THEMES[$idx]}"
                     local tname="${entry%%|*}"
                     local turl="${entry#*|}"
                     local tdir
@@ -5903,9 +6745,9 @@ draw_interface() {
 
     # Footer (each line exactly 80 chars, ASCII only)
     printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
-    if [ $CATEGORY_CURSOR -eq 17 ]; then
+    if [ $CATEGORY_CURSOR -eq 20 ]; then
         printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit          │"
-    elif [ $CATEGORY_CURSOR -eq 5 ] || [ $CATEGORY_CURSOR -eq 6 ] || [ $CATEGORY_CURSOR -eq 7 ] || [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ]; then
+    elif [ $CATEGORY_CURSOR -eq 5 ] || [ $CATEGORY_CURSOR -eq 6 ] || [ $CATEGORY_CURSOR -eq 7 ] || [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ] || [ $CATEGORY_CURSOR -eq 17 ] || [ $CATEGORY_CURSOR -eq 18 ]; then
         printf '%s\n' "│          Arrows:Navigate  Space:Edit  R:Reset  Enter:Confirm  Q:Quit         │"
     else
         printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
@@ -6033,7 +6875,7 @@ handle_input() {
             return 1
             ;;
         'a'|'A')  # Select all / deselect all (Extra Themes only)
-            if [ $CATEGORY_CURSOR -eq 17 ]; then
+            if [ $CATEGORY_CURSOR -eq 20 ]; then
                 toggle_all_themes
             fi
             ;;
@@ -6239,7 +7081,46 @@ toggle_current_item() {
             tput civis
             stty -echo 2>/dev/null
             ;;
-        17) # Extra Themes (simple toggle)
+        17|18)  # ROG items (mixed: toggle + action)
+            local rog_arr
+            case $CATEGORY_CURSOR in
+                17) rog_arr="ROG_HARDWARE_ITEMS" ;;
+                18) rog_arr="ROG_LIGHTING_ITEMS" ;;
+            esac
+            local -n rog_items="$rog_arr"
+            local item="${rog_items[$ITEM_CURSOR]}"
+            parse_toggle_item "$item"
+            local cur="${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}"
+            if [ "$TOGGLE_TYPE" = "action" ]; then
+                stty echo 2>/dev/null
+                tput cnorm
+                case "$TOGGLE_ID" in
+                    rog_profile) show_rog_profile_dialog ;;
+                    rog_kbd_leds) show_rog_kbd_leds_dialog ;;
+                    rog_aura) show_rog_aura_dialog ;;
+                    rog_slash) show_rog_slash_dialog ;;
+                esac
+                tput civis
+                stty -echo 2>/dev/null
+            elif [ "$TOGGLE_TYPE" = "toggle" ]; then
+                if [ "$cur" -eq 0 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+                elif [ "$cur" -eq 1 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=2
+                else
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                fi
+            else
+                if [ "$cur" -eq 0 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+                elif [ "$cur" -eq 1 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=2
+                else
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                fi
+            fi
+            ;;
+        20) # Extra Themes (simple toggle)
             local entry="${EXTRA_THEMES[$ITEM_CURSOR]}"
             local tname="${entry%%|*}"
             local cur="${THEME_SELECTIONS[$tname]:-0}"
@@ -6492,6 +7373,54 @@ case "${TOGGLE_SELECTIONS[menu_shortcut]:-0}" in
     2) REMOVE_MENU_SHORTCUT=true ;;
 esac
 
+# rog_fan_curves: 1=Enable, 2=Disable
+ROG_ENABLE_FAN_CURVES=false
+ROG_DISABLE_FAN_CURVES=false
+case "${TOGGLE_SELECTIONS[rog_fan_curves]:-0}" in
+    1) ROG_ENABLE_FAN_CURVES=true ;;
+    2) ROG_DISABLE_FAN_CURVES=true ;;
+esac
+
+# rog_boot_sound: 1=Enable, 2=Disable
+ROG_ENABLE_BOOT_SOUND=false
+ROG_DISABLE_BOOT_SOUND=false
+case "${TOGGLE_SELECTIONS[rog_boot_sound]:-0}" in
+    1) ROG_ENABLE_BOOT_SOUND=true ;;
+    2) ROG_DISABLE_BOOT_SOUND=true ;;
+esac
+
+# rog_panel_od: 1=Enable, 2=Disable
+ROG_ENABLE_PANEL_OD=false
+ROG_DISABLE_PANEL_OD=false
+case "${TOGGLE_SELECTIONS[rog_panel_od]:-0}" in
+    1) ROG_ENABLE_PANEL_OD=true ;;
+    2) ROG_DISABLE_PANEL_OD=true ;;
+esac
+
+# rog_dgpu: 1=Enable, 2=Disable
+ROG_ENABLE_DGPU=false
+ROG_DISABLE_DGPU=false
+case "${TOGGLE_SELECTIONS[rog_dgpu]:-0}" in
+    1) ROG_ENABLE_DGPU=true ;;
+    2) ROG_DISABLE_DGPU=true ;;
+esac
+
+# rog_gpu_mux: 1=dGPU, 2=Hybrid
+ROG_DGPU_MUX=false
+ROG_HYBRID_MUX=false
+case "${TOGGLE_SELECTIONS[rog_gpu_mux]:-0}" in
+    1) ROG_DGPU_MUX=true ;;
+    2) ROG_HYBRID_MUX=true ;;
+esac
+
+# rog_anime: 1=Enable, 2=Disable
+ROG_ENABLE_ANIME=false
+ROG_DISABLE_ANIME=false
+case "${TOGGLE_SELECTIONS[rog_anime]:-0}" in
+    1) ROG_ENABLE_ANIME=true ;;
+    2) ROG_DISABLE_ANIME=true ;;
+esac
+
 # Check if anything was selected
 has_selection=false
 if [ ${#SELECTED_PACKAGES_FINAL[@]} -gt 0 ] || [ ${#SELECTED_WEBAPPS_FINAL[@]} -gt 0 ] || [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ]; then
@@ -6519,6 +7448,18 @@ if [[ -n "$SELECTED_BATTERY_LIMIT" ]]; then
     has_selection=true
 fi
 if [[ -n "$SELECTED_PRIMARY_MONITOR" ]]; then
+    has_selection=true
+fi
+if [[ -n "$SELECTED_ROG_PROFILE" ]]; then
+    has_selection=true
+fi
+if [[ -n "$SELECTED_ROG_KBD_LEDS" ]]; then
+    has_selection=true
+fi
+if [[ -n "$SELECTED_ROG_AURA_EFFECT" ]]; then
+    has_selection=true
+fi
+if [[ -n "$ROG_SLASH_ENABLE" || -n "$SELECTED_ROG_SLASH_MODE" ]]; then
     has_selection=true
 fi
 
@@ -6609,6 +7550,23 @@ declare -a ACTION_SUMMARY=()
 [[ -n "$SELECTED_POWER_PROFILE" ]] && ACTION_SUMMARY+=("Set power profile: $SELECTED_POWER_PROFILE")
 [[ -n "$SELECTED_BATTERY_LIMIT" ]] && ACTION_SUMMARY+=("Set battery limit: ${SELECTED_BATTERY_LIMIT}%")
 [[ -n "$SELECTED_PRIMARY_MONITOR" ]] && ACTION_SUMMARY+=("Set primary monitor: $SELECTED_PRIMARY_MONITOR")
+[[ -n "$SELECTED_ROG_PROFILE" ]] && ACTION_SUMMARY+=("Set ROG profile: $SELECTED_ROG_PROFILE")
+[[ -n "$SELECTED_ROG_KBD_LEDS" ]] && ACTION_SUMMARY+=("Set keyboard LEDs: $SELECTED_ROG_KBD_LEDS")
+[[ -n "$SELECTED_ROG_AURA_EFFECT" ]] && ACTION_SUMMARY+=("Set Aura RGB: $SELECTED_ROG_AURA_EFFECT")
+[[ -n "$ROG_SLASH_ENABLE" ]] && ACTION_SUMMARY+=("${ROG_SLASH_ENABLE^} Slash Ledbar")
+[[ -n "$SELECTED_ROG_SLASH_MODE" ]] && ACTION_SUMMARY+=("Set Slash mode: $SELECTED_ROG_SLASH_MODE")
+[ "$ROG_ENABLE_FAN_CURVES" = true ] && ACTION_SUMMARY+=("Enable fan curves")
+[ "$ROG_DISABLE_FAN_CURVES" = true ] && ACTION_SUMMARY+=("Disable fan curves")
+[ "$ROG_ENABLE_BOOT_SOUND" = true ] && ACTION_SUMMARY+=("Enable boot sound")
+[ "$ROG_DISABLE_BOOT_SOUND" = true ] && ACTION_SUMMARY+=("Disable boot sound")
+[ "$ROG_ENABLE_PANEL_OD" = true ] && ACTION_SUMMARY+=("Enable panel overdrive")
+[ "$ROG_DISABLE_PANEL_OD" = true ] && ACTION_SUMMARY+=("Disable panel overdrive")
+[ "$ROG_ENABLE_DGPU" = true ] && ACTION_SUMMARY+=("Enable discrete GPU")
+[ "$ROG_DISABLE_DGPU" = true ] && ACTION_SUMMARY+=("Disable discrete GPU")
+[ "$ROG_DGPU_MUX" = true ] && ACTION_SUMMARY+=("Set GPU MUX to dGPU direct")
+[ "$ROG_HYBRID_MUX" = true ] && ACTION_SUMMARY+=("Set GPU MUX to hybrid")
+[ "$ROG_ENABLE_ANIME" = true ] && ACTION_SUMMARY+=("Enable AniMe Matrix")
+[ "$ROG_DISABLE_ANIME" = true ] && ACTION_SUMMARY+=("Disable AniMe Matrix")
 [ "$ENABLE_SUSPEND" = true ] && ACTION_SUMMARY+=("Enable suspend")
 [ "$DISABLE_SUSPEND" = true ] && ACTION_SUMMARY+=("Disable suspend")
 [ "$ENABLE_HIBERNATION" = true ] && ACTION_SUMMARY+=("Enable hibernation")
@@ -6709,6 +7667,24 @@ fi
 if [[ -n "$SELECTED_PRIMARY_MONITOR" ]]; then
     apply_primary_monitor
 fi
+
+if [[ -n "$SELECTED_ROG_PROFILE" ]]; then
+    apply_rog_profile
+fi
+
+if [[ -n "$SELECTED_ROG_KBD_LEDS" ]]; then
+    apply_rog_kbd_leds
+fi
+
+if [[ -n "$SELECTED_ROG_AURA_EFFECT" ]]; then
+    apply_rog_aura
+fi
+
+if [[ -n "$ROG_SLASH_ENABLE" || -n "$SELECTED_ROG_SLASH_MODE" ]]; then
+    apply_rog_slash
+fi
+
+apply_rog_hardware_toggles
 
 if [ "$BIND_SHUTDOWN" = true ]; then
     bind_shutdown

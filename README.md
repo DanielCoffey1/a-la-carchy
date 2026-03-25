@@ -16,6 +16,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
 - **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
 - **Multi-monitor management** with detection, positioning, primary monitor, and laptop auto-off
+- **ASUS ROG hardware control** via asusctl (platform profiles, Aura RGB, Slash Ledbar, fan curves, GPU MUX, and more)
 - **27 configuration tweaks** for keybindings, display, system, appearance, keyboard, and utilities
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
@@ -53,6 +54,7 @@ chmod +x a-la-carchy.sh
 - `socat` or `nc` for real-time monitor plug/unplug events (falls back to polling if unavailable)
 - `power-profiles-daemon` for power profile management (optional, shows error if unavailable)
 - Battery with kernel `charge_control_end_threshold` support for battery charge limit (optional, shows error if unavailable)
+- `asusctl` for ASUS ROG hardware control (optional, shows error if unavailable)
 - No other external dependencies - works out of the box!
 
 ## How to Use
@@ -443,6 +445,90 @@ When a battery charge limit is set (any value other than 100%), the Omarchy powe
 |-------|------|-------------|
 | Backup config | action | Create a timestamped backup of your Omarchy configuration |
 | Menu shortcut | toggle | Add or remove A La Carchy from the Omarchy launcher menu |
+
+### ROG Hardware Control
+
+Full ASUS ROG laptop control via `asusctl`, organized into two subcategories. Requires `asusctl` (part of the `asusctl` package). If not installed, dialogs show a graceful error message.
+
+#### ROG Hardware
+
+| Tweak | Type | Description |
+|-------|------|-------------|
+| Platform profile | action | Set ASUS performance profile (Quiet/Balanced/Performance) via `asusctl profile set` |
+| Fan curves | toggle | Enable or disable custom fan curves for the active profile |
+| Boot sound | toggle | Enable or disable the POST boot sound via firmware attributes |
+| Panel overdrive | toggle | Reduce display ghosting with panel overdrive (may increase power use) |
+| Discrete GPU | toggle | Enable or disable the dedicated NVIDIA GPU |
+| GPU MUX | radio | Switch between dGPU direct and hybrid mode (reboot required) |
+
+##### Platform Profile
+
+Press Space on "Platform profile" to open an arrow-key selection dialog with three options:
+
+- **Quiet** — reduced fan noise and lower performance
+- **Balanced** — default profile balancing performance and thermals
+- **Performance** — maximum performance with higher fan speeds
+
+The dialog marks the currently active profile with `(active)`. On confirm, the profile is applied immediately via `asusctl profile set`.
+
+##### Firmware Attributes
+
+Boot sound, panel overdrive, discrete GPU, and GPU MUX are controlled via `asusctl armoury set` which writes directly to ASUS firmware attributes. Changes take effect immediately (GPU MUX requires a reboot). Fan curves are toggled via `asusctl fan-curve --enable-fan-curves` for the active performance profile.
+
+#### ROG Lighting
+
+| Tweak | Type | Description |
+|-------|------|-------------|
+| Keyboard LEDs | action | Set keyboard backlight brightness (off/low/med/high) |
+| Aura RGB effect | action | Set keyboard RGB lighting effect and color |
+| Slash Ledbar | action | Configure the Slash LED bar animations and triggers |
+| AniMe Matrix | toggle | Enable or disable the AniMe Matrix display |
+
+##### Keyboard LEDs
+
+Press Space to open a brightness selection dialog with four levels: Off, Low, Medium, High. Applied via `asusctl leds set`.
+
+##### Aura RGB Effect
+
+Press Space to open a two-step dialog:
+
+1. **Select effect** — choose from 12 RGB effects:
+
+| Effect | Parameters |
+|--------|-----------|
+| Static | Color |
+| Breathe | Two colors + speed |
+| Rainbow Cycle | Speed |
+| Rainbow Wave | Direction + speed |
+| Stars | Two colors + speed |
+| Rain | Speed |
+| Highlight | Color + speed |
+| Laser | Color + speed |
+| Ripple | Color + speed |
+| Pulse | Color |
+| Comet | Color |
+| Flash | Color |
+
+2. **Configure parameters** — based on the selected effect, the dialog prompts for the required inputs:
+   - **Color** — enter a 6-digit hex value (e.g. `ff0000` for red)
+   - **Speed** — arrow-key selection: Low, Medium, High
+   - **Direction** — arrow-key selection: Up, Down, Left, Right (Rainbow Wave only)
+   - **Two-color effects** (Breathe, Stars) prompt for both primary and secondary colors
+
+Applied via `asusctl aura effect <type>` with the appropriate flags (`-c`, `--colour`, `--colour2`, `--speed`, `--direction`).
+
+##### Slash Ledbar
+
+Press Space to open a dialog with options to:
+- **Enable/Disable** the Slash LED bar
+- **Select animation mode** from 16 available animations (Static, Bounce, Slash, Loading, BitStream, Transmission, Flow, Flux, Phantom, Spectrum, Hazard, Interfacing, Ramp, GameOver, Start, Buzzer)
+- **Set brightness** (0-255) when enabling or changing mode
+
+Applied via `asusctl slash --enable/--disable`, `--mode`, and `-l` flags.
+
+##### AniMe Matrix
+
+Toggle to enable or disable the AniMe Matrix LED display on the laptop lid. Applied via `asusctl anime --enable-display true/false`.
 
 ### Extra Themes
 
