@@ -532,7 +532,7 @@ Toggle to enable or disable the AniMe Matrix LED display on the laptop lid. Appl
 
 ### Extra Themes
 
-Browse and install 103 community-made themes directly from the TUI. Themes are sourced from the [Omarchy Extra Themes](https://learn.omacom.io/2/the-omarchy-manual/90/extra-themes) directory and installed via `omarchy-theme-install`.
+Browse and install 252 community-made themes directly from the TUI. Themes are sourced from the [Omarchy Extra Themes](https://learn.omacom.io/2/the-omarchy-manual/90/extra-themes) directory and installed via `omarchy-theme-install`.
 
 - Already-installed themes are marked with `(installed)` and skipped during installation
 - The last theme installed becomes the active theme
@@ -541,113 +541,262 @@ Browse and install 103 community-made themes directly from the TUI. Themes are s
 - Themes that require GitHub authentication are automatically skipped after a timeout
 
 <details>
-<summary>Available themes (103)</summary>
+<summary>Available themes (252)</summary>
 
 | Theme | Repository |
 |-------|------------|
+| Aamis | vyrx-dev/omarchy-aamis-theme |
+| Ado | errantProgrammer/omarchy-ado-theme |
+| Adrift | jaredb1011/omarchy-adrift-theme |
 | Aetheria | JJDizz1L/aetheria |
+| Agentuity | rblalock/omarchy-agentuity.theme |
+| Akaito | stannorbvb-cmd/akaito |
+| Akane | Grenish/omarchy-akane-theme |
 | All Hallow's Eve | guilhermetk/omarchy-all-hallows-eve-theme |
 | Amberbyte | tahfizhabib/omarchy-amberbyte-theme |
+| Amekoji | atif-1402/omarchy-amekoji-theme |
+| Anonymous | j4v3l/omarchy-anonymous-theme |
+| Apocalypse | atif-1402/omarchy-apocalypse-theme |
 | Arc Blueberry | vale-c/omarchy-arc-blueberry |
+| Arc Raiders | rondilley/omarchy-arc_raiders-theme |
+| ArchRiot | CyphrRiot/omarchy-archriot-theme |
 | Archwave | davidguttman/archwave |
 | Artzen | tahfizhabib/omarchy-artzen-theme |
-| Atelier | atif-1402/omarchy-atelier-theme |
 | Ash | bjarneo/omarchy-ash-theme |
+| Astrochy | Nanjiifr/omarchy-astrochy-theme |
+| Astrodark | JamsMendez/omarchy-astrodark-theme |
+| Atari | atif-1402/omarchy-atari-theme |
+| Atelier | atif-1402/omarchy-atelier-theme |
 | Aura | bjarneo/omarchy-aura-theme |
+| Aureth | atif-1402/omarchy-aureth-theme |
 | Ayaka | abhijeet-swami/omarchy-ayaka-theme |
+| Ayu Dark | fdidron/omarchy-ayu-dark-theme |
+| Ayu Light | fdidron/omarchy-ayu-light-theme |
+| Ayu Mirage | fdidron/omarchy-ayu-mirage-theme |
+| Azure | tahfizhabib/omarchy-azure-theme |
 | Azure Glow | Hydradevx/omarchy-azure-glow-theme |
+| Bad Hand | bjornramberg/omarchy-bad-hand-theme |
+| Batman | OldJobobo/omarchy-batman-theme |
 | Batou | HANCORE-linux/omarchy-batou-theme |
 | Bauhaus | somerocketeer/omarchy-bauhaus-theme |
+| BeachVan | haripako/omarchy-BeachVan-theme |
+| Beta | jjdizz1l/beta |
 | Biscuit de Mar Dark | OldJobobo/omarchy-biscuit-de-mar-dark-theme |
 | Black Arch | ankur311sudo/black_arch |
 | Black Gold | HANCORE-linux/omarchy-blackgold-theme |
+| Black Money | HANCORE-linux/omarchy-blackmoney-theme |
 | Black Turq | HANCORE-linux/omarchy-blackturq-theme |
+| Blackwall | rlind3r/omarchy-blackwall-theme |
 | Bliss | mishonki3/omarchy-bliss-theme |
 | Blue Ridge Dark | hipsterusername/omarchy-blueridge-dark-theme |
 | bluedotrb | dotsilva/omarchy-bluedotrb-theme |
+| Boring | geohot/omarchy-boring-theme |
+| Brutalism | bjornramberg/omarchy-brutalism-theme |
+| C64 | scar45/omarchy-c64-theme |
+| Caroline Skyline | OldJobobo/omarchy-caroline-skyline-theme |
+| Catppu Mocha | ankur311sudo/Catppu_Mocha |
+| Catppuccin Mocha | KidDogDad/omarchy-catppuccin-mocha-theme |
 | Catppuccin Mocha Dark | Luquatic/omarchy-catppuccin-dark |
+| Cattpuccin Glass | Luquatic/omarchy-catppuccin-glass |
 | Citrus Cynapse | Grey-007/citrus-cynapse |
 | City-783 | OldJobobo/omarchy-city-783-theme |
 | Cobalt2 | hoblin/omarchy-cobalt2-theme |
+| Colored Darkness | Palccod/colored-darkness |
+| Copper Night | hembramnishant50-glitch/omarchy-coppernight-theme |
+| Corporate | defer/omarchy-corporate-theme |
+| Covenant | dotsilva/omarchy-covenant-theme |
 | CpUnk | stannorbvb-cmd/cpunk |
+| Crimson | tahfizhabib/omarchy-crimson-theme |
+| Crimson Gold | knappkevin/omarchy-crimson-gold-theme |
+| Cyberpunk Cyan | Matcraft94/cyberpunk-cyan |
 | Darcula | noahljungberg/omarchy-darcula-theme |
+| Dark XP | ITSZXY/dark-xp-omarchy |
+| Dayfox | defer/omarchy-dayfox-theme |
+| Deadspace | atif-1402/omarchy-deadspace-theme |
+| Deckard | OldJobobo/omarchy-deckard-theme |
+| DeLorean | jbnunn/omarchy-delorean-theme |
 | Demon | HANCORE-linux/omarchy-demon-theme |
+| Desert Twilight | avis3nna/desert-twilight |
 | Dotrb | dotsilva/omarchy-dotrb-theme |
 | Drac | ShehabShaef/omarchy-drac-theme |
 | Dracula | catlee/omarchy-dracula-theme |
+| Dracula Official | dracula/omarchy |
+| Dragon | thatmechguy/omarchy-dragon-theme |
+| Dragon Frost | Grey-007/dragon-frost |
+| Dreamwave | RiO7MAKK3R/omarchy-dreamwave-theme |
+| Duskwire | Grey-007/duskwire |
+| Dustyfog | atif-1402/omarchy-dustyfog-theme |
 | Eldritch | eldritch-theme/omarchy |
+| Eldritch Official | eldritch-theme/omarchy-eldritch-theme |
+| Elysian | bjarneo/omarchy-elysian-theme |
+| Ember n Ash | Hydradevx/omarchy-ember-n-ash-theme |
+| Eva-01 | Ludurn/omarchy-eva01-theme |
 | Event Horizon | OldJobobo/omarchy-event-horizon-theme |
+| Everblush | Swarnim114/omarchy-everblush-theme |
 | Evergarden | celsobenedetti/omarchy-evergarden |
+| Farline | atif-1402/omarchy-farline-theme |
 | Felix | TyRichards/omarchy-felix-theme |
+| Fenrir | imbypass/omarchy-fenrir-theme |
+| Fiery Ocean | bjarneo/omarchy-fiery-ocean-theme |
 | Fireside | bjarneo/omarchy-fireside-theme |
+| Firesky | bjarneo/omarchy-firesky-theme |
 | Flat Dracula | OldJobobo/omarchy-flat-dracula-theme |
 | Flexoki Dark | euandeas/omarchy-flexoki-dark-theme |
+| Florida Man | OldJobobo/omarchy-florida-man-theme |
+| Fluid Glass | ripple0328/omarchy-fluid-glass-theme |
 | Forest Green | abhijeet-swami/omarchy-forest-green-theme |
 | Frost | bjarneo/omarchy-frost-theme |
 | Futurism | bjarneo/omarchy-futurism-theme |
 | Ghost Pastel | row-huh/omarchy-ghost-pastel-theme |
+| Glory Antic | clement-rtfm/glory-antic |
 | Gold Rush | tahayvr/omarchy-gold-rush-theme |
+| Gotham City | JustArmaan/omarchy-gotham-city-theme |
+| Greek Noir | HANCORE-linux/omarchy-greek-noir-theme |
+| Green City | zillamtt/omarchy-green-city |
 | Green Garden | kalk-ak/omarchy-green-garden-theme |
 | Green Hakkar | joaquinmeza/omarchy-hakker-green-theme |
+| Grimdark Solarized | OldJobobo/omarchy-grimdark-solarized-theme |
+| Gruber Darker | celsobenedetti/omarchy-gruber-darker |
+| Gruber Tsoding | davide-ferrara/omarchy-gruberdark-tsoding-theme |
+| Grudark | zillamtt/omarchy-grudark |
 | Gruvu | ankur311sudo/gruvu |
+| Gruvy Glass | signaldirective/gruvy-glass |
+| GTA | jordan-ops/omarchy-GTA-theme |
+| Hakkar Green | JonasAllenCodes/omarchy-hakkar-green-better-contrast-theme |
 | Harbor | HANCORE-linux/omarchy-harbor-theme |
 | Harbor Dark | HANCORE-linux/omarchy-harbordark-theme |
+| Hex | OldJobobo/omarchy-hex-theme |
+| Himalaya | rondilley/omarchy-himalaya-theme |
 | Hinterlands | OldJobobo/omarchy-hinterlands-theme |
+| Hollow Knight | bjarneo/omarchy-hollow-knight-theme |
+| Hydra Pressure | monoooki/omarchy-hydra-pressure-theme |
+| HyprBlue | Grey-007/hyprblue |
+| IBM | DimaZbr/omarchy-ibm-theme |
 | Infernium | RiO7MAKK3R/omarchy-infernium-dark-theme |
+| Infernium Light | RiO7MAKK3R/omarchy-infernium-theme |
+| InkyPinky | HANCORE-linux/omarchy-inkypinky-theme |
+| Kawasaki Foundry | komagata/omarchy-kawasaki-foundry-theme |
+| Kimiko | krymzonn/omarchy-kimiko-theme |
+| Koda | celsobenedetti/omarchy-koda |
+| Koyanagi | YutaKoyanagi10/omarchy-koyanagi-theme |
+| Krishna | tanishenigma/omarchy-krishna-theme |
+| Kurayami | bjornramberg/omarchy-kurayami-theme |
+| Kurumi | borgox/omarchy-kurumi-theme |
+| lain | ITSZXY/lain-omarchy |
+| Lairetam | chrisintheshell/omarchy-lairetam-theme |
 | Last Horizon | HANCORE-linux/omarchy-lasthorizon-theme |
+| Latch | atif-1402/omarchy-latch-theme |
+| Latchdark | atif-1402/omarchy-latchdark-theme |
+| Lilly | JJDizz1L/lilly |
+| Lowlight | atif-1402/omarchy-lowlight-theme |
+| Lumon | OldJobobo/omarchy-lumon-theme |
+| Lunar | pdfosborne/omarchy-lunar-theme |
+| Mac Transparent | notzeman/Omarchy-Mac-Transparent-theme |
+| Manga | atif-1402/omarchy-manga-theme |
 | Map Quest | ItsABigIgloo/omarchy-mapquest-theme |
 | Mars | steve-lohmeyer/omarchy-mars-theme |
 | Mechanoonna | HANCORE-linux/omarchy-mechanoonna-theme |
+| Memento Mori | hipsterusername/omarchy-memento-mori-theme |
 | Miasma | OldJobobo/omarchy-miasma-theme |
 | Midnight | JaxonWright/omarchy-midnight-theme |
+| Miles Morales | ahmed-z0/omarchy-miles-morales-theme |
 | Milky Matcha | hipsterusername/omarchy-milkmatcha-light-theme |
 | Monochrome | Swarnim114/omarchy-monochrome-theme |
 | Monokai | bjarneo/omarchy-monokai-theme |
+| Monokai Dark | ericrswanny/omarchy-monokai-dark-theme |
+| Monolith | OldJobobo/omarchy-monolith-theme |
+| Moodpeak | HANCORE-linux/omarchy-moodpeak-theme |
+| Moon Orbit | JJDizz1L/moon-orbit |
+| Motivator | rondilley/omarchy-motivator-theme |
 | Nagai Poolside | somerocketeer/omarchy-nagai-poolside-theme |
+| Nagai Twilight | somerocketeer/omarchy-nagai-twilight-theme |
+| Nebulite | atif-1402/omarchy-nebulite-theme |
 | Neo Sploosh | monoooki/omarchy-neo-sploosh-theme |
+| Neonstreet | atif-1402/omarchy-neonstreet-theme |
 | Neovoid | RiO7MAKK3R/omarchy-neovoid-theme |
 | NES | bjarneo/omarchy-nes-theme |
+| Night Cat | maxberggren/omarchy-night-cat-theme |
+| Night Owl | janhesters/omarchy-night-owl-theme |
+| NYC | WillyV3/omarchy-nyc-theme |
+| Oasis | joaofelipegalvao/omarchy-oasis |
 | Omacarchy | RiO7MAKK3R/omarchy-omacarchy-theme |
+| Omarchy95 | atif-1402/omarchy-omarchy95-theme |
 | One Dark Pro | sc0ttman/omarchy-one-dark-pro-theme |
+| Oxford | HANCORE-linux/omarchy-oxford-theme |
 | Oxo Carbon | HANCORE-linux/omarchy-oxocarbon-theme |
 | Pandora | imbypass/omarchy-pandora-theme |
+| PhosphorOS | OldJobobo/omarchy-phosphor-os-theme |
 | Pina | bjarneo/omarchy-pina-theme |
 | Pink Blood | ITSZXY/pink-blood-omarchy-theme |
+| pmndrs | leweyse/omarchy-pmndrs-theme |
 | Pulsar | bjarneo/omarchy-pulsar-theme |
 | Purple Moon | Grey-007/purple-moon |
 | Purplewave | dotsilva/omarchy-purplewave-theme |
 | Rainy Night | atif-1402/omarchy-rainynight-theme |
 | Red Monarch | kamatealif/omarchy-red-monarch-theme |
+| REDDCS | mohamedredachakir/LINUX-OMARCHY-REDDCS |
+| Retro '82 | OldJobobo/omarchy-retro-82-theme |
+| Retro Fallout | zdravkodanailov7/omarchy-retro-fallout-theme |
 | RetroPC | rondilley/omarchy-retropc-theme |
+| Reverie | bjarneo/omarchy-reverie-theme |
+| RobCo | signaldirective/robco-theme |
+| RobCo Mojave | signaldirective/robco-mojave |
 | RobZee84 | robzolkos/omarchy-robzee84-theme |
 | Rose of Dune | HANCORE-linux/omarchy-roseofdune-theme |
 | Rose Pine Dark | guilhermetk/omarchy-rose-pine-dark |
+| Royal | notSagyo/omarchy-royal-theme |
+| Rustleaf | tahfizhabib/omarchy-rustleaf-theme |
 | Sakura | bjarneo/omarchy-sakura-theme |
 | Sapphire | HANCORE-linux/omarchy-sapphire-theme |
+| SeaShells | odysseyalive/omarchy-seashells-theme |
+| Serenity | bjarneo/omarchy-serenity-theme |
 | Shades of Jade | HANCORE-linux/omarchy-shadesofjade-theme |
+| Shuiro | Grenish/omarchy-shuiro-theme |
 | Snow | bjarneo/omarchy-snow-theme |
 | Snow Black | ankur311sudo/snow_black |
+| Softteal | atif-1402/omarchy-softteal-theme |
+| Soho | bjarneo/omarchy-soho-theme |
 | Solarized | Gazler/omarchy-solarized-theme |
 | Solarized Light | dfrico/omarchy-solarized-light-theme |
 | Solarized Osaka | motorsss/omarchy-solarizedosaka-theme |
+| Solitude | HANCORE-linux/omarchy-solitude-theme |
 | Space Monkey | TyRichards/omarchy-space-monkey-theme |
+| Spark | stefanomainardi/omarchy-sf-theme |
+| Spectra | abhijeet-swami/omarchy-spectra-theme |
+| Spectral Violet | shmall03/omarchy-spectral-violet-theme |
+| Stellar | cicorias/omarchy-stellar-theme |
+| Stillmoon | atif-1402/omarchy-stillmoon-theme |
+| Stillwood | shresth-dwivedi/omarchy-stillwood-theme |
+| Sunkissed | loeclos/omarchy-sunkissed-theme |
 | Sunset | rondilley/omarchy-sunset-theme |
 | Sunset Drive | tahayvr/omarchy-sunset-drive-theme |
 | Super Game Bro | TyRichards/omarchy-super-game-bro-theme |
 | Synthwave '84 | omacom-io/omarchy-synthwave84-theme |
+| Taikami | SamuelCam14/taikami |
+| Tarot | jjdizz1l/base16-tarot |
 | Temerald | Ahmad-Mtr/omarchy-temerald-theme |
+| Terramour | atif-1402/omarchy-terramour-theme |
 | The Greek | HANCORE-linux/omarchy-thegreek-theme |
 | Tokyo Night OLED | Justin-De-Sio/omarchy-tokyoled-theme |
 | Torrentz Hydra | monoooki/omarchy-torrentz-hydra-theme |
 | Tycho | leonardobetti/omarchy-tycho |
+| Type17 | atif-1402/omarchy-type17-theme |
 | Van Gogh | Nirmal314/omarchy-van-gogh-theme |
+| Velocity | perfektnacht/omarchy-velocity-theme |
 | Velvet Night | HANCORE-linux/omarchy-velvetnight-theme |
+| Vengeance | Grey-007/vengeance |
 | Vesper | thmoee/omarchy-vesper-theme |
 | VHS 80 | tahayvr/omarchy-vhs80-theme |
+| Vice City | lavarinimoreira/omarchy-vice-city-theme |
 | Void | vyrx-dev/omarchy-void-theme |
+| Vurple | tahfizhabib/omarchy-vurple-theme |
 | Waffle Cat | OldJobobo/omarchy-waffle-cat-theme |
+| Wasteland | perfektnacht/omarchy-wasteland-theme |
 | Waveform Dark | hipsterusername/omarchy-waveform-dark-theme |
 | White Gold | HANCORE-linux/omarchy-whitegold-theme |
+| Windows Dark Mode | OldJobobo/omarchy-windows-dark-mode-theme |
+| X-1632 | OldJobobo/omarchy-x-1632-theme |
+| Yuugure | ItsABigIgloo/omarchy-yuugure-theme |
 
 </details>
 
