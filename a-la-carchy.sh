@@ -3,12 +3,26 @@
 # A La Carchy - Omarchy Linux Debloater
 # Pick and choose what you want to remove, à la carte style!
 
-# Clean, minimal color scheme
+# TUI color scheme
 RESET='\033[0m'
-BOLD='\033[1m'
-DIM='\033[2m'
-SELECTED_BG='\033[7m'
-CHECKED='\033[38;5;10m'
+BOLD='\033[1;38;5;75m'
+DIM='\033[38;5;243m'
+SELECTED_BG='\033[1;38;5;255;48;5;24m'
+CHECKED='\033[38;5;114m'
+
+# Modern TUI palette (256-color)
+C_BORDER='\033[38;5;67m'
+C_ACCENT='\033[38;5;75m'
+C_TITLE='\033[1;38;5;75m'
+C_SUBTITLE='\033[38;5;246m'
+C_SECTION='\033[1;38;5;75m'
+C_TEXT='\033[38;5;252m'
+C_DIM='\033[38;5;243m'
+C_SEL_ACTIVE='\033[1;38;5;255;48;5;24m'
+C_SEL_INACTIVE='\033[38;5;252;48;5;237m'
+C_CHECK='\033[38;5;114m'
+C_MODIFIED='\033[38;5;214m'
+C_FOOTER_TXT='\033[38;5;246m'
 
 # Default packages offered for removal
 # List from: https://github.com/basecamp/omarchy/blob/master/install/packages.sh
@@ -423,7 +437,7 @@ edit_binding() {
             if [[ $i -eq $mod_cursor ]]; then
                 printf " ${SELECTED_BG}[%s] %s${RESET}" "$mark" "${mod_names[$i]}"
             else
-                printf " [%s] %s" "$mark" "${mod_names[$i]}"
+                printf " ${C_TEXT}[%s] %s${RESET}" "$mark" "${mod_names[$i]}"
             fi
         done
         echo
@@ -673,7 +687,7 @@ edit_hypr_setting() {
                 if [[ $i -eq $opt_cursor ]]; then
                     echo -e "    ${SELECTED_BG}> ${opts[$i]}${RESET}"
                 else
-                    echo -e "      ${opts[$i]}"
+                    echo -e "      ${C_TEXT}${opts[$i]}${RESET}"
                 fi
             done
 
@@ -1558,7 +1572,7 @@ show_position_editor_dialog() {
                 if [ $r -eq $rot_cursor ]; then
                     echo -e "    ${SELECTED_BG} > ${rot_labels[$r]} ${RESET}"
                 else
-                    echo -e "       ${rot_labels[$r]}"
+                    echo -e "       ${C_TEXT}${rot_labels[$r]}${RESET}"
                 fi
             done
 
@@ -1604,7 +1618,7 @@ show_position_editor_dialog() {
             if [ $i -eq $cursor ]; then
                 echo -e "    ${SELECTED_BG} > ${mon_names[$i]}${label}  ${mon_widths[$i]}x${mon_heights[$i]} ${RESET}"
             else
-                echo -e "       ${mon_names[$i]}${label}  ${DIM}${mon_widths[$i]}x${mon_heights[$i]}${RESET}"
+                echo -e "       ${C_TEXT}${mon_names[$i]}${label}${RESET}  ${DIM}${mon_widths[$i]}x${mon_heights[$i]}${RESET}"
             fi
         done
 
@@ -1673,7 +1687,7 @@ show_position_editor_dialog() {
                 if [ $p -eq $ref_cursor ]; then
                     echo -e "    ${SELECTED_BG} > ${mon_names[$pi]}${plabel}  at ${ppos} ${RESET}"
                 else
-                    echo -e "       ${mon_names[$pi]}${plabel}  ${DIM}at ${ppos}${RESET}"
+                    echo -e "       ${C_TEXT}${mon_names[$pi]}${plabel}${RESET}  ${DIM}at ${ppos}${RESET}"
                 fi
             done
 
@@ -1721,7 +1735,7 @@ show_position_editor_dialog() {
                 if [ $d -eq $dir_cursor ]; then
                     echo -e "    ${SELECTED_BG} > ${directions[$d]} ${RESET}"
                 else
-                    echo -e "       ${directions[$d]}"
+                    echo -e "       ${C_TEXT}${directions[$d]}${RESET}"
                 fi
             done
 
@@ -2186,7 +2200,7 @@ show_primary_monitor_dialog() {
             if [[ $i -eq $opt_cursor ]]; then
                 echo -e "    ${SELECTED_BG}> ${label}${suffix}${RESET}"
             else
-                echo -e "      ${label}${suffix}"
+                echo -e "      ${C_TEXT}${label}${suffix}${RESET}"
             fi
         done
 
@@ -2349,7 +2363,7 @@ show_power_profile_dialog() {
             if [[ $i -eq $opt_cursor ]]; then
                 echo -e "    ${SELECTED_BG}> ${labels[$i]}${suffix}${RESET}"
             else
-                echo -e "      ${labels[$i]}${suffix}"
+                echo -e "      ${C_TEXT}${labels[$i]}${suffix}${RESET}"
             fi
         done
 
@@ -2502,7 +2516,7 @@ show_battery_limit_dialog() {
             if [[ $i -eq $opt_cursor ]]; then
                 echo -e "    ${SELECTED_BG}> ${labels[$i]}${suffix}${RESET}"
             else
-                echo -e "      ${labels[$i]}${suffix}"
+                echo -e "      ${C_TEXT}${labels[$i]}${suffix}${RESET}"
             fi
         done
 
@@ -2945,7 +2959,7 @@ show_rog_profile_dialog() {
             if [[ $i -eq $opt_cursor ]]; then
                 echo -e "    ${SELECTED_BG}> ${profiles[$i]}${suffix}${RESET}"
             else
-                echo -e "      ${profiles[$i]}${suffix}"
+                echo -e "      ${C_TEXT}${profiles[$i]}${suffix}${RESET}"
             fi
         done
 
@@ -3043,7 +3057,7 @@ show_rog_kbd_leds_dialog() {
             if [[ $i -eq $opt_cursor ]]; then
                 echo -e "    ${SELECTED_BG}> ${labels[$i]}${suffix}${RESET}"
             else
-                echo -e "      ${labels[$i]}${suffix}"
+                echo -e "      ${C_TEXT}${labels[$i]}${suffix}${RESET}"
             fi
         done
 
@@ -3140,7 +3154,7 @@ _aura_prompt_speed() {
             if [[ $i -eq $sc ]]; then
                 echo -e "    ${SELECTED_BG}> ${slabels[$i]}${RESET}"
             else
-                echo -e "      ${slabels[$i]}"
+                echo -e "      ${C_TEXT}${slabels[$i]}${RESET}"
             fi
         done
 
@@ -3182,7 +3196,7 @@ _aura_prompt_direction() {
             if [[ $i -eq $dc ]]; then
                 echo -e "    ${SELECTED_BG}> ${dlabels[$i]}${RESET}"
             else
-                echo -e "      ${dlabels[$i]}"
+                echo -e "      ${C_TEXT}${dlabels[$i]}${RESET}"
             fi
         done
 
@@ -3244,7 +3258,7 @@ show_rog_aura_dialog() {
             if [[ $i -eq $opt_cursor ]]; then
                 echo -e "    ${SELECTED_BG}> ${labels[$i]}${RESET}"
             else
-                echo -e "      ${labels[$i]}"
+                echo -e "      ${C_TEXT}${labels[$i]}${RESET}"
             fi
         done
 
@@ -3443,7 +3457,7 @@ show_rog_slash_dialog() {
             if [[ $i -eq $opt_cursor ]]; then
                 echo -e "    ${SELECTED_BG}> ${options[$i]}${RESET}"
             else
-                echo -e "      ${options[$i]}"
+                echo -e "      ${C_TEXT}${options[$i]}${RESET}"
             fi
         done
 
@@ -6646,13 +6660,21 @@ draw_hline() {
     printf "%s" "$right"
 }
 
-# Function to draw the two-panel interface (fixed 80x24 layout)
-# Layout: │<-25 chars->│<-52 chars->│ = 80 total
+# Function to draw the two-panel interface (dynamic layout)
 draw_interface() {
-    # Fixed dimensions - must match static borders exactly
-    local LEFT_W=25
-    local RIGHT_W=52
-    local ROWS=12
+    # Dynamic terminal dimensions
+    local TERM_W TERM_H
+    TERM_W=$(tput cols)
+    TERM_H=$(tput lines)
+    (( TERM_W < 60 )) && TERM_W=60
+    (( TERM_H < 16 )) && TERM_H=16
+
+    # Layout: │<LEFT_W>│<RIGHT_W>│ = TERM_W total
+    local LEFT_W=26
+    local INNER_W=$((TERM_W - 2))
+    local RIGHT_W=$((INNER_W - LEFT_W - 1))
+    local ROWS=$((TERM_H - 12))
+    (( ROWS < 4 )) && ROWS=4
 
     # Clamp cursors
     local cat_count=${#CATEGORIES[@]}
@@ -6673,15 +6695,63 @@ draw_interface() {
     (( CATEGORY_CURSOR >= CAT_SCROLL_OFFSET + ROWS )) && CAT_SCROLL_OFFSET=$((CATEGORY_CURSOR - ROWS + 1))
     (( CAT_SCROLL_OFFSET < 0 )) && CAT_SCROLL_OFFSET=0
 
+    # Scroll state for indicators
+    local L_scroll_up=$(( CAT_SCROLL_OFFSET > 0 ? 1 : 0 ))
+    local L_scroll_down=$(( CAT_SCROLL_OFFSET + ROWS < cat_count ? 1 : 0 ))
+    local R_scroll_up=$(( ITEM_SCROLL_OFFSET > 0 ? 1 : 0 ))
+    local R_scroll_down=$(( ITEM_SCROLL_OFFSET + ROWS < item_count ? 1 : 0 ))
+
     clear
 
-    # Header (each line is exactly 80 chars)
-    printf '%s\n' "┌──────────────────────────────────────────────────────────────────────────────┐"
-    printf "│${BOLD}                            A   L A   C A R C H Y                             ${RESET}│\n"
-    printf "│${DIM}                    Omarchy Linux Debloater And Optimizer                     ${RESET}│\n"
-    printf "│${DIM}                               by Daniel Coffey                               ${RESET}│\n"
-    printf '%s\n' "│                                                                              │"
-    printf '%s\n' "├─────────────────────────┬────────────────────────────────────────────────────┤"
+    # Pre-compute dash strings
+    local left_dashes="" right_dashes="" full_dashes=""
+    for ((i=0; i<LEFT_W; i++)); do left_dashes+="─"; done
+    for ((i=0; i<RIGHT_W; i++)); do right_dashes+="─"; done
+    for ((i=0; i<INNER_W; i++)); do full_dashes+="─"; done
+
+    # ── HEADER ──
+    printf "${C_BORDER}╭%s╮${RESET}\n" "$full_dashes"
+
+    # Helper: center text and pad to exact INNER_W characters
+    _center_pad() {
+        local raw
+        raw="$(center_text "$1" $INNER_W)"
+        local len=${#raw}
+        if (( len >= INNER_W )); then
+            printf '%s' "${raw:0:$INNER_W}"
+        else
+            printf "%s%*s" "$raw" $((INNER_W - len)) ""
+        fi
+    }
+
+    local title_padded
+    title_padded="$(_center_pad "A  L A  C A R C H Y")"
+    printf "${C_BORDER}│${C_TITLE}%s${RESET}${C_BORDER}│${RESET}\n" "$title_padded"
+
+    local sub_padded
+    sub_padded="$(_center_pad "Omarchy Linux Debloater & Optimizer")"
+    printf "${C_BORDER}│${C_SUBTITLE}%s${RESET}${C_BORDER}│${RESET}\n" "$sub_padded"
+
+    local author_padded
+    author_padded="$(_center_pad "by Daniel Coffey")"
+    printf "${C_BORDER}│${C_DIM}%s${RESET}${C_BORDER}│${RESET}\n" "$author_padded"
+
+    local spaces_inner
+    printf -v spaces_inner "%*s" $INNER_W ""
+    printf "${C_BORDER}│${RESET}%s${C_BORDER}│${RESET}\n" "$spaces_inner"
+
+    # ── PANEL DIVIDER WITH CATEGORY NAME ──
+    local cat_display="${CATEGORIES[$CATEGORY_CURSOR]}"
+    cat_display="${cat_display#"${cat_display%%[![:space:]]*}"}"
+    local right_label=" ${cat_display} "
+    local right_label_len=${#right_label}
+    local right_fill_count=$((RIGHT_W - right_label_len - 1))
+    (( right_fill_count < 0 )) && right_fill_count=0
+    local right_fill=""
+    for ((i=0; i<right_fill_count; i++)); do right_fill+="─"; done
+
+    printf "${C_BORDER}├%s┬─${RESET}${C_ACCENT}%s${RESET}${C_BORDER}%s┤${RESET}\n" \
+        "$left_dashes" "$right_label" "$right_fill"
 
     # Get current description for display
     local cur_desc=$(get_current_description)
@@ -6689,7 +6759,7 @@ draw_interface() {
     # Content rows
     for ((row=0; row<ROWS; row++)); do
         local L="" R=""
-        local Lhl=0 Rhl=0
+        local Lhl=0 Rhl=0 Rchecked=0 Rmodified=0
 
         # Left panel (with scroll offset)
         local Lsection=0
@@ -6697,14 +6767,21 @@ draw_interface() {
         if (( cat_idx < cat_count )); then
             local cat_text="${CATEGORIES[$cat_idx]}"
             if [[ "$cat_text" == ---* ]]; then
-                # Section header - will be dimmed at output time
-                L=" ${cat_text}"
+                # Section header: extract name and uppercase
+                local section_name="${cat_text#---}"
+                section_name="${section_name%---}"
+                section_name="${section_name#"${section_name%%[![:space:]]*}"}"
+                section_name="${section_name%"${section_name##*[![:space:]]}"}"
+                section_name="${section_name^^}"
+                L="  ${section_name}"
                 Lsection=1
             elif (( cat_idx == CATEGORY_CURSOR )); then
-                L=" > ${cat_text}"
-                (( CURRENT_PANEL == 0 )) && Lhl=1
+                local trimmed="${cat_text#"${cat_text%%[![:space:]]*}"}"
+                L="  ▸ ${trimmed}"
+                (( CURRENT_PANEL == 0 )) && Lhl=2 || Lhl=1
             else
-                L="   ${cat_text}"
+                local trimmed="${cat_text#"${cat_text%%[![:space:]]*}"}"
+                L="    ${trimmed}"
             fi
         fi
 
@@ -6715,9 +6792,17 @@ draw_interface() {
             (( CURRENT_PANEL == 1 && idx == ITEM_CURSOR )) && Rhl=1
             case $CATEGORY_CURSOR in
                 1) local p="${INSTALLED_PACKAGES[$idx]}"
-                   [[ "${PKG_SELECTIONS[$p]:-0}" == "1" ]] && R=" [x] $p" || R=" [ ] $p" ;;
+                   if [[ "${PKG_SELECTIONS[$p]:-0}" == "1" ]]; then
+                       R="  ● $p"; Rchecked=1
+                   else
+                       R="  ○ $p"
+                   fi ;;
                 2) local w="${INSTALLED_WEBAPPS[$idx]}"
-                   [[ "${WEBAPP_SELECTIONS[$w]:-0}" == "1" ]] && R=" [x] $w" || R=" [ ] $w" ;;
+                   if [[ "${WEBAPP_SELECTIONS[$w]:-0}" == "1" ]]; then
+                       R="  ● $w"; Rchecked=1
+                   else
+                       R="  ○ $w"
+                   fi ;;
                 4|8|9)
                     local arr
                     case $CATEGORY_CURSOR in
@@ -6737,9 +6822,9 @@ draw_interface() {
                             sys_suffix="${SELECTED_BATTERY_LIMIT}%"
                         fi
                         if [[ -n "$sys_suffix" ]]; then
-                            R=$(printf " %-24s %s" "$TOGGLE_NAME" "$sys_suffix")
+                            R=$(printf "  %-24s %s" "$TOGGLE_NAME" "$sys_suffix")
                         else
-                            R=" $TOGGLE_NAME"
+                            R="  $TOGGLE_NAME"
                         fi
                     else
                         R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
@@ -6756,9 +6841,9 @@ draw_interface() {
                             d_suffix="$SELECTED_PRIMARY_MONITOR"
                         fi
                         if [[ -n "$d_suffix" ]]; then
-                            R=$(printf " %-24s %s" "$TOGGLE_NAME" "$d_suffix")
+                            R=$(printf "  %-24s %s" "$TOGGLE_NAME" "$d_suffix")
                         else
-                            R=" $TOGGLE_NAME"
+                            R="  $TOGGLE_NAME"
                         fi
                     else
                         R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
@@ -6767,7 +6852,7 @@ draw_interface() {
                     local be_entry="${EDIT_BINDINGS_ITEMS[$idx]}"
                     if [[ "$be_entry" == HEADER* ]]; then
                         local header_name="${be_entry#HEADER|}"
-                        R=" -- $header_name --"
+                        R="  ── ${header_name} ──"
                         Rsection=1
                     else
                         IFS='|' read -r _t be_mods be_key be_desc _rest <<< "$be_entry"
@@ -6776,7 +6861,8 @@ draw_interface() {
                         local display_key="$be_key"
                         if [[ -n "${BINDING_EDITS[$idx]:-}" ]]; then
                             IFS='|' read -r display_mods display_key <<< "${BINDING_EDITS[$idx]}"
-                            be_prefix="*"
+                            be_prefix="◆"
+                            Rmodified=1
                         fi
                         local keycombo="${display_mods}+${display_key}"
                         R=$(printf "%s%-17s %s" "$be_prefix" "$keycombo" "$be_desc")
@@ -6785,7 +6871,11 @@ draw_interface() {
                     if [ "$TOGGLE_TYPE" = "toggle" ]; then
                         R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
                     else
-                        [[ "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}" == "1" ]] && R=" [x] $TOGGLE_NAME" || R=" [ ] $TOGGLE_NAME"
+                        if [[ "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}" == "1" ]]; then
+                            R="  ● $TOGGLE_NAME"; Rchecked=1
+                        else
+                            R="  ○ $TOGGLE_NAME"
+                        fi
                     fi ;;
                 12|13|14|15)  # Hyprland settings
                     local hypr_arr
@@ -6805,7 +6895,8 @@ draw_interface() {
                     local h_prefix=" "
                     if [[ -n "${HYPR_EDITS[$HYPR_ID]:-}" ]]; then
                         local h_new="${HYPR_EDITS[$HYPR_ID]}"
-                        h_prefix="*"
+                        h_prefix="◆"
+                        Rmodified=1
                         if [[ "$HYPR_TYPE" == "bool" ]]; then
                             [[ "$h_val" == "true" ]] && h_val="ON" || h_val="OFF"
                             [[ "$h_new" == "true" ]] && h_new="ON" || h_new="OFF"
@@ -6815,7 +6906,7 @@ draw_interface() {
                         if [[ "$HYPR_TYPE" == "bool" ]]; then
                             [[ "$h_val" == "true" ]] && h_val="ON" || h_val="OFF"
                         fi
-                        R=$(printf " %-24s %s" "$HYPR_LABEL" "$h_val")
+                        R=$(printf "  %-24s %s" "$HYPR_LABEL" "$h_val")
                     fi ;;
                 17|18)  # ROG items (mixed: toggle + action)
                     local rog_arr
@@ -6839,9 +6930,9 @@ draw_interface() {
                             rog_suffix="$SELECTED_ROG_SLASH_MODE"
                         fi
                         if [[ -n "$rog_suffix" ]]; then
-                            R=$(printf " %-24s %s" "$TOGGLE_NAME" "$rog_suffix")
+                            R=$(printf "  %-24s %s" "$TOGGLE_NAME" "$rog_suffix")
                         else
-                            R=" $TOGGLE_NAME"
+                            R="  $TOGGLE_NAME"
                         fi
                     else
                         R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
@@ -6854,57 +6945,111 @@ draw_interface() {
                     local installed_suffix=""
                     [[ -n "${INSTALLED_THEME_SET[$tdir]:-}" ]] && installed_suffix=" (installed)"
                     if [[ "${THEME_SELECTIONS[$tname]:-0}" == "1" ]]; then
-                        R=" [x] ${tname}${installed_suffix}"
+                        R="  ● ${tname}${installed_suffix}"; Rchecked=1
                     else
-                        R=" [ ] ${tname}${installed_suffix}"
+                        R="  ○ ${tname}${installed_suffix}"
                     fi ;;
             esac
         fi
 
-        # Format cells to exact width
-        local Lfmt=$(printf "%-${LEFT_W}.${LEFT_W}s" "$L")
-        local Rfmt=$(printf "%-${RIGHT_W}.${RIGHT_W}s" "$R")
-
-        # Output row
-        if (( Lhl )); then
-            printf "│${SELECTED_BG}%s${RESET}│" "$Lfmt"
-        elif (( Lsection )); then
-            printf "│${DIM}%s${RESET}│" "$Lfmt"
+        # Format cells to exact width (character-based to handle Unicode)
+        local Lfmt Rfmt
+        local L_len=${#L} R_len=${#R}
+        if (( L_len >= LEFT_W )); then
+            Lfmt="${L:0:$LEFT_W}"
         else
-            printf "│%s│" "$Lfmt"
+            printf -v Lfmt "%s%*s" "$L" $((LEFT_W - L_len)) ""
         fi
-        if (( Rhl )); then
-            printf "${SELECTED_BG}%s${RESET}│\n" "$Rfmt"
-        elif (( Rsection )); then
-            printf "${DIM}%s${RESET}│\n" "$Rfmt"
+        if (( R_len >= RIGHT_W )); then
+            Rfmt="${R:0:$RIGHT_W}"
         else
-            printf "%s│\n" "$Rfmt"
+            printf -v Rfmt "%s%*s" "$R" $((RIGHT_W - R_len)) ""
+        fi
+
+        # Scroll indicators
+        if (( row == 0 && L_scroll_up )); then
+            Lfmt="${Lfmt:0:$((LEFT_W-2))} ▲"
+        fi
+        if (( row == ROWS-1 && L_scroll_down )); then
+            Lfmt="${Lfmt:0:$((LEFT_W-2))} ▼"
+        fi
+        if (( row == 0 && R_scroll_up )); then
+            Rfmt="${Rfmt:0:$((RIGHT_W-2))} ▲"
+        fi
+        if (( row == ROWS-1 && R_scroll_down )); then
+            Rfmt="${Rfmt:0:$((RIGHT_W-2))} ▼"
+        fi
+
+        # ── Output left cell ──
+        if (( Lhl == 2 )); then
+            printf "${C_BORDER}│${C_SEL_ACTIVE}%s${RESET}${C_BORDER}│${RESET}" "$Lfmt"
+        elif (( Lhl == 1 )); then
+            printf "${C_BORDER}│${C_SEL_INACTIVE}%s${RESET}${C_BORDER}│${RESET}" "$Lfmt"
+        elif (( Lsection )); then
+            printf "${C_BORDER}│${C_SECTION}%s${RESET}${C_BORDER}│${RESET}" "$Lfmt"
+        else
+            printf "${C_BORDER}│${C_TEXT}%s${RESET}${C_BORDER}│${RESET}" "$Lfmt"
+        fi
+
+        # ── Output right cell ──
+        if (( Rhl )); then
+            printf "${C_SEL_ACTIVE}%s${RESET}${C_BORDER}│${RESET}\n" "$Rfmt"
+        elif (( Rsection )); then
+            printf "${C_DIM}%s${RESET}${C_BORDER}│${RESET}\n" "$Rfmt"
+        elif (( Rchecked )); then
+            # Highlight the ● character in green
+            printf "${C_TEXT}%s${C_CHECK}%s${RESET}${C_TEXT}%s${RESET}${C_BORDER}│${RESET}\n" \
+                "${Rfmt:0:2}" "${Rfmt:2:1}" "${Rfmt:3}"
+        elif (( Rmodified )); then
+            # Highlight the ◆ prefix in orange
+            printf "${C_MODIFIED}%s${RESET}${C_TEXT}%s${RESET}${C_BORDER}│${RESET}\n" \
+                "${Rfmt:0:1}" "${Rfmt:1}"
+        else
+            printf "${C_TEXT}%s${RESET}${C_BORDER}│${RESET}\n" "$Rfmt"
         fi
     done
 
-    # Description row (always visible, spans full width)
-    printf '%s\n' "├─────────────────────────┴────────────────────────────────────────────────────┤"
+    # ── DESCRIPTION ROW ──
+    printf "${C_BORDER}├%s┴%s┤${RESET}\n" "$left_dashes" "$right_dashes"
     if [[ -n "$cur_desc" ]]; then
-        # Center the description in 78 chars, dimmed
-        local desc_padded=$(printf " %-76s " "${cur_desc:0:76}")
-        printf "│${DIM}%s${RESET}│\n" "$desc_padded"
+        local desc_raw
+        desc_raw="$(center_text "${cur_desc:0:$((INNER_W - 4))}" $INNER_W)"
+        local desc_len=${#desc_raw}
+        local desc_centered
+        if (( desc_len >= INNER_W )); then
+            desc_centered="${desc_raw:0:$INNER_W}"
+        else
+            printf -v desc_centered "%s%*s" "$desc_raw" $((INNER_W - desc_len)) ""
+        fi
+        printf "${C_BORDER}│${C_DIM}%s${RESET}${C_BORDER}│${RESET}\n" "$desc_centered"
     else
-        printf '%s\n' "│                                                                              │"
+        printf "${C_BORDER}│${RESET}%-${INNER_W}s${C_BORDER}│${RESET}\n" ""
     fi
 
-    # Footer (each line exactly 80 chars, ASCII only)
-    printf '%s\n' "├──────────────────────────────────────────────────────────────────────────────┤"
+    # ── FOOTER ──
+    printf "${C_BORDER}├%s┤${RESET}\n" "$full_dashes"
+    local footer_text=""
     if [ $CATEGORY_CURSOR -eq 20 ]; then
-        printf '%s\n' "│         Arrows:Navigate  Space:Select  A:All  Enter:Confirm  Q:Quit          │"
+        footer_text="←→ Navigate   ↑↓ Move   Space Select   A All   Enter Confirm   Q Quit"
     elif [ $CATEGORY_CURSOR -eq 5 ] || [ $CATEGORY_CURSOR -eq 6 ] || [ $CATEGORY_CURSOR -eq 7 ] || [ $CATEGORY_CURSOR -eq 12 ] || [ $CATEGORY_CURSOR -eq 13 ] || [ $CATEGORY_CURSOR -eq 14 ] || [ $CATEGORY_CURSOR -eq 15 ] || [ $CATEGORY_CURSOR -eq 17 ] || [ $CATEGORY_CURSOR -eq 18 ]; then
-        printf '%s\n' "│          Arrows:Navigate  Space:Edit  R:Reset  Enter:Confirm  Q:Quit         │"
+        footer_text="←→ Navigate   ↑↓ Move   Space Edit   R Reset   Enter Confirm   Q Quit"
     else
-        printf '%s\n' "│             Arrows:Navigate  Space:Select  Enter:Confirm  Q:Quit             │"
+        footer_text="←→ Navigate   ↑↓ Move   Space Select   Enter Confirm   Q Quit"
     fi
-    printf '%s\n' "└──────────────────────────────────────────────────────────────────────────────┘"
+    local footer_centered
+    footer_centered="$(center_text "$footer_text" $INNER_W)"
+    local footer_len=${#footer_centered}
+    local footer_padded
+    if (( footer_len >= INNER_W )); then
+        footer_padded="${footer_centered:0:$INNER_W}"
+    else
+        printf -v footer_padded "%s%*s" "$footer_centered" $((INNER_W - footer_len)) ""
+    fi
+    printf "${C_BORDER}│${C_FOOTER_TXT}%s${RESET}${C_BORDER}│${RESET}\n" "$footer_padded"
+    printf "${C_BORDER}╰%s╯${RESET}\n" "$full_dashes"
 }
 
-# Format a toggle item for display (ASCII only, fixed width)
+# Format a toggle item for display
 format_toggle_item() {
     local name="$1"
     local opt1="$2"
@@ -6914,16 +7059,16 @@ format_toggle_item() {
     if [ -z "$opt2" ]; then
         # Action item (like backup)
         if [ "$sel" -eq 1 ]; then
-            printf " [x] %s" "$name"
+            printf "  ● %s" "$name"
         else
-            printf " [ ] %s" "$name"
+            printf "  ○ %s" "$name"
         fi
     else
         # Toggle item with two options
-        local m1=" " m2=" "
-        [ "$sel" -eq 1 ] && m1="*"
-        [ "$sel" -eq 2 ] && m2="*"
-        printf " %-15s [%s%s] [%s%s]" "$name" "$m1" "$opt1" "$m2" "$opt2"
+        local m1="○" m2="○"
+        [ "$sel" -eq 1 ] && m1="●"
+        [ "$sel" -eq 2 ] && m2="●"
+        printf "  %-14s  %s %-7s  %s %s" "$name" "$m1" "$opt1" "$m2" "$opt2"
     fi
 }
 
