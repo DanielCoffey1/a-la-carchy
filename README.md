@@ -16,7 +16,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
 - **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
 - **Multi-monitor management** with detection, positioning, primary monitor, and laptop auto-off
-- **ASUS ROG hardware control** via asusctl (platform profiles, Aura RGB, Slash Ledbar, fan curves, GPU MUX, and more)
+- **ASUS ROG hardware control** via asusctl (platform profiles, Aura RGB, Slash Ledbar, fan curves, GPU MUX, battery management, power tuning, AniMe Matrix, and more)
 - **27 configuration tweaks** for keybindings, display, system, appearance, keyboard, and utilities
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
@@ -456,10 +456,13 @@ Full ASUS ROG laptop control via `asusctl`, organized into two subcategories. Re
 |-------|------|-------------|
 | Platform profile | action | Set ASUS performance profile (Quiet/Balanced/Performance) via `asusctl profile set` |
 | Fan curves | toggle | Enable or disable custom fan curves for the active profile |
+| Fan curve editor | action | Edit custom fan curve data points per fan (CPU/GPU/MID) |
 | Boot sound | toggle | Enable or disable the POST boot sound via firmware attributes |
 | Panel overdrive | toggle | Reduce display ghosting with panel overdrive (may increase power use) |
 | Discrete GPU | toggle | Enable or disable the dedicated NVIDIA GPU |
 | GPU MUX | radio | Switch between dGPU direct and hybrid mode (reboot required) |
+| Battery management | action | Set battery charge limit and one-shot full charge |
+| Power tuning | action | Adjust CPU/GPU power and thermal limits via firmware attributes |
 
 ##### Platform Profile
 
@@ -471,9 +474,39 @@ Press Space on "Platform profile" to open an arrow-key selection dialog with thr
 
 The dialog marks the currently active profile with `(active)`. On confirm, the profile is applied immediately via `asusctl profile set`.
 
+##### Fan Curve Editor
+
+Press Space to open a dialog with options to:
+- **Edit CPU/GPU/MID fan curves** — enter custom temperature:speed data points (e.g. `30c:1%,49c:2%,59c:3%,69c:4%,79c:31%,89c:49%,99c:56%,109c:58%`)
+- **Reset to default** — restore the active profile's fan curves to factory defaults
+- Shows current curve data and active profile for reference
+
+Applied via `asusctl fan-curve --mod-profile --fan --data` and `--default`. Setting a custom curve automatically enables it for the specified fan.
+
 ##### Firmware Attributes
 
 Boot sound, panel overdrive, discrete GPU, and GPU MUX are controlled via `asusctl armoury set` which writes directly to ASUS firmware attributes. Changes take effect immediately (GPU MUX requires a reboot). Fan curves are toggled via `asusctl fan-curve --enable-fan-curves` for the active performance profile.
+
+##### Battery Management
+
+Press Space to open a dialog with two options:
+- **Set charge limit** — set the battery charge limit between 20-100% to extend battery longevity (applied via `asusctl battery limit`)
+- **One-shot full charge** — temporarily override the charge limit for a single full charge cycle (applied via `asusctl battery oneshot`)
+
+The dialog shows the current charge limit for reference.
+
+##### Power Tuning
+
+Press Space to open a multi-parameter editor for CPU/GPU power and thermal limits:
+
+| Parameter | Range | Default | Description |
+|-----------|-------|---------|-------------|
+| NVIDIA Dynamic Boost | 5-20W | 20W | GPU dynamic boost wattage |
+| NVIDIA Temp Target | 75-87°C | 87°C | GPU thermal throttle target |
+| CPU Sustained Power (PL1) | 28-90W | 90W | CPU sustained power limit |
+| CPU Short Boost (PL2) | 28-135W | 135W | CPU short-duration boost power limit |
+
+Navigate between parameters with arrow keys, press Enter to edit a value, press Escape when done. Applied via `asusctl armoury set`.
 
 #### ROG Lighting
 
@@ -481,8 +514,11 @@ Boot sound, panel overdrive, discrete GPU, and GPU MUX are controlled via `asusc
 |-------|------|-------------|
 | Keyboard LEDs | action | Set keyboard backlight brightness (off/low/med/high) |
 | Aura RGB effect | action | Set keyboard RGB lighting effect and color |
+| Aura power zones | action | Control LED zones for different power states |
 | Slash Ledbar | action | Configure the Slash LED bar animations and triggers |
+| Slash options | action | Set interval and conditional show settings |
 | AniMe Matrix | toggle | Enable or disable the AniMe Matrix display |
+| AniMe options | action | Configure brightness, powersave, and builtin animations |
 
 ##### Keyboard LEDs
 
@@ -517,6 +553,20 @@ Press Space to open a two-step dialog:
 
 Applied via `asusctl aura effect <type>` with the appropriate flags (`-c`, `--colour`, `--colour2`, `--speed`, `--direction`).
 
+##### Aura Power Zones
+
+Press Space to configure which LED zones are active during different power states. Select a zone, then toggle which states it should be enabled for:
+
+| Zone | Description |
+|------|-------------|
+| Keyboard | Main keyboard backlight zone |
+| Logo | ROG logo LED |
+| Lightbar | Light bar LEDs |
+| Lid | Laptop lid LEDs |
+| Rear Glow | Rear glow zone |
+
+Each zone can be independently enabled for **Boot**, **Awake**, **Sleep**, and **Shutdown** states. Applied via `asusctl aura power <zone>` with `--boot`, `--awake`, `--sleep`, `--shutdown` flags.
+
 ##### Slash Ledbar
 
 Press Space to open a dialog with options to:
@@ -526,9 +576,45 @@ Press Space to open a dialog with options to:
 
 Applied via `asusctl slash --enable/--disable`, `--mode`, and `-l` flags.
 
+##### Slash Options
+
+Press Space to configure additional Slash Ledbar behavior:
+
+| Option | Description |
+|--------|-------------|
+| Interval | Animation interval (0-5) |
+| Show on boot | Show the animation during boot |
+| Show on shutdown | Show the animation during shutdown |
+| Show on sleep | Show the animation during sleep |
+| Show on battery | Show the animation when on battery power |
+| Battery warning | Show the low-battery warning animation |
+
+Toggle options cycle through Enable/Disable. Applied via `asusctl slash` with `-B`, `-S`, `-s`, `-b`, `-w`, and `--interval` flags.
+
 ##### AniMe Matrix
 
 Toggle to enable or disable the AniMe Matrix LED display on the laptop lid. Applied via `asusctl anime --enable-display true/false`.
+
+##### AniMe Options
+
+Press Space to configure additional AniMe Matrix behavior:
+
+| Option | Description |
+|--------|-------------|
+| Brightness | Set display brightness (off/low/med/high) |
+| Powersave animation | Enable or disable the builtin powersave animation |
+| Off when unplugged | Turn off when external power is disconnected |
+| Off when suspended | Turn off when the laptop suspends |
+| Off when lid closed | Turn off when the lid is closed |
+| Builtin animations | Choose animations for boot, awake, sleep, and shutdown states |
+
+The builtin animations dialog walks through four phases, each with preset options:
+- **Boot** — default, GlitchConstruction, StaticEmergence
+- **Awake** — default, BinaryBannerScroll, RogLogoGlitch
+- **Sleep** — default, BannerSwipe, Starfield
+- **Shutdown** — default, GlitchOut, SeeYa
+
+Applied via `asusctl anime` with `--brightness`, `--enable-powersave-anim`, `--off-when-unplugged`, `--off-when-suspended`, `--off-when-lid-closed`, and `asusctl anime set-builtins`.
 
 ### Extra Themes
 

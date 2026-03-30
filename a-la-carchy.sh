@@ -2915,6 +2915,33 @@ SELECTED_ROG_AURA_DIRECTION=""
 SELECTED_ROG_SLASH_MODE=""
 SELECTED_ROG_SLASH_BRIGHT=""
 ROG_SLASH_ENABLE=""
+SELECTED_ROG_SLASH_INTERVAL=""
+ROG_SLASH_SHOW_BOOT=""
+ROG_SLASH_SHOW_SHUTDOWN=""
+ROG_SLASH_SHOW_SLEEP=""
+ROG_SLASH_SHOW_BATTERY=""
+ROG_SLASH_SHOW_BATTERY_WARN=""
+SELECTED_ROG_BATTERY_LIMIT=""
+ROG_BATTERY_ONESHOT=""
+SELECTED_ROG_NV_DYNAMIC_BOOST=""
+SELECTED_ROG_NV_TEMP_TARGET=""
+SELECTED_ROG_PPT_PL1_SPL=""
+SELECTED_ROG_PPT_PL2_SPPT=""
+SELECTED_ROG_ANIME_BRIGHTNESS=""
+ROG_ANIME_POWERSAVE=""
+ROG_ANIME_OFF_UNPLUGGED=""
+ROG_ANIME_OFF_SUSPENDED=""
+ROG_ANIME_OFF_LID_CLOSED=""
+SELECTED_ROG_ANIME_BOOT=""
+SELECTED_ROG_ANIME_AWAKE=""
+SELECTED_ROG_ANIME_SLEEP=""
+SELECTED_ROG_ANIME_SHUTDOWN=""
+SELECTED_ROG_FAN_CURVE_FAN=""
+SELECTED_ROG_FAN_CURVE_DATA=""
+ROG_FAN_CURVE_DEFAULT=""
+ROG_FAN_CURVE_ENABLE_SINGLE=""
+SELECTED_ROG_AURA_POWER_ZONE=""
+SELECTED_ROG_AURA_POWER_STATES=""
 
 show_rog_profile_dialog() {
     if ! command -v asusctl &>/dev/null; then
@@ -3673,6 +3700,1066 @@ apply_rog_hardware_toggles() {
         else
             echo -e "    ${DIM}✗${RESET}  Failed to disable AniMe Matrix"
             SUMMARY_LOG+=("✗  AniMe Matrix -- failed to disable")
+        fi
+    fi
+
+    echo
+    echo
+}
+
+# =============================================================================
+# ROG BATTERY MANAGEMENT
+# =============================================================================
+
+show_rog_battery_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  ROG Battery Management${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local current_limit
+    current_limit=$(asusctl battery info 2>/dev/null | grep -oE '[0-9]+' | head -1)
+
+    local -a options=("Set charge limit" "One-shot full charge")
+    local opt_cursor=0
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}ROG Battery Management${RESET}"
+        echo -e "  ${DIM}Control battery charging behavior${RESET}"
+        if [[ -n "$current_limit" ]]; then
+            echo -e "  ${DIM}Current charge limit: ${current_limit}%${RESET}"
+        fi
+        echo
+        echo -e "  ${DIM}Select option (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        for i in "${!options[@]}"; do
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${options[$i]}${RESET}"
+            else
+                echo -e "      ${C_TEXT}${options[$i]}${RESET}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#options[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    if [[ $opt_cursor -eq 0 ]]; then
+                        # Charge limit
+                        clear
+                        echo
+                        echo -e "  ${BOLD}Battery Charge Limit${RESET}"
+                        echo
+                        echo -e "  ${DIM}Enter charge limit (20-100):${RESET}"
+                        echo
+                        printf "    Limit: "
+                        local limit_input=""
+                        read -r limit_input < /dev/tty
+                        if [[ "$limit_input" =~ ^[0-9]+$ ]] && (( limit_input >= 20 && limit_input <= 100 )); then
+                            SELECTED_ROG_BATTERY_LIMIT="$limit_input"
+                            clear
+                            echo
+                            echo -e "  ${BOLD}Battery Charge Limit${RESET}"
+                            echo
+                            echo -e "  ${CHECKED}✓${RESET}  Charge limit ${limit_input}% queued for apply"
+                            echo
+                            echo -e "  ${DIM}Press any key to return...${RESET}"
+                            read -rsn1 < /dev/tty
+                            return
+                        else
+                            echo
+                            echo -e "  ${DIM}✗${RESET}  Invalid value. Must be 20-100."
+                            echo
+                            echo -e "  ${DIM}Press any key to return...${RESET}"
+                            read -rsn1 < /dev/tty
+                            return
+                        fi
+                    else
+                        # One-shot full charge
+                        ROG_BATTERY_ONESHOT="true"
+                        clear
+                        echo
+                        echo -e "  ${BOLD}Battery One-Shot Charge${RESET}"
+                        echo
+                        echo -e "  ${CHECKED}✓${RESET}  One-shot full charge queued for apply"
+                        echo
+                        echo -e "  ${DIM}Press any key to return...${RESET}"
+                        read -rsn1 < /dev/tty
+                        return
+                    fi
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_battery() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  ROG Battery Management${RESET}"
+    echo
+
+    if [[ -n "$SELECTED_ROG_BATTERY_LIMIT" ]]; then
+        if asusctl battery limit "$SELECTED_ROG_BATTERY_LIMIT" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Battery charge limit set to ${SELECTED_ROG_BATTERY_LIMIT}%"
+            SUMMARY_LOG+=("✓  Battery charge limit set to ${SELECTED_ROG_BATTERY_LIMIT}%")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set battery charge limit"
+            SUMMARY_LOG+=("✗  Battery charge limit -- failed to set")
+        fi
+    fi
+
+    if [[ "$ROG_BATTERY_ONESHOT" == "true" ]]; then
+        if asusctl battery oneshot 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  One-shot full charge activated"
+            SUMMARY_LOG+=("✓  One-shot full charge activated")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to activate one-shot charge"
+            SUMMARY_LOG+=("✗  One-shot charge -- failed to activate")
+        fi
+    fi
+    echo
+    echo
+}
+
+# =============================================================================
+# ROG POWER TUNING
+# =============================================================================
+
+show_rog_power_tuning_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  ROG Power Tuning${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local -a items=("nv_dynamic_boost|NVIDIA Dynamic Boost|5|20|20|W" "nv_temp_target|NVIDIA Temp Target|75|87|87|°C" "ppt_pl1_spl|CPU Sustained Power (PL1)|28|90|90|W" "ppt_pl2_sppt|CPU Short Boost (PL2)|28|135|135|W")
+    local opt_cursor=0
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}ROG Power Tuning${RESET}"
+        echo -e "  ${DIM}Adjust CPU/GPU power and thermal limits${RESET}"
+        echo
+        echo -e "  ${DIM}Select parameter (Up/Down, Enter to edit):${RESET}"
+        echo
+
+        for i in "${!items[@]}"; do
+            IFS='|' read -r attr label min max default unit <<< "${items[$i]}"
+            local current_val=""
+            case "$attr" in
+                nv_dynamic_boost) current_val="$SELECTED_ROG_NV_DYNAMIC_BOOST" ;;
+                nv_temp_target) current_val="$SELECTED_ROG_NV_TEMP_TARGET" ;;
+                ppt_pl1_spl) current_val="$SELECTED_ROG_PPT_PL1_SPL" ;;
+                ppt_pl2_sppt) current_val="$SELECTED_ROG_PPT_PL2_SPPT" ;;
+            esac
+            local suffix=""
+            [[ -n "$current_val" ]] && suffix=" → ${current_val}${unit}"
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${label} (${min}-${max}${unit})${suffix}${RESET}"
+            else
+                echo -e "      ${C_TEXT}${label} (${min}-${max}${unit})${suffix}${RESET}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: done${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#items[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    IFS='|' read -r attr label min max default unit <<< "${items[$opt_cursor]}"
+                    clear
+                    echo
+                    echo -e "  ${BOLD}${label}${RESET}"
+                    echo
+                    echo -e "  ${DIM}Range: ${min}-${max}${unit} (default: ${default}${unit})${RESET}"
+                    echo
+                    printf "    Value: "
+                    local val_input=""
+                    read -r val_input < /dev/tty
+                    if [[ "$val_input" =~ ^[0-9]+$ ]] && (( val_input >= min && val_input <= max )); then
+                        case "$attr" in
+                            nv_dynamic_boost) SELECTED_ROG_NV_DYNAMIC_BOOST="$val_input" ;;
+                            nv_temp_target) SELECTED_ROG_NV_TEMP_TARGET="$val_input" ;;
+                            ppt_pl1_spl) SELECTED_ROG_PPT_PL1_SPL="$val_input" ;;
+                            ppt_pl2_sppt) SELECTED_ROG_PPT_PL2_SPPT="$val_input" ;;
+                        esac
+                    else
+                        echo
+                        echo -e "  ${DIM}✗${RESET}  Invalid value. Must be ${min}-${max}."
+                        echo
+                        echo -e "  ${DIM}Press any key to return...${RESET}"
+                        read -rsn1 < /dev/tty
+                    fi
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_power_tuning() {
+    local has_change=false
+    [[ -n "$SELECTED_ROG_NV_DYNAMIC_BOOST" ]] && has_change=true
+    [[ -n "$SELECTED_ROG_NV_TEMP_TARGET" ]] && has_change=true
+    [[ -n "$SELECTED_ROG_PPT_PL1_SPL" ]] && has_change=true
+    [[ -n "$SELECTED_ROG_PPT_PL2_SPPT" ]] && has_change=true
+
+    [[ "$has_change" != true ]] && return
+
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  ROG Power Tuning${RESET}"
+    echo
+
+    if [[ -n "$SELECTED_ROG_NV_DYNAMIC_BOOST" ]]; then
+        apply_rog_armoury_toggle "nv_dynamic_boost" "NVIDIA Dynamic Boost" "$SELECTED_ROG_NV_DYNAMIC_BOOST" "${SELECTED_ROG_NV_DYNAMIC_BOOST}W"
+    fi
+
+    if [[ -n "$SELECTED_ROG_NV_TEMP_TARGET" ]]; then
+        apply_rog_armoury_toggle "nv_temp_target" "NVIDIA Temp Target" "$SELECTED_ROG_NV_TEMP_TARGET" "${SELECTED_ROG_NV_TEMP_TARGET}°C"
+    fi
+
+    if [[ -n "$SELECTED_ROG_PPT_PL1_SPL" ]]; then
+        apply_rog_armoury_toggle "ppt_pl1_spl" "CPU Sustained Power" "$SELECTED_ROG_PPT_PL1_SPL" "${SELECTED_ROG_PPT_PL1_SPL}W"
+    fi
+
+    if [[ -n "$SELECTED_ROG_PPT_PL2_SPPT" ]]; then
+        apply_rog_armoury_toggle "ppt_pl2_sppt" "CPU Short Boost" "$SELECTED_ROG_PPT_PL2_SPPT" "${SELECTED_ROG_PPT_PL2_SPPT}W"
+    fi
+
+    echo
+    echo
+}
+
+# =============================================================================
+# ROG AURA POWER ZONES
+# =============================================================================
+
+show_rog_aura_power_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Aura Power Zones${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local -a zones=("keyboard" "logo" "lightbar" "lid" "rear-glow")
+    local -a zone_labels=("Keyboard" "Logo" "Lightbar" "Lid" "Rear Glow")
+    local -a states=("boot" "awake" "sleep" "shutdown")
+    local -a state_labels=("Boot" "Awake" "Sleep" "Shutdown")
+
+    local opt_cursor=0
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Aura Power Zones${RESET}"
+        echo -e "  ${DIM}Control LED zones for different power states${RESET}"
+        echo
+        echo -e "  ${DIM}Select zone (Up/Down, Enter to configure):${RESET}"
+        echo
+
+        for i in "${!zones[@]}"; do
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${zone_labels[$i]}${RESET}"
+            else
+                echo -e "      ${C_TEXT}${zone_labels[$i]}${RESET}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: done${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#zones[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    local zone="${zones[$opt_cursor]}"
+                    local zone_label="${zone_labels[$opt_cursor]}"
+
+                    # Toggle states for this zone
+                    local -a zone_toggles=(0 0 0 0)
+                    local sc=0
+
+                    while true; do
+                        clear
+                        echo
+                        echo -e "  ${BOLD}Aura Power — ${zone_label}${RESET}"
+                        echo -e "  ${DIM}Toggle power states (Enter to toggle, Escape to save):${RESET}"
+                        echo
+
+                        for si in "${!states[@]}"; do
+                            local marker="  "
+                            [[ "${zone_toggles[$si]}" -eq 1 ]] && marker="●"
+                            [[ "${zone_toggles[$si]}" -eq 0 ]] && marker="○"
+                            if [[ $si -eq $sc ]]; then
+                                echo -e "    ${SELECTED_BG}> ${marker} ${state_labels[$si]}${RESET}"
+                            else
+                                echo -e "      ${marker} ${C_TEXT}${state_labels[$si]}${RESET}"
+                            fi
+                        done
+
+                        echo
+                        echo -e "  ${DIM}Escape: save and return${RESET}"
+
+                        IFS= read -rsn1 skey < /dev/tty
+                        case "$skey" in
+                            $'\x1b')
+                                read -rsn2 -t 0.1 skey
+                                case "$skey" in
+                                    '[A') (( sc > 0 )) && ((sc--)) ;;
+                                    '[B') (( sc < ${#states[@]} - 1 )) && ((sc++)) ;;
+                                esac
+                                if [[ -z "$skey" ]]; then
+                                    # Build the state list for this zone
+                                    local enabled_states=""
+                                    for si in "${!states[@]}"; do
+                                        if [[ "${zone_toggles[$si]}" -eq 1 ]]; then
+                                            [[ -n "$enabled_states" ]] && enabled_states+=","
+                                            enabled_states+="${states[$si]}"
+                                        fi
+                                    done
+                                    if [[ -n "$enabled_states" ]]; then
+                                        SELECTED_ROG_AURA_POWER_ZONE+="${zone}:${enabled_states};"
+                                    fi
+                                    break
+                                fi
+                                ;;
+                            '')
+                                # Toggle
+                                if [[ "${zone_toggles[$sc]}" -eq 0 ]]; then
+                                    zone_toggles[$sc]=1
+                                else
+                                    zone_toggles[$sc]=0
+                                fi
+                                ;;
+                            q|Q) break ;;
+                        esac
+                    done
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_aura_power() {
+    [[ -z "$SELECTED_ROG_AURA_POWER_ZONE" ]] && return
+
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Aura Power Zones${RESET}"
+    echo
+
+    # Parse zone:states; pairs
+    IFS=';' read -ra zone_pairs <<< "$SELECTED_ROG_AURA_POWER_ZONE"
+    for pair in "${zone_pairs[@]}"; do
+        [[ -z "$pair" ]] && continue
+        local zone="${pair%%:*}"
+        local states_str="${pair#*:}"
+        IFS=',' read -ra state_list <<< "$states_str"
+
+        local -a cmd=(asusctl aura power "$zone")
+        for st in "${state_list[@]}"; do
+            cmd+=("--$st")
+        done
+
+        if "${cmd[@]}" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  ${zone} zone: ${states_str} enabled"
+            SUMMARY_LOG+=("✓  Aura power ${zone}: ${states_str}")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set ${zone} zone"
+            SUMMARY_LOG+=("✗  Aura power ${zone} -- failed to set")
+        fi
+    done
+
+    echo
+    echo
+}
+
+# =============================================================================
+# ROG EXTENDED SLASH LEDBAR
+# =============================================================================
+
+show_rog_slash_extra_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Slash Ledbar Options${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local -a options=("Interval (0-5)" "Show on boot" "Show on shutdown" "Show on sleep" "Show on battery" "Battery warning")
+    local -a toggle_vars=("" "ROG_SLASH_SHOW_BOOT" "ROG_SLASH_SHOW_SHUTDOWN" "ROG_SLASH_SHOW_SLEEP" "ROG_SLASH_SHOW_BATTERY" "ROG_SLASH_SHOW_BATTERY_WARN")
+    local opt_cursor=0
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Slash Ledbar Options${RESET}"
+        echo -e "  ${DIM}Configure when the Slash LED bar is active${RESET}"
+        echo
+        echo -e "  ${DIM}Select option (Up/Down, Enter to toggle/edit):${RESET}"
+        echo
+
+        for i in "${!options[@]}"; do
+            local suffix=""
+            if [[ $i -eq 0 ]]; then
+                [[ -n "$SELECTED_ROG_SLASH_INTERVAL" ]] && suffix=" → $SELECTED_ROG_SLASH_INTERVAL"
+            else
+                local var="${toggle_vars[$i]}"
+                local val="${!var}"
+                [[ "$val" == "true" ]] && suffix=" → Enable"
+                [[ "$val" == "false" ]] && suffix=" → Disable"
+            fi
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${options[$i]}${suffix}${RESET}"
+            else
+                echo -e "      ${C_TEXT}${options[$i]}${suffix}${RESET}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: done${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#options[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    if [[ $opt_cursor -eq 0 ]]; then
+                        clear
+                        echo
+                        echo -e "  ${BOLD}Slash Interval${RESET}"
+                        echo
+                        echo -e "  ${DIM}Enter interval value (0-5):${RESET}"
+                        echo
+                        printf "    Interval: "
+                        local int_input=""
+                        read -r int_input < /dev/tty
+                        if [[ "$int_input" =~ ^[0-5]$ ]]; then
+                            SELECTED_ROG_SLASH_INTERVAL="$int_input"
+                        else
+                            echo
+                            echo -e "  ${DIM}✗${RESET}  Invalid value. Must be 0-5."
+                            echo
+                            echo -e "  ${DIM}Press any key to return...${RESET}"
+                            read -rsn1 < /dev/tty
+                        fi
+                    else
+                        # Cycle: unset → true → false → unset
+                        local var="${toggle_vars[$opt_cursor]}"
+                        local val="${!var}"
+                        if [[ -z "$val" ]]; then
+                            printf -v "$var" '%s' "true"
+                        elif [[ "$val" == "true" ]]; then
+                            printf -v "$var" '%s' "false"
+                        else
+                            printf -v "$var" '%s' ""
+                        fi
+                    fi
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_slash_extra() {
+    local has_change=false
+    [[ -n "$SELECTED_ROG_SLASH_INTERVAL" ]] && has_change=true
+    [[ -n "$ROG_SLASH_SHOW_BOOT" ]] && has_change=true
+    [[ -n "$ROG_SLASH_SHOW_SHUTDOWN" ]] && has_change=true
+    [[ -n "$ROG_SLASH_SHOW_SLEEP" ]] && has_change=true
+    [[ -n "$ROG_SLASH_SHOW_BATTERY" ]] && has_change=true
+    [[ -n "$ROG_SLASH_SHOW_BATTERY_WARN" ]] && has_change=true
+
+    [[ "$has_change" != true ]] && return
+
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Slash Ledbar Options${RESET}"
+    echo
+
+    if [[ -n "$SELECTED_ROG_SLASH_INTERVAL" ]]; then
+        if asusctl slash --interval "$SELECTED_ROG_SLASH_INTERVAL" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash interval set to $SELECTED_ROG_SLASH_INTERVAL"
+            SUMMARY_LOG+=("✓  Slash interval set to $SELECTED_ROG_SLASH_INTERVAL")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set Slash interval"
+            SUMMARY_LOG+=("✗  Slash interval -- failed to set")
+        fi
+    fi
+
+    if [[ -n "$ROG_SLASH_SHOW_BOOT" ]]; then
+        if asusctl slash -B "$ROG_SLASH_SHOW_BOOT" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash show-on-boot: $ROG_SLASH_SHOW_BOOT"
+            SUMMARY_LOG+=("✓  Slash show-on-boot: $ROG_SLASH_SHOW_BOOT")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set show-on-boot"
+            SUMMARY_LOG+=("✗  Slash show-on-boot -- failed")
+        fi
+    fi
+
+    if [[ -n "$ROG_SLASH_SHOW_SHUTDOWN" ]]; then
+        if asusctl slash -S "$ROG_SLASH_SHOW_SHUTDOWN" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash show-on-shutdown: $ROG_SLASH_SHOW_SHUTDOWN"
+            SUMMARY_LOG+=("✓  Slash show-on-shutdown: $ROG_SLASH_SHOW_SHUTDOWN")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set show-on-shutdown"
+            SUMMARY_LOG+=("✗  Slash show-on-shutdown -- failed")
+        fi
+    fi
+
+    if [[ -n "$ROG_SLASH_SHOW_SLEEP" ]]; then
+        if asusctl slash -s "$ROG_SLASH_SHOW_SLEEP" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash show-on-sleep: $ROG_SLASH_SHOW_SLEEP"
+            SUMMARY_LOG+=("✓  Slash show-on-sleep: $ROG_SLASH_SHOW_SLEEP")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set show-on-sleep"
+            SUMMARY_LOG+=("✗  Slash show-on-sleep -- failed")
+        fi
+    fi
+
+    if [[ -n "$ROG_SLASH_SHOW_BATTERY" ]]; then
+        if asusctl slash -b "$ROG_SLASH_SHOW_BATTERY" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash show-on-battery: $ROG_SLASH_SHOW_BATTERY"
+            SUMMARY_LOG+=("✓  Slash show-on-battery: $ROG_SLASH_SHOW_BATTERY")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set show-on-battery"
+            SUMMARY_LOG+=("✗  Slash show-on-battery -- failed")
+        fi
+    fi
+
+    if [[ -n "$ROG_SLASH_SHOW_BATTERY_WARN" ]]; then
+        if asusctl slash -w "$ROG_SLASH_SHOW_BATTERY_WARN" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Slash battery warning: $ROG_SLASH_SHOW_BATTERY_WARN"
+            SUMMARY_LOG+=("✓  Slash battery warning: $ROG_SLASH_SHOW_BATTERY_WARN")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set battery warning"
+            SUMMARY_LOG+=("✗  Slash battery warning -- failed")
+        fi
+    fi
+
+    echo
+    echo
+}
+
+# =============================================================================
+# ROG EXTENDED ANIME MATRIX
+# =============================================================================
+
+show_rog_anime_extra_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  AniMe Matrix Options${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local -a options=("Brightness" "Powersave animation" "Off when unplugged" "Off when suspended" "Off when lid closed" "Builtin animations")
+    local opt_cursor=0
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}AniMe Matrix Options${RESET}"
+        echo -e "  ${DIM}Configure AniMe Matrix display behavior${RESET}"
+        echo
+        echo -e "  ${DIM}Select option (Up/Down, Enter to configure):${RESET}"
+        echo
+
+        for i in "${!options[@]}"; do
+            local suffix=""
+            case $i in
+                0) [[ -n "$SELECTED_ROG_ANIME_BRIGHTNESS" ]] && suffix=" → $SELECTED_ROG_ANIME_BRIGHTNESS" ;;
+                1) [[ -n "$ROG_ANIME_POWERSAVE" ]] && suffix=" → $ROG_ANIME_POWERSAVE" ;;
+                2) [[ -n "$ROG_ANIME_OFF_UNPLUGGED" ]] && suffix=" → $ROG_ANIME_OFF_UNPLUGGED" ;;
+                3) [[ -n "$ROG_ANIME_OFF_SUSPENDED" ]] && suffix=" → $ROG_ANIME_OFF_SUSPENDED" ;;
+                4) [[ -n "$ROG_ANIME_OFF_LID_CLOSED" ]] && suffix=" → $ROG_ANIME_OFF_LID_CLOSED" ;;
+                5) [[ -n "$SELECTED_ROG_ANIME_BOOT" ]] && suffix=" → configured" ;;
+            esac
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${options[$i]}${suffix}${RESET}"
+            else
+                echo -e "      ${C_TEXT}${options[$i]}${suffix}${RESET}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: done${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#options[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    case $opt_cursor in
+                        0) # Brightness
+                            local -a blevels=("off" "low" "med" "high")
+                            local -a blabels=("Off" "Low" "Medium" "High")
+                            local bc=1
+                            while true; do
+                                clear
+                                echo
+                                echo -e "  ${BOLD}AniMe Brightness${RESET}"
+                                echo -e "  ${DIM}Select brightness level:${RESET}"
+                                echo
+                                for bi in "${!blevels[@]}"; do
+                                    if [[ $bi -eq $bc ]]; then
+                                        echo -e "    ${SELECTED_BG}> ${blabels[$bi]}${RESET}"
+                                    else
+                                        echo -e "      ${C_TEXT}${blabels[$bi]}${RESET}"
+                                    fi
+                                done
+                                echo
+                                echo -e "  ${DIM}Escape: cancel${RESET}"
+                                IFS= read -rsn1 bkey < /dev/tty
+                                case "$bkey" in
+                                    $'\x1b')
+                                        read -rsn2 -t 0.1 bkey
+                                        case "$bkey" in
+                                            '[A') (( bc > 0 )) && ((bc--)) ;;
+                                            '[B') (( bc < 3 )) && ((bc++)) ;;
+                                        esac
+                                        [[ -z "$bkey" ]] && break
+                                        ;;
+                                    '') SELECTED_ROG_ANIME_BRIGHTNESS="${blevels[$bc]}"; break ;;
+                                    q|Q) break ;;
+                                esac
+                            done
+                            ;;
+                        1) # Powersave animation toggle
+                            if [[ -z "$ROG_ANIME_POWERSAVE" || "$ROG_ANIME_POWERSAVE" == "false" ]]; then
+                                ROG_ANIME_POWERSAVE="true"
+                            else
+                                ROG_ANIME_POWERSAVE="false"
+                            fi
+                            ;;
+                        2) # Off when unplugged
+                            if [[ -z "$ROG_ANIME_OFF_UNPLUGGED" || "$ROG_ANIME_OFF_UNPLUGGED" == "false" ]]; then
+                                ROG_ANIME_OFF_UNPLUGGED="true"
+                            else
+                                ROG_ANIME_OFF_UNPLUGGED="false"
+                            fi
+                            ;;
+                        3) # Off when suspended
+                            if [[ -z "$ROG_ANIME_OFF_SUSPENDED" || "$ROG_ANIME_OFF_SUSPENDED" == "false" ]]; then
+                                ROG_ANIME_OFF_SUSPENDED="true"
+                            else
+                                ROG_ANIME_OFF_SUSPENDED="false"
+                            fi
+                            ;;
+                        4) # Off when lid closed
+                            if [[ -z "$ROG_ANIME_OFF_LID_CLOSED" || "$ROG_ANIME_OFF_LID_CLOSED" == "false" ]]; then
+                                ROG_ANIME_OFF_LID_CLOSED="true"
+                            else
+                                ROG_ANIME_OFF_LID_CLOSED="false"
+                            fi
+                            ;;
+                        5) # Builtin animations
+                            _anime_select_builtins
+                            ;;
+                    esac
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+_anime_select_builtins() {
+    local -a boot_opts=("default" "GlitchConstruction" "StaticEmergence")
+    local -a awake_opts=("default" "BinaryBannerScroll" "RogLogoGlitch")
+    local -a sleep_opts=("default" "BannerSwipe" "Starfield")
+    local -a shutdown_opts=("default" "GlitchOut" "SeeYa")
+    local -a phase_names=("Boot" "Awake" "Sleep" "Shutdown")
+
+    local phase=0
+    while (( phase < 4 )); do
+        local -n opts_ref="${phase_names[$phase],,}_opts"
+        local pc=0
+
+        while true; do
+            clear
+            echo
+            echo -e "  ${BOLD}AniMe Builtin — ${phase_names[$phase]}${RESET}"
+            echo -e "  ${DIM}Select animation:${RESET}"
+            echo
+
+            for oi in "${!opts_ref[@]}"; do
+                if [[ $oi -eq $pc ]]; then
+                    echo -e "    ${SELECTED_BG}> ${opts_ref[$oi]}${RESET}"
+                else
+                    echo -e "      ${C_TEXT}${opts_ref[$oi]}${RESET}"
+                fi
+            done
+
+            echo
+            echo -e "  ${DIM}Escape: skip${RESET}"
+
+            IFS= read -rsn1 akey < /dev/tty
+            case "$akey" in
+                $'\x1b')
+                    read -rsn2 -t 0.1 akey
+                    case "$akey" in
+                        '[A') (( pc > 0 )) && ((pc--)) ;;
+                        '[B') (( pc < ${#opts_ref[@]} - 1 )) && ((pc++)) ;;
+                    esac
+                    [[ -z "$akey" ]] && break
+                    ;;
+                '')
+                    case $phase in
+                        0) SELECTED_ROG_ANIME_BOOT="${opts_ref[$pc]}" ;;
+                        1) SELECTED_ROG_ANIME_AWAKE="${opts_ref[$pc]}" ;;
+                        2) SELECTED_ROG_ANIME_SLEEP="${opts_ref[$pc]}" ;;
+                        3) SELECTED_ROG_ANIME_SHUTDOWN="${opts_ref[$pc]}" ;;
+                    esac
+                    break
+                    ;;
+                q|Q) return ;;
+            esac
+        done
+        ((phase++))
+    done
+}
+
+apply_rog_anime_extra() {
+    local has_change=false
+    [[ -n "$SELECTED_ROG_ANIME_BRIGHTNESS" ]] && has_change=true
+    [[ -n "$ROG_ANIME_POWERSAVE" ]] && has_change=true
+    [[ -n "$ROG_ANIME_OFF_UNPLUGGED" ]] && has_change=true
+    [[ -n "$ROG_ANIME_OFF_SUSPENDED" ]] && has_change=true
+    [[ -n "$ROG_ANIME_OFF_LID_CLOSED" ]] && has_change=true
+    [[ -n "$SELECTED_ROG_ANIME_BOOT" ]] && has_change=true
+
+    [[ "$has_change" != true ]] && return
+
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  AniMe Matrix Options${RESET}"
+    echo
+
+    if [[ -n "$SELECTED_ROG_ANIME_BRIGHTNESS" ]]; then
+        if asusctl anime --brightness "$SELECTED_ROG_ANIME_BRIGHTNESS" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  AniMe brightness set to $SELECTED_ROG_ANIME_BRIGHTNESS"
+            SUMMARY_LOG+=("✓  AniMe brightness: $SELECTED_ROG_ANIME_BRIGHTNESS")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set AniMe brightness"
+            SUMMARY_LOG+=("✗  AniMe brightness -- failed")
+        fi
+    fi
+
+    if [[ -n "$ROG_ANIME_POWERSAVE" ]]; then
+        if asusctl anime --enable-powersave-anim "$ROG_ANIME_POWERSAVE" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  AniMe powersave animation: $ROG_ANIME_POWERSAVE"
+            SUMMARY_LOG+=("✓  AniMe powersave: $ROG_ANIME_POWERSAVE")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set powersave animation"
+            SUMMARY_LOG+=("✗  AniMe powersave -- failed")
+        fi
+    fi
+
+    if [[ -n "$ROG_ANIME_OFF_UNPLUGGED" ]]; then
+        if asusctl anime --off-when-unplugged "$ROG_ANIME_OFF_UNPLUGGED" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  AniMe off-when-unplugged: $ROG_ANIME_OFF_UNPLUGGED"
+            SUMMARY_LOG+=("✓  AniMe off-when-unplugged: $ROG_ANIME_OFF_UNPLUGGED")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set off-when-unplugged"
+            SUMMARY_LOG+=("✗  AniMe off-when-unplugged -- failed")
+        fi
+    fi
+
+    if [[ -n "$ROG_ANIME_OFF_SUSPENDED" ]]; then
+        if asusctl anime --off-when-suspended "$ROG_ANIME_OFF_SUSPENDED" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  AniMe off-when-suspended: $ROG_ANIME_OFF_SUSPENDED"
+            SUMMARY_LOG+=("✓  AniMe off-when-suspended: $ROG_ANIME_OFF_SUSPENDED")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set off-when-suspended"
+            SUMMARY_LOG+=("✗  AniMe off-when-suspended -- failed")
+        fi
+    fi
+
+    if [[ -n "$ROG_ANIME_OFF_LID_CLOSED" ]]; then
+        if asusctl anime --off-when-lid-closed "$ROG_ANIME_OFF_LID_CLOSED" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  AniMe off-when-lid-closed: $ROG_ANIME_OFF_LID_CLOSED"
+            SUMMARY_LOG+=("✓  AniMe off-when-lid-closed: $ROG_ANIME_OFF_LID_CLOSED")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set off-when-lid-closed"
+            SUMMARY_LOG+=("✗  AniMe off-when-lid-closed -- failed")
+        fi
+    fi
+
+    if [[ -n "$SELECTED_ROG_ANIME_BOOT" || -n "$SELECTED_ROG_ANIME_AWAKE" || -n "$SELECTED_ROG_ANIME_SLEEP" || -n "$SELECTED_ROG_ANIME_SHUTDOWN" ]]; then
+        local -a builtin_cmd=(asusctl anime set-builtins)
+        builtin_cmd+=(--boot "${SELECTED_ROG_ANIME_BOOT:-default}")
+        builtin_cmd+=(--awake "${SELECTED_ROG_ANIME_AWAKE:-default}")
+        builtin_cmd+=(--sleep "${SELECTED_ROG_ANIME_SLEEP:-default}")
+        builtin_cmd+=(--shutdown "${SELECTED_ROG_ANIME_SHUTDOWN:-default}")
+        builtin_cmd+=(--set true)
+
+        if "${builtin_cmd[@]}" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  AniMe builtin animations configured"
+            SUMMARY_LOG+=("✓  AniMe builtin animations set")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set builtin animations"
+            SUMMARY_LOG+=("✗  AniMe builtins -- failed")
+        fi
+    fi
+
+    echo
+    echo
+}
+
+# =============================================================================
+# ROG FAN CURVE EDITOR
+# =============================================================================
+
+show_rog_fan_curve_dialog() {
+    if ! command -v asusctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Fan Curve Editor${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  asusctl not found."
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    local -a options=("Edit CPU fan curve" "Edit GPU fan curve" "Edit MID fan curve" "Reset to default")
+    local opt_cursor=0
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Fan Curve Editor${RESET}"
+        echo -e "  ${DIM}Edit custom fan curve data points${RESET}"
+        echo
+        echo -e "  ${DIM}Select option (Up/Down, Enter to configure):${RESET}"
+        echo
+
+        for i in "${!options[@]}"; do
+            if [[ $i -eq $opt_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${options[$i]}${RESET}"
+            else
+                echo -e "      ${C_TEXT}${options[$i]}${RESET}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: done${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( opt_cursor > 0 )) && ((opt_cursor--)) ;;
+                    '[B') (( opt_cursor < ${#options[@]} - 1 )) && ((opt_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            ''|q|Q)
+                if [[ -z "$key" ]]; then
+                    if [[ $opt_cursor -eq 3 ]]; then
+                        ROG_FAN_CURVE_DEFAULT="true"
+                        clear
+                        echo
+                        echo -e "  ${BOLD}Fan Curve Editor${RESET}"
+                        echo
+                        echo -e "  ${CHECKED}✓${RESET}  Reset to default queued"
+                        echo
+                        echo -e "  ${DIM}Press any key to return...${RESET}"
+                        read -rsn1 < /dev/tty
+                    else
+                        local -a fans=("cpu" "gpu" "mid")
+                        local fan="${fans[$opt_cursor]}"
+                        local fan_upper="${fan^^}"
+
+                        # Show current curve if available
+                        local profile
+                        profile=$(asusctl profile get 2>/dev/null | head -1 | sed 's/Active profile: //')
+
+                        clear
+                        echo
+                        echo -e "  ${BOLD}${fan_upper} Fan Curve${RESET}"
+                        echo -e "  ${DIM}Profile: ${profile:-unknown}${RESET}"
+                        echo
+
+                        local current_curve
+                        current_curve=$(asusctl fan-curve --mod-profile "${profile:-Balanced}" --fan "$fan" 2>/dev/null)
+                        if [[ -n "$current_curve" ]]; then
+                            echo -e "  ${DIM}Current curve:${RESET}"
+                            echo -e "  ${DIM}${current_curve}${RESET}"
+                            echo
+                        fi
+
+                        echo -e "  ${DIM}Enter curve data (format: 30c:1%,49c:2%,59c:3%,69c:4%,79c:31%,89c:49%,99c:56%,109c:58%):${RESET}"
+                        echo
+                        printf "    Data: "
+                        local curve_input=""
+                        read -r curve_input < /dev/tty
+
+                        if [[ -n "$curve_input" ]]; then
+                            SELECTED_ROG_FAN_CURVE_FAN="$fan"
+                            SELECTED_ROG_FAN_CURVE_DATA="$curve_input"
+                            clear
+                            echo
+                            echo -e "  ${BOLD}Fan Curve Editor${RESET}"
+                            echo
+                            echo -e "  ${CHECKED}✓${RESET}  ${fan_upper} fan curve queued for apply"
+                            echo
+                            echo -e "  ${DIM}Press any key to return...${RESET}"
+                            read -rsn1 < /dev/tty
+                        else
+                            echo
+                            echo -e "  ${DIM}No data entered.${RESET}"
+                            echo
+                            echo -e "  ${DIM}Press any key to return...${RESET}"
+                            read -rsn1 < /dev/tty
+                        fi
+                    fi
+                else
+                    return
+                fi
+                ;;
+        esac
+    done
+}
+
+apply_rog_fan_curve() {
+    local has_change=false
+    [[ -n "$SELECTED_ROG_FAN_CURVE_DATA" ]] && has_change=true
+    [[ "$ROG_FAN_CURVE_DEFAULT" == "true" ]] && has_change=true
+
+    [[ "$has_change" != true ]] && return
+
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Fan Curve Editor${RESET}"
+    echo
+
+    local profile
+    profile=$(asusctl profile get 2>/dev/null | head -1 | sed 's/Active profile: //')
+
+    if [[ "$ROG_FAN_CURVE_DEFAULT" == "true" ]]; then
+        if asusctl fan-curve --default --mod-profile "${profile:-Balanced}" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  Fan curves reset to default for ${profile:-Balanced}"
+            SUMMARY_LOG+=("✓  Fan curves reset to default")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to reset fan curves"
+            SUMMARY_LOG+=("✗  Fan curves -- failed to reset")
+        fi
+    fi
+
+    if [[ -n "$SELECTED_ROG_FAN_CURVE_DATA" && -n "$SELECTED_ROG_FAN_CURVE_FAN" ]]; then
+        if asusctl fan-curve --mod-profile "${profile:-Balanced}" --fan "$SELECTED_ROG_FAN_CURVE_FAN" --data "$SELECTED_ROG_FAN_CURVE_DATA" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  ${SELECTED_ROG_FAN_CURVE_FAN^^} fan curve set"
+            SUMMARY_LOG+=("✓  ${SELECTED_ROG_FAN_CURVE_FAN^^} fan curve set")
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to set ${SELECTED_ROG_FAN_CURVE_FAN^^} fan curve"
+            SUMMARY_LOG+=("✗  ${SELECTED_ROG_FAN_CURVE_FAN^^} fan curve -- failed")
+        fi
+
+        # Auto-enable the single fan curve
+        if asusctl fan-curve --enable-fan-curve true --mod-profile "${profile:-Balanced}" --fan "$SELECTED_ROG_FAN_CURVE_FAN" 2>/dev/null; then
+            echo -e "    ${CHECKED}✓${RESET}  ${SELECTED_ROG_FAN_CURVE_FAN^^} fan curve enabled"
         fi
     fi
 
@@ -5996,17 +7083,23 @@ declare -a UTILITIES_ITEMS=(
 declare -a ROG_HARDWARE_ITEMS=(
     "rog_profile|Platform profile|[Open]||action|Set ASUS performance profile (Quiet/Balanced/Performance)"
     "rog_fan_curves|Fan curves|Enable|Disable|toggle|Enable custom fan curves for the active profile"
+    "rog_fan_curve_edit|Fan curve editor|[Open]||action|Edit custom fan curve data points per fan"
     "rog_boot_sound|Boot sound|Enable|Disable|toggle|Play the POST boot sound on startup"
     "rog_panel_od|Panel overdrive|Enable|Disable|toggle|Reduce display ghosting with panel overdrive"
     "rog_dgpu|Discrete GPU|Enable|Disable|toggle|Enable or disable the dedicated NVIDIA GPU"
     "rog_gpu_mux|GPU MUX|dGPU|Hybrid|radio|Direct display to dGPU or hybrid mode (reboot required)"
+    "rog_battery|Battery management|[Open]||action|Set charge limit and one-shot full charge"
+    "rog_power_tuning|Power tuning|[Open]||action|Adjust CPU/GPU power and thermal limits"
 )
 
 declare -a ROG_LIGHTING_ITEMS=(
     "rog_kbd_leds|Keyboard LEDs|[Open]||action|Set keyboard backlight brightness (off/low/med/high)"
     "rog_aura|Aura RGB effect|[Open]||action|Set keyboard RGB lighting effect and color"
+    "rog_aura_power|Aura power zones|[Open]||action|Control LED zones for different power states"
     "rog_slash|Slash Ledbar|[Open]||action|Configure the Slash LED bar animations"
+    "rog_slash_extra|Slash options|[Open]||action|Set interval and conditional show settings"
     "rog_anime|AniMe Matrix|Enable|Disable|toggle|Enable or disable the AniMe Matrix display"
+    "rog_anime_extra|AniMe options|[Open]||action|Brightness, powersave, and builtin animations"
 )
 
 # Extra themes: each entry is "Display Name|github_url"
@@ -6924,10 +8017,24 @@ draw_interface() {
                             rog_suffix="$SELECTED_ROG_KBD_LEDS"
                         elif [[ "$TOGGLE_ID" == "rog_aura" && -n "$SELECTED_ROG_AURA_EFFECT" ]]; then
                             rog_suffix="$SELECTED_ROG_AURA_EFFECT"
+                        elif [[ "$TOGGLE_ID" == "rog_aura_power" && -n "$SELECTED_ROG_AURA_POWER_ZONE" ]]; then
+                            rog_suffix="configured"
                         elif [[ "$TOGGLE_ID" == "rog_slash" && -n "$ROG_SLASH_ENABLE" ]]; then
                             rog_suffix="$ROG_SLASH_ENABLE"
                         elif [[ "$TOGGLE_ID" == "rog_slash" && -n "$SELECTED_ROG_SLASH_MODE" ]]; then
                             rog_suffix="$SELECTED_ROG_SLASH_MODE"
+                        elif [[ "$TOGGLE_ID" == "rog_slash_extra" && -n "$SELECTED_ROG_SLASH_INTERVAL$ROG_SLASH_SHOW_BOOT$ROG_SLASH_SHOW_SHUTDOWN$ROG_SLASH_SHOW_SLEEP$ROG_SLASH_SHOW_BATTERY$ROG_SLASH_SHOW_BATTERY_WARN" ]]; then
+                            rog_suffix="configured"
+                        elif [[ "$TOGGLE_ID" == "rog_battery" && -n "$SELECTED_ROG_BATTERY_LIMIT$ROG_BATTERY_ONESHOT" ]]; then
+                            [[ -n "$SELECTED_ROG_BATTERY_LIMIT" ]] && rog_suffix="limit ${SELECTED_ROG_BATTERY_LIMIT}%"
+                            [[ "$ROG_BATTERY_ONESHOT" == "true" ]] && rog_suffix="${rog_suffix:+$rog_suffix, }one-shot"
+                        elif [[ "$TOGGLE_ID" == "rog_power_tuning" && -n "$SELECTED_ROG_NV_DYNAMIC_BOOST$SELECTED_ROG_NV_TEMP_TARGET$SELECTED_ROG_PPT_PL1_SPL$SELECTED_ROG_PPT_PL2_SPPT" ]]; then
+                            rog_suffix="configured"
+                        elif [[ "$TOGGLE_ID" == "rog_fan_curve_edit" && -n "$SELECTED_ROG_FAN_CURVE_DATA$ROG_FAN_CURVE_DEFAULT" ]]; then
+                            [[ -n "$SELECTED_ROG_FAN_CURVE_FAN" ]] && rog_suffix="${SELECTED_ROG_FAN_CURVE_FAN^^}"
+                            [[ "$ROG_FAN_CURVE_DEFAULT" == "true" ]] && rog_suffix="${rog_suffix:+$rog_suffix, }reset"
+                        elif [[ "$TOGGLE_ID" == "rog_anime_extra" && -n "$SELECTED_ROG_ANIME_BRIGHTNESS$ROG_ANIME_POWERSAVE$ROG_ANIME_OFF_UNPLUGGED$ROG_ANIME_OFF_SUSPENDED$ROG_ANIME_OFF_LID_CLOSED$SELECTED_ROG_ANIME_BOOT" ]]; then
+                            rog_suffix="configured"
                         fi
                         if [[ -n "$rog_suffix" ]]; then
                             R=$(printf "  %-24s %s" "$TOGGLE_NAME" "$rog_suffix")
@@ -7392,7 +8499,13 @@ toggle_current_item() {
                     rog_profile) show_rog_profile_dialog ;;
                     rog_kbd_leds) show_rog_kbd_leds_dialog ;;
                     rog_aura) show_rog_aura_dialog ;;
+                    rog_aura_power) show_rog_aura_power_dialog ;;
                     rog_slash) show_rog_slash_dialog ;;
+                    rog_slash_extra) show_rog_slash_extra_dialog ;;
+                    rog_anime_extra) show_rog_anime_extra_dialog ;;
+                    rog_battery) show_rog_battery_dialog ;;
+                    rog_power_tuning) show_rog_power_tuning_dialog ;;
+                    rog_fan_curve_edit) show_rog_fan_curve_dialog ;;
                 esac
                 tput civis
                 stty -echo 2>/dev/null
@@ -7756,6 +8869,24 @@ fi
 if [[ -n "$ROG_SLASH_ENABLE" || -n "$SELECTED_ROG_SLASH_MODE" ]]; then
     has_selection=true
 fi
+if [[ -n "$SELECTED_ROG_SLASH_INTERVAL$ROG_SLASH_SHOW_BOOT$ROG_SLASH_SHOW_SHUTDOWN$ROG_SLASH_SHOW_SLEEP$ROG_SLASH_SHOW_BATTERY$ROG_SLASH_SHOW_BATTERY_WARN" ]]; then
+    has_selection=true
+fi
+if [[ -n "$SELECTED_ROG_BATTERY_LIMIT" || "$ROG_BATTERY_ONESHOT" == "true" ]]; then
+    has_selection=true
+fi
+if [[ -n "$SELECTED_ROG_NV_DYNAMIC_BOOST$SELECTED_ROG_NV_TEMP_TARGET$SELECTED_ROG_PPT_PL1_SPL$SELECTED_ROG_PPT_PL2_SPPT" ]]; then
+    has_selection=true
+fi
+if [[ -n "$SELECTED_ROG_AURA_POWER_ZONE" ]]; then
+    has_selection=true
+fi
+if [[ -n "$SELECTED_ROG_ANIME_BRIGHTNESS$ROG_ANIME_POWERSAVE$ROG_ANIME_OFF_UNPLUGGED$ROG_ANIME_OFF_SUSPENDED$ROG_ANIME_OFF_LID_CLOSED$SELECTED_ROG_ANIME_BOOT" ]]; then
+    has_selection=true
+fi
+if [[ -n "$SELECTED_ROG_FAN_CURVE_DATA" || "$ROG_FAN_CURVE_DEFAULT" == "true" ]]; then
+    has_selection=true
+fi
 
 if [ "$has_selection" = false ]; then
     clear
@@ -7861,6 +8992,27 @@ declare -a ACTION_SUMMARY=()
 [ "$ROG_HYBRID_MUX" = true ] && ACTION_SUMMARY+=("Set GPU MUX to hybrid")
 [ "$ROG_ENABLE_ANIME" = true ] && ACTION_SUMMARY+=("Enable AniMe Matrix")
 [ "$ROG_DISABLE_ANIME" = true ] && ACTION_SUMMARY+=("Disable AniMe Matrix")
+[[ -n "$SELECTED_ROG_BATTERY_LIMIT" ]] && ACTION_SUMMARY+=("Set ROG battery limit: ${SELECTED_ROG_BATTERY_LIMIT}%")
+[[ "$ROG_BATTERY_ONESHOT" == "true" ]] && ACTION_SUMMARY+=("One-shot full charge")
+[[ -n "$SELECTED_ROG_NV_DYNAMIC_BOOST" ]] && ACTION_SUMMARY+=("Set NVIDIA dynamic boost: ${SELECTED_ROG_NV_DYNAMIC_BOOST}W")
+[[ -n "$SELECTED_ROG_NV_TEMP_TARGET" ]] && ACTION_SUMMARY+=("Set NVIDIA temp target: ${SELECTED_ROG_NV_TEMP_TARGET}°C")
+[[ -n "$SELECTED_ROG_PPT_PL1_SPL" ]] && ACTION_SUMMARY+=("Set CPU sustained power: ${SELECTED_ROG_PPT_PL1_SPL}W")
+[[ -n "$SELECTED_ROG_PPT_PL2_SPPT" ]] && ACTION_SUMMARY+=("Set CPU short boost: ${SELECTED_ROG_PPT_PL2_SPPT}W")
+[[ -n "$SELECTED_ROG_AURA_POWER_ZONE" ]] && ACTION_SUMMARY+=("Configure Aura power zones")
+[[ -n "$SELECTED_ROG_SLASH_INTERVAL" ]] && ACTION_SUMMARY+=("Set Slash interval: $SELECTED_ROG_SLASH_INTERVAL")
+[[ -n "$ROG_SLASH_SHOW_BOOT" ]] && ACTION_SUMMARY+=("Slash show-on-boot: $ROG_SLASH_SHOW_BOOT")
+[[ -n "$ROG_SLASH_SHOW_SHUTDOWN" ]] && ACTION_SUMMARY+=("Slash show-on-shutdown: $ROG_SLASH_SHOW_SHUTDOWN")
+[[ -n "$ROG_SLASH_SHOW_SLEEP" ]] && ACTION_SUMMARY+=("Slash show-on-sleep: $ROG_SLASH_SHOW_SLEEP")
+[[ -n "$ROG_SLASH_SHOW_BATTERY" ]] && ACTION_SUMMARY+=("Slash show-on-battery: $ROG_SLASH_SHOW_BATTERY")
+[[ -n "$ROG_SLASH_SHOW_BATTERY_WARN" ]] && ACTION_SUMMARY+=("Slash battery warning: $ROG_SLASH_SHOW_BATTERY_WARN")
+[[ -n "$SELECTED_ROG_ANIME_BRIGHTNESS" ]] && ACTION_SUMMARY+=("Set AniMe brightness: $SELECTED_ROG_ANIME_BRIGHTNESS")
+[[ -n "$ROG_ANIME_POWERSAVE" ]] && ACTION_SUMMARY+=("AniMe powersave animation: $ROG_ANIME_POWERSAVE")
+[[ -n "$ROG_ANIME_OFF_UNPLUGGED" ]] && ACTION_SUMMARY+=("AniMe off-when-unplugged: $ROG_ANIME_OFF_UNPLUGGED")
+[[ -n "$ROG_ANIME_OFF_SUSPENDED" ]] && ACTION_SUMMARY+=("AniMe off-when-suspended: $ROG_ANIME_OFF_SUSPENDED")
+[[ -n "$ROG_ANIME_OFF_LID_CLOSED" ]] && ACTION_SUMMARY+=("AniMe off-when-lid-closed: $ROG_ANIME_OFF_LID_CLOSED")
+[[ -n "$SELECTED_ROG_ANIME_BOOT" ]] && ACTION_SUMMARY+=("Set AniMe builtin animations")
+[[ -n "$SELECTED_ROG_FAN_CURVE_DATA" ]] && ACTION_SUMMARY+=("Set ${SELECTED_ROG_FAN_CURVE_FAN^^} fan curve data")
+[[ "$ROG_FAN_CURVE_DEFAULT" == "true" ]] && ACTION_SUMMARY+=("Reset fan curves to default")
 [ "$ENABLE_SUSPEND" = true ] && ACTION_SUMMARY+=("Enable suspend")
 [ "$DISABLE_SUSPEND" = true ] && ACTION_SUMMARY+=("Disable suspend")
 [ "$ENABLE_HIBERNATION" = true ] && ACTION_SUMMARY+=("Enable hibernation")
@@ -7978,7 +9130,21 @@ if [[ -n "$ROG_SLASH_ENABLE" || -n "$SELECTED_ROG_SLASH_MODE" ]]; then
     apply_rog_slash
 fi
 
+apply_rog_slash_extra
+
 apply_rog_hardware_toggles
+
+if [[ -n "$SELECTED_ROG_BATTERY_LIMIT" || "$ROG_BATTERY_ONESHOT" == "true" ]]; then
+    apply_rog_battery
+fi
+
+apply_rog_power_tuning
+
+apply_rog_aura_power
+
+apply_rog_anime_extra
+
+apply_rog_fan_curve
 
 if [ "$BIND_SHUTDOWN" = true ]; then
     bind_shutdown
