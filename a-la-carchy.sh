@@ -4607,6 +4607,253 @@ apply_rog_anime_extra() {
 # ROG FAN CURVE EDITOR
 # =============================================================================
 
+_fan_curve_parse_current() {
+    local profile="$1" fan="$2"
+    local output
+    output=$(asusctl fan-curve --mod-profile "$profile" --fan "$fan" 2>/dev/null)
+
+    # Extract the block for the matching fan
+    local fan_upper="${fan^^}"
+    local in_block=false pwm_line="" temp_line=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ fan:\ $fan_upper ]]; then
+            in_block=true
+        elif [[ "$in_block" == true ]]; then
+            if [[ "$line" =~ pwm:\ \((.+)\) ]]; then
+                pwm_line="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ temp:\ \((.+)\) ]]; then
+                temp_line="${BASH_REMATCH[1]}"
+                break
+            fi
+        fi
+    done <<< "$output"
+
+    # Convert PWM (0-255) to percentage (0-100) for the UI
+    if [[ -n "$pwm_line" && -n "$temp_line" ]]; then
+        local -a raw_pwm=()
+        IFS=', ' read -ra raw_pwm <<< "$pwm_line"
+        IFS=', ' read -ra FC_TEMP <<< "$temp_line"
+        FC_PCT=()
+        for val in "${raw_pwm[@]}"; do
+            FC_PCT+=( $(( val * 100 / 255 )) )
+        done
+    else
+        FC_PCT=(5 10 25 35 50 60 80 90)
+        FC_TEMP=(30 40 50 60 70 80 90 100)
+    fi
+}
+
+_fan_curve_draw_graph() {
+    local -n pct_ref=$1 temp_ref=$2
+    local selected=$3
+    local graph_h=16
+    local graph_w=40
+
+    # Y-axis: 0-100% mapped to graph_h rows
+    # X-axis: 8 points spread across graph_w columns
+
+    local -a col_positions=()
+    for (( i=0; i<8; i++ )); do
+        col_positions+=( $(( i * (graph_w - 1) / 7 )) )
+    done
+
+    # Build point row positions (0 = bottom, graph_h-1 = top)
+    local -a point_rows=()
+    for (( i=0; i<8; i++ )); do
+        local row=$(( pct_ref[i] * (graph_h - 1) / 100 ))
+        (( row > graph_h - 1 )) && row=$((graph_h - 1))
+        (( row < 0 )) && row=0
+        point_rows+=( "$row" )
+    done
+
+    # Build the grid row by row (top to bottom = high % to low)
+    for (( row=graph_h-1; row>=0; row-- )); do
+        # Y-axis label
+        if (( row == graph_h - 1 )); then
+            printf "  ${DIM}100%%${RESET} ${C_BORDER}│${RESET}"
+        elif (( row == (graph_h - 1) * 3 / 4 )); then
+            printf "  ${DIM} 75%%${RESET} ${C_BORDER}│${RESET}"
+        elif (( row == (graph_h - 1) / 2 )); then
+            printf "  ${DIM} 50%%${RESET} ${C_BORDER}│${RESET}"
+        elif (( row == (graph_h - 1) / 4 )); then
+            printf "  ${DIM} 25%%${RESET} ${C_BORDER}│${RESET}"
+        elif (( row == 0 )); then
+            printf "  ${DIM}  0%%${RESET} ${C_BORDER}│${RESET}"
+        else
+            printf "  ${DIM}    ${RESET} ${C_BORDER}│${RESET}"
+        fi
+
+        # Build this row's content
+        local -a row_chars=()
+        for (( c=0; c<graph_w; c++ )); do
+            row_chars+=(" ")
+        done
+
+        # Fill in the curve line between points
+        for (( i=0; i<7; i++ )); do
+            local ni=$((i+1))
+            local c1=${col_positions[$i]} r1=${point_rows[$i]}
+            local c2=${col_positions[$ni]} r2=${point_rows[$ni]}
+            local dc=$(( c2 - c1 ))
+            for (( c=c1; c<=c2; c++ )); do
+                local interp_row
+                if (( dc == 0 )); then
+                    interp_row=$r1
+                else
+                    interp_row=$(( r1 + (r2 - r1) * (c - c1) / dc ))
+                fi
+                if (( interp_row == row )); then
+                    row_chars[$c]="─"
+                fi
+            done
+        done
+
+        # Place the point markers (overwrite line chars)
+        for (( i=0; i<8; i++ )); do
+            if (( point_rows[i] == row )); then
+                if (( i == selected )); then
+                    row_chars[${col_positions[$i]}]="◆"
+                else
+                    row_chars[${col_positions[$i]}]="●"
+                fi
+            fi
+        done
+
+        # Print the row
+        for (( c=0; c<graph_w; c++ )); do
+            local ch="${row_chars[$c]}"
+            local is_point=false pi_match=-1
+            for (( pi=0; pi<8; pi++ )); do
+                if (( col_positions[pi] == c && point_rows[pi] == row )); then
+                    is_point=true
+                    pi_match=$pi
+                    break
+                fi
+            done
+            if [[ "$is_point" == true ]]; then
+                if (( pi_match == selected )); then
+                    printf "${C_ACCENT}◆${RESET}"
+                else
+                    printf "${CHECKED}●${RESET}"
+                fi
+            elif [[ "$ch" == "─" ]]; then
+                printf "${DIM}─${RESET}"
+            else
+                printf " "
+            fi
+        done
+        echo
+    done
+
+    # X-axis line
+    printf "  ${DIM}    ${RESET} ${C_BORDER}└"
+    for (( c=0; c<graph_w; c++ )); do
+        printf "─"
+    done
+    printf "${RESET}"
+    echo
+
+    # X-axis labels (temperatures)
+    printf "  ${DIM}      "
+    for (( i=0; i<8; i++ )); do
+        local pos=${col_positions[$i]}
+        local label="${temp_ref[$i]}°"
+        if (( i == 0 )); then
+            printf "%s" "$label"
+        else
+            local prev_end=$(( col_positions[i-1] + ${#prev_label} ))
+            local gap=$(( pos - prev_end ))
+            (( gap < 1 )) && gap=1
+            printf "%*s%s" "$gap" "" "$label"
+        fi
+        local prev_label="$label"
+    done
+    printf "${RESET}"
+    echo
+}
+
+_fan_curve_graph_editor() {
+    local fan="$1" profile="$2"
+    local fan_upper="${fan^^}"
+
+    # Parse current curve data (populates FC_PCT and FC_TEMP)
+    local -a FC_PCT=() FC_TEMP=()
+    _fan_curve_parse_current "$profile" "$fan"
+
+    local selected=0
+    local step=5  # Percentage adjustment step
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Fan Curve Editor — ${fan_upper}${RESET}"
+        echo -e "  ${DIM}Profile: ${profile}${RESET}"
+        echo
+
+        _fan_curve_draw_graph FC_PCT FC_TEMP "$selected"
+
+        echo
+        echo -e "  ${C_ACCENT}Point $((selected+1))/8:${RESET}  ${FC_TEMP[$selected]}°C → ${FC_PCT[$selected]}% fan speed"
+        echo
+        echo -e "  ${DIM}←/→ select point   ↑/↓ adjust speed (±${step}%)${RESET}"
+        echo -e "  ${DIM}T: edit temperature   S: toggle step (1%/5%/10%)${RESET}"
+        echo -e "  ${DIM}Enter: save   Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A')  # Up - increase fan %
+                        (( FC_PCT[selected] += step ))
+                        (( FC_PCT[selected] > 100 )) && FC_PCT[$selected]=100
+                        ;;
+                    '[B')  # Down - decrease fan %
+                        (( FC_PCT[selected] -= step ))
+                        (( FC_PCT[selected] < 0 )) && FC_PCT[$selected]=0
+                        ;;
+                    '[C')  # Right - next point
+                        (( selected < 7 )) && ((selected++))
+                        ;;
+                    '[D')  # Left - previous point
+                        (( selected > 0 )) && ((selected--))
+                        ;;
+                esac
+                [[ -z "$key" ]] && return 1  # Escape = cancel
+                ;;
+            t|T)
+                # Edit temperature for selected point
+                echo
+                printf "    New temperature for point $((selected+1)) (°C): "
+                local temp_input=""
+                read -r temp_input < /dev/tty
+                if [[ "$temp_input" =~ ^[0-9]+$ ]] && (( temp_input >= 0 && temp_input <= 120 )); then
+                    FC_TEMP[$selected]=$temp_input
+                fi
+                ;;
+            s|S)
+                # Cycle step size: 5% → 1% → 10% → 5%
+                if (( step == 5 )); then step=1
+                elif (( step == 1 )); then step=10
+                else step=5; fi
+                ;;
+            '')  # Enter = save
+                # Convert percentages back to PWM (0-255) for asusctl
+                local data=""
+                for (( i=0; i<8; i++ )); do
+                    (( i > 0 )) && data+=","
+                    local pwm_val=$(( FC_PCT[i] * 255 / 100 ))
+                    data+="${FC_TEMP[$i]}c:${pwm_val}"
+                done
+                SELECTED_ROG_FAN_CURVE_FAN="$fan"
+                SELECTED_ROG_FAN_CURVE_DATA="$data"
+                return 0
+                ;;
+            q|Q) return 1 ;;
+        esac
+    done
+}
+
 show_rog_fan_curve_dialog() {
     if ! command -v asusctl &>/dev/null; then
         clear
@@ -4621,14 +4868,17 @@ show_rog_fan_curve_dialog() {
         return
     fi
 
-    local -a options=("Edit CPU fan curve" "Edit GPU fan curve" "Edit MID fan curve" "Reset to default")
+    local profile
+    profile=$(asusctl profile get 2>/dev/null | head -1 | sed 's/Active profile: //')
+
+    local -a options=("Edit CPU fan curve" "Edit GPU fan curve" "Reset to default")
     local opt_cursor=0
 
     while true; do
         clear
         echo
         echo -e "  ${BOLD}Fan Curve Editor${RESET}"
-        echo -e "  ${DIM}Edit custom fan curve data points${RESET}"
+        echo -e "  ${DIM}Profile: ${profile:-unknown}${RESET}"
         echo
         echo -e "  ${DIM}Select option (Up/Down, Enter to configure):${RESET}"
         echo
@@ -4656,7 +4906,7 @@ show_rog_fan_curve_dialog() {
                 ;;
             ''|q|Q)
                 if [[ -z "$key" ]]; then
-                    if [[ $opt_cursor -eq 3 ]]; then
+                    if [[ $opt_cursor -eq 2 ]]; then
                         ROG_FAN_CURVE_DEFAULT="true"
                         clear
                         echo
@@ -4667,48 +4917,14 @@ show_rog_fan_curve_dialog() {
                         echo -e "  ${DIM}Press any key to return...${RESET}"
                         read -rsn1 < /dev/tty
                     else
-                        local -a fans=("cpu" "gpu" "mid")
+                        local -a fans=("cpu" "gpu")
                         local fan="${fans[$opt_cursor]}"
-                        local fan_upper="${fan^^}"
-
-                        # Show current curve if available
-                        local profile
-                        profile=$(asusctl profile get 2>/dev/null | head -1 | sed 's/Active profile: //')
-
-                        clear
-                        echo
-                        echo -e "  ${BOLD}${fan_upper} Fan Curve${RESET}"
-                        echo -e "  ${DIM}Profile: ${profile:-unknown}${RESET}"
-                        echo
-
-                        local current_curve
-                        current_curve=$(asusctl fan-curve --mod-profile "${profile:-Balanced}" --fan "$fan" 2>/dev/null)
-                        if [[ -n "$current_curve" ]]; then
-                            echo -e "  ${DIM}Current curve:${RESET}"
-                            echo -e "  ${DIM}${current_curve}${RESET}"
-                            echo
-                        fi
-
-                        echo -e "  ${DIM}Enter curve data (format: 30c:1%,49c:2%,59c:3%,69c:4%,79c:31%,89c:49%,99c:56%,109c:58%):${RESET}"
-                        echo
-                        printf "    Data: "
-                        local curve_input=""
-                        read -r curve_input < /dev/tty
-
-                        if [[ -n "$curve_input" ]]; then
-                            SELECTED_ROG_FAN_CURVE_FAN="$fan"
-                            SELECTED_ROG_FAN_CURVE_DATA="$curve_input"
+                        if _fan_curve_graph_editor "$fan" "${profile:-Balanced}"; then
                             clear
                             echo
                             echo -e "  ${BOLD}Fan Curve Editor${RESET}"
                             echo
-                            echo -e "  ${CHECKED}✓${RESET}  ${fan_upper} fan curve queued for apply"
-                            echo
-                            echo -e "  ${DIM}Press any key to return...${RESET}"
-                            read -rsn1 < /dev/tty
-                        else
-                            echo
-                            echo -e "  ${DIM}No data entered.${RESET}"
+                            echo -e "  ${CHECKED}✓${RESET}  ${fan^^} fan curve queued for apply"
                             echo
                             echo -e "  ${DIM}Press any key to return...${RESET}"
                             read -rsn1 < /dev/tty

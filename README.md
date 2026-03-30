@@ -456,7 +456,7 @@ Full ASUS ROG laptop control via `asusctl`, organized into two subcategories. Re
 |-------|------|-------------|
 | Platform profile | action | Set ASUS performance profile (Quiet/Balanced/Performance) via `asusctl profile set` |
 | Fan curves | toggle | Enable or disable custom fan curves for the active profile |
-| Fan curve editor | action | Edit custom fan curve data points per fan (CPU/GPU/MID) |
+| Fan curve editor | action | Visual graph editor for CPU/GPU fan curves with 8 adjustable points |
 | Boot sound | toggle | Enable or disable the POST boot sound via firmware attributes |
 | Panel overdrive | toggle | Reduce display ghosting with panel overdrive (may increase power use) |
 | Discrete GPU | toggle | Enable or disable the dedicated NVIDIA GPU |
@@ -476,12 +476,17 @@ The dialog marks the currently active profile with `(active)`. On confirm, the p
 
 ##### Fan Curve Editor
 
-Press Space to open a dialog with options to:
-- **Edit CPU/GPU/MID fan curves** — enter custom temperature:speed data points (e.g. `30c:1%,49c:2%,59c:3%,69c:4%,79c:31%,89c:49%,99c:56%,109c:58%`)
+Press Space to open a visual graph editor for fan curves:
+- **Edit CPU/GPU fan curves** — interactive ASCII graph showing the current 8-point curve
+  - Left/Right arrows to select a point on the curve
+  - Up/Down arrows to adjust fan speed (0-100%)
+  - T key to edit the temperature value (°C) for the selected point
+  - S key to toggle adjustment step size (±1%, ±5%, ±10%)
+  - Graph displays real-time with percentage scale and temperature axis
+  - Percentages are converted to/from PWM values automatically
 - **Reset to default** — restore the active profile's fan curves to factory defaults
-- Shows current curve data and active profile for reference
 
-Applied via `asusctl fan-curve --mod-profile --fan --data` and `--default`. Setting a custom curve automatically enables it for the specified fan.
+The editor loads the current curve from asusctl and shows the active profile for reference. Applied via `asusctl fan-curve --mod-profile --fan --data` and `--default`. Setting a custom curve automatically enables it for the specified fan.
 
 ##### Firmware Attributes
 
