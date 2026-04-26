@@ -17,7 +17,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
 - **Multi-monitor management** with detection, positioning, primary monitor, and laptop auto-off
 - **ASUS ROG hardware control** via asusctl (platform profiles, Aura RGB, Slash Ledbar, fan curves, GPU MUX, battery management, power tuning, AniMe Matrix, and more)
-- **27 configuration tweaks** for keybindings, display, system, appearance, keyboard, and utilities
+- **30 configuration tweaks** for keybindings, display, system, appearance, keyboard, and utilities
 - **Backup & restore** config directories with a single selection
 - **Summary screen** after all actions complete
 - Safe removal with confirmation prompts
@@ -350,6 +350,10 @@ All items below are in the **Appearance** category in the TUI.
 | Restore transparency | Restore default window transparency rules |
 | Show all tray icons | All system tray icons always visible |
 | Hide tray icons | Use expander for cleaner bar |
+| Remove Omarchy logo | Remove the Omarchy logo button from the left of the waybar |
+| Restore Omarchy logo | Bring the Omarchy logo button back to the waybar |
+| Remove update icon | Remove the update notification icon from the waybar |
+| Restore update icon | Bring the update notification icon back to the waybar |
 | Enable 12-hour clock | Clock displays with AM/PM |
 | Disable 12-hour clock | 24-hour format |
 | Show clock date | Display day name on clock (e.g. "Sunday 10:55 AM") |
@@ -372,6 +376,7 @@ All items below are in the **Appearance** category in the TUI.
 | Enable FIDO2 auth | Set up security keys (YubiKey, etc.) |
 | Disable FIDO2 auth | Remove security key authentication |
 | Power profile | Set default power profile (power-saver, balanced, performance) restored on startup |
+| Auto-switch profiles | Configure which profiles to use when AC power is connected or disconnected, or disable auto-switching entirely |
 | Battery limit | Set maximum battery charge level (60%/70%/80%/90%/100%) with walker power menu integration |
 
 ##### Power Profile
@@ -390,6 +395,20 @@ On confirm, the selected profile is:
 3. Auto-started on login via an `exec-once` managed block in `~/.config/hypr/monitors.conf`
 
 Requires `power-profiles-daemon` (provides `powerprofilesctl`). If not installed, the dialog shows a graceful error message.
+
+##### Auto-Switch Profiles
+
+Press Space on "Auto-switch profiles" to open a configuration form with three settings:
+
+- **Auto-switching** — toggle on or off
+- **On AC power** — profile to apply when the charger is plugged in (Performance, Balanced, or Power saver)
+- **On battery** — profile to apply when running on battery (Performance, Balanced, or Power saver)
+
+When auto-switching is disabled, the Power Profile picker opens automatically so you can set a static startup profile in the same flow.
+
+When enabled, a script is written to `~/.config/hypr/scripts/power-profile-auto-switch.sh` and a udev rule is installed at `/etc/udev/rules.d/99-power-profile.rules` that calls it whenever AC power is connected or disconnected. When disabled, the udev rule is removed.
+
+Requires `power-profiles-daemon` and sudo access to write the udev rule.
 
 ##### Battery Charge Limit
 

@@ -6323,6 +6323,210 @@ hide_tray_icons() {
     echo
 }
 
+remove_omarchy_logo() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Remove Omarchy Logo${RESET}"
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Remove Omarchy logo -- failed (config not found)")
+        return 1
+    fi
+
+    if ! grep -q '"modules-left".*"custom/omarchy"' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Omarchy logo already removed.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Remove Omarchy logo -- already removed")
+        return 0
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Remove Omarchy logo -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    sed -i '/modules-left/s/"custom\/omarchy", //' "$WAYBAR_CONF"
+
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Omarchy logo removed from waybar"
+    SUMMARY_LOG+=("✓  Removed Omarchy logo from waybar")
+    echo
+}
+
+restore_omarchy_logo() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Restore Omarchy Logo${RESET}"
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Restore Omarchy logo -- failed (config not found)")
+        return 1
+    fi
+
+    if grep -q '"modules-left".*"custom/omarchy"' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Omarchy logo already present.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Restore Omarchy logo -- already present")
+        return 0
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Restore Omarchy logo -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    sed -i '/modules-left/s/\["hyprland/["custom\/omarchy", "hyprland/' "$WAYBAR_CONF"
+
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Omarchy logo restored to waybar"
+    SUMMARY_LOG+=("✓  Restored Omarchy logo to waybar")
+    echo
+}
+
+remove_update_icon() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Remove Update Icon${RESET}"
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Remove update icon -- failed (config not found)")
+        return 1
+    fi
+
+    if ! grep -q '"modules-center".*"custom/update"' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Update icon already removed.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Remove update icon -- already removed")
+        return 0
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Remove update icon -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    sed -i '/modules-center/s/"custom\/update", //' "$WAYBAR_CONF"
+
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Update icon removed from waybar"
+    SUMMARY_LOG+=("✓  Removed update icon from waybar")
+    echo
+}
+
+restore_update_icon() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Restore Update Icon${RESET}"
+    echo
+
+    if [[ ! -f "$WAYBAR_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  waybar config not found at $WAYBAR_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Restore update icon -- failed (config not found)")
+        return 1
+    fi
+
+    if grep -q '"modules-center".*"custom/update"' "$WAYBAR_CONF"; then
+        echo -e "  ${DIM}Update icon already present.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Restore update icon -- already present")
+        return 0
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Restore update icon -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${WAYBAR_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$WAYBAR_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    sed -i '/modules-center/s/"clock", /"clock", "custom\/update", /' "$WAYBAR_CONF"
+
+    if command -v omarchy-restart-waybar &>/dev/null; then
+        omarchy-restart-waybar &>/dev/null || true
+    fi
+
+    echo -e "  ${CHECKED}✓${RESET}  Update icon restored to waybar"
+    SUMMARY_LOG+=("✓  Restored update icon to waybar")
+    echo
+}
+
 enable_rounded_corners() {
     clear
     echo
@@ -7548,6 +7752,8 @@ declare -a APPEARANCE_ITEMS=(
     "window_gaps|Window gaps|Remove|Restore|toggle|Remove or restore gaps between tiled windows"
     "transparency|Transparency|Remove|Restore|toggle|Remove or restore window transparency effects"
     "tray_icons|Tray icons|Show all|Hide|toggle|Show all system tray icons or hide extras"
+    "omarchy_logo|Omarchy logo|Remove|Restore|toggle|Remove or restore the Omarchy logo button on the waybar"
+    "update_icon|Update icon|Remove|Restore|toggle|Remove or restore the update notification icon on the waybar"
     "clock_format|Clock format|12h|24h|radio|Set waybar clock to 12-hour or 24-hour format"
     "clock_date|Clock date|Show|Hide|toggle|Show or hide the day name on the waybar clock"
     "window_title|Window title|Show|Hide|toggle|Show active window name on waybar next to workspaces"
@@ -9213,6 +9419,22 @@ case "${TOGGLE_SELECTIONS[tray_icons]:-0}" in
     2) HIDE_TRAY_ICONS=true ;;
 esac
 
+# omarchy_logo: 1=Remove, 2=Restore
+REMOVE_OMARCHY_LOGO=false
+RESTORE_OMARCHY_LOGO=false
+case "${TOGGLE_SELECTIONS[omarchy_logo]:-0}" in
+    1) REMOVE_OMARCHY_LOGO=true ;;
+    2) RESTORE_OMARCHY_LOGO=true ;;
+esac
+
+# update_icon: 1=Remove, 2=Restore
+REMOVE_UPDATE_ICON=false
+RESTORE_UPDATE_ICON=false
+case "${TOGGLE_SELECTIONS[update_icon]:-0}" in
+    1) REMOVE_UPDATE_ICON=true ;;
+    2) RESTORE_UPDATE_ICON=true ;;
+esac
+
 # clock_format: 1=12h, 2=24h
 ENABLE_12H_CLOCK=false
 DISABLE_12H_CLOCK=false
@@ -9526,6 +9748,10 @@ fi
 [ "$DISABLE_FIDO2" = true ] && ACTION_SUMMARY+=("Disable FIDO2 auth")
 [ "$SHOW_ALL_TRAY_ICONS" = true ] && ACTION_SUMMARY+=("Show all tray icons")
 [ "$HIDE_TRAY_ICONS" = true ] && ACTION_SUMMARY+=("Hide tray icons")
+[ "$REMOVE_OMARCHY_LOGO" = true ] && ACTION_SUMMARY+=("Remove Omarchy logo from waybar")
+[ "$RESTORE_OMARCHY_LOGO" = true ] && ACTION_SUMMARY+=("Restore Omarchy logo to waybar")
+[ "$REMOVE_UPDATE_ICON" = true ] && ACTION_SUMMARY+=("Remove update icon from waybar")
+[ "$RESTORE_UPDATE_ICON" = true ] && ACTION_SUMMARY+=("Restore update icon to waybar")
 [ "$ENABLE_ROUNDED_CORNERS" = true ] && ACTION_SUMMARY+=("Enable rounded corners")
 [ "$DISABLE_ROUNDED_CORNERS" = true ] && ACTION_SUMMARY+=("Disable rounded corners")
 [ "$REMOVE_WINDOW_GAPS" = true ] && ACTION_SUMMARY+=("Remove window gaps")
@@ -9737,6 +9963,22 @@ fi
 
 if [ "$HIDE_TRAY_ICONS" = true ]; then
     hide_tray_icons
+fi
+
+if [ "$REMOVE_OMARCHY_LOGO" = true ]; then
+    remove_omarchy_logo
+fi
+
+if [ "$RESTORE_OMARCHY_LOGO" = true ]; then
+    restore_omarchy_logo
+fi
+
+if [ "$REMOVE_UPDATE_ICON" = true ]; then
+    remove_update_icon
+fi
+
+if [ "$RESTORE_UPDATE_ICON" = true ]; then
+    restore_update_icon
 fi
 
 if [ "$ENABLE_ROUNDED_CORNERS" = true ]; then
