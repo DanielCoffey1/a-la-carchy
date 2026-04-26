@@ -2635,25 +2635,23 @@ show_power_auto_switch_dialog() {
                             SELECTED_POWER_AUTO_SWITCH="disabled"
                             SELECTED_POWER_AC_PROFILE=""
                             SELECTED_POWER_BATTERY_PROFILE=""
+                            # Auto-switching off — let the user pick a static startup profile
+                            show_power_profile_dialog
                         else
                             SELECTED_POWER_AUTO_SWITCH="enabled"
                             SELECTED_POWER_AC_PROFILE="$form_ac"
                             SELECTED_POWER_BATTERY_PROFILE="$form_bat"
-                        fi
-                        clear
-                        echo
-                        echo -e "  ${BOLD}Power Profile Auto-Switch${RESET}"
-                        echo
-                        if [[ "$SELECTED_POWER_AUTO_SWITCH" == "disabled" ]]; then
-                            echo -e "  ${CHECKED}✓${RESET}  Auto-switching disabled — queued for apply"
-                        else
+                            clear
+                            echo
+                            echo -e "  ${BOLD}Power Profile Auto-Switch${RESET}"
+                            echo
                             echo -e "  ${CHECKED}✓${RESET}  Auto-switching enabled — queued for apply"
                             echo -e "  ${DIM}     AC power: ${ac_label}${RESET}"
                             echo -e "  ${DIM}     Battery:  ${bat_label}${RESET}"
+                            echo
+                            echo -e "  ${DIM}Press any key to return...${RESET}"
+                            read -rsn1 < /dev/tty
                         fi
-                        echo
-                        echo -e "  ${DIM}Press any key to return...${RESET}"
-                        read -rsn1 < /dev/tty
                         return
                         ;;
                 esac
