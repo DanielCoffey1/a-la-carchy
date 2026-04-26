@@ -595,7 +595,7 @@ Each zone can be independently enabled for **Boot**, **Awake**, **Sleep**, and *
 
 Press Space to open a dialog with options to:
 - **Enable/Disable** the Slash LED bar
-- **Select animation mode** from 16 available animations (Static, Bounce, Slash, Loading, BitStream, Transmission, Flow, Flux, Phantom, Spectrum, Hazard, Interfacing, Ramp, GameOver, Start, Buzzer)
+- **Select animation mode** from 16 available animations (Static, Bounce, Slash, Loading, BitStream, Transmission, Flow, Flux, Phantom, Spectrum, Hazard, Interfacing, Ramp, GameOver, Start, Buzzer) — selecting a mode automatically enables the Slash Ledbar
 - **Set brightness** (0-255) when enabling or changing mode
 
 Applied via `asusctl slash --enable/--disable`, `--mode`, and `-l` flags.

@@ -3782,7 +3782,7 @@ show_rog_slash_dialog() {
                         SELECTED_ROG_SLASH_MODE=""
                     else
                         SELECTED_ROG_SLASH_MODE="${selection#Mode: }"
-                        ROG_SLASH_ENABLE=""
+                        ROG_SLASH_ENABLE="enable"
                     fi
 
                     # Ask for brightness if enabling or setting mode
