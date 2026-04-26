@@ -121,6 +121,10 @@ POWER_PROFILE_SCRIPT="$HOME/.config/hypr/scripts/power-profile-default.sh"
 # Battery charge limit udev rule path
 BATTERY_LIMIT_UDEV_RULE="/etc/udev/rules.d/99-battery-charge-limit.rules"
 
+# Power profile auto-switch udev rule and script paths
+POWER_AUTO_SWITCH_UDEV_RULE="/etc/udev/rules.d/99-power-profile.rules"
+POWER_AUTO_SWITCH_SCRIPT="$HOME/.config/hypr/scripts/power-profile-auto-switch.sh"
+
 # Managed-block markers for power menu charge limit override
 POWER_MENU_MARKER_START="# === a-la-carchy power-menu charge-limit ==="
 POWER_MENU_MARKER_END="# === end a-la-carchy power-menu charge-limit ==="
@@ -2447,6 +2451,271 @@ SCRIPTEOF
     echo -e "    ${CHECKED}✓${RESET}  Added exec-once to monitors.conf"
 
     SUMMARY_LOG+=("✓  Power profile set to $SELECTED_POWER_PROFILE")
+    echo
+    echo
+}
+
+# =============================================================================
+# POWER PROFILE AUTO-SWITCH
+# =============================================================================
+
+# Helper: show a profile picker sub-dialog; stores result in PICK_RESULT
+_pick_auto_switch_profile() {
+    local title="$1"
+    local current="$2"
+    local -a profiles=("performance" "balanced" "power-saver")
+    local -a labels=("Performance" "Balanced" "Power saver")
+    local picker_cursor=0
+    PICK_RESULT=""
+
+    for i in "${!profiles[@]}"; do
+        [[ "${profiles[$i]}" == "$current" ]] && picker_cursor=$i
+    done
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}${title}${RESET}"
+        echo -e "  ${DIM}Select profile (Up/Down, Enter to confirm):${RESET}"
+        echo
+
+        for i in "${!profiles[@]}"; do
+            if [[ $i -eq $picker_cursor ]]; then
+                echo -e "    ${SELECTED_BG}> ${labels[$i]}${RESET}"
+            else
+                echo -e "      ${C_TEXT}${labels[$i]}${RESET}"
+            fi
+        done
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( picker_cursor > 0 )) && ((picker_cursor--)) ;;
+                    '[B') (( picker_cursor < ${#profiles[@]} - 1 )) && ((picker_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            '')
+                PICK_RESULT="${profiles[$picker_cursor]}"
+                return
+                ;;
+        esac
+    done
+}
+
+show_power_auto_switch_dialog() {
+    if ! command -v powerprofilesctl &>/dev/null; then
+        clear
+        echo
+        echo
+        echo -e "${BOLD}  Power Profile Auto-Switch${RESET}"
+        echo
+        echo -e "  ${DIM}✗${RESET}  powerprofilesctl not found."
+        echo -e "  ${DIM}Install power-profiles-daemon to use this feature.${RESET}"
+        echo
+        echo -e "  ${DIM}Press any key to return...${RESET}"
+        read -rsn1 < /dev/tty
+        return
+    fi
+
+    # Read current configured state from our script if it exists
+    local cur_ac="performance"
+    local cur_bat="balanced"
+    local cur_enabled=0  # 0=enabled, 1=disabled
+
+    if [[ -f "$POWER_AUTO_SWITCH_SCRIPT" ]]; then
+        local parsed_ac parsed_bat
+        parsed_ac=$(grep -oP 'PROFILE_AC="\K[^"]+' "$POWER_AUTO_SWITCH_SCRIPT" 2>/dev/null)
+        parsed_bat=$(grep -oP 'PROFILE_BATTERY="\K[^"]+' "$POWER_AUTO_SWITCH_SCRIPT" 2>/dev/null)
+        [[ -n "$parsed_ac" ]] && cur_ac="$parsed_ac"
+        [[ -n "$parsed_bat" ]] && cur_bat="$parsed_bat"
+    fi
+
+    # Disabled if udev rule is missing or marked disabled
+    if [[ ! -f "$POWER_AUTO_SWITCH_UDEV_RULE" ]]; then
+        cur_enabled=1
+    elif grep -q "auto-switch: disabled" "$POWER_AUTO_SWITCH_UDEV_RULE" 2>/dev/null; then
+        cur_enabled=1
+    fi
+
+    # Pre-populate with any selections already made this session
+    [[ -n "$SELECTED_POWER_AUTO_SWITCH" ]] && { [[ "$SELECTED_POWER_AUTO_SWITCH" == "disabled" ]] && cur_enabled=1 || cur_enabled=0; }
+    [[ -n "$SELECTED_POWER_AC_PROFILE" ]] && cur_ac="$SELECTED_POWER_AC_PROFILE"
+    [[ -n "$SELECTED_POWER_BATTERY_PROFILE" ]] && cur_bat="$SELECTED_POWER_BATTERY_PROFILE"
+
+    local form_enabled=$cur_enabled
+    local form_ac="$cur_ac"
+    local form_bat="$cur_bat"
+    local form_cursor=0  # 0=enabled toggle, 1=ac profile, 2=battery profile, 3=confirm
+
+    while true; do
+        clear
+        echo
+        echo -e "  ${BOLD}Power Profile Auto-Switch${RESET}"
+        echo -e "  ${DIM}Configure profiles used when AC power is connected or disconnected${RESET}"
+        echo
+        echo -e "  ${DIM}Up/Down: navigate  Enter: change  Esc: cancel${RESET}"
+        echo
+
+        local enabled_label
+        [[ $form_enabled -eq 0 ]] && enabled_label="${CHECKED}Enabled${RESET}" || enabled_label="${DIM}Disabled${RESET}"
+        if [[ $form_cursor -eq 0 ]]; then
+            echo -e "    ${SELECTED_BG}> Auto-switching   ${enabled_label}${RESET}"
+        else
+            printf "      %-20s" "Auto-switching"
+            [[ $form_enabled -eq 0 ]] && echo -e "${CHECKED}Enabled${RESET}" || echo -e "${DIM}Disabled${RESET}"
+        fi
+
+        local ac_label bat_label
+        case "$form_ac" in
+            performance) ac_label="Performance" ;;
+            balanced)    ac_label="Balanced" ;;
+            power-saver) ac_label="Power saver" ;;
+        esac
+        case "$form_bat" in
+            performance) bat_label="Performance" ;;
+            balanced)    bat_label="Balanced" ;;
+            power-saver) bat_label="Power saver" ;;
+        esac
+
+        if [[ $form_cursor -eq 1 ]]; then
+            echo -e "    ${SELECTED_BG}> On AC power      ${ac_label}${RESET}"
+        else
+            [[ $form_enabled -eq 1 ]] && echo -e "      ${DIM}On AC power      ${ac_label}${RESET}" || echo -e "      ${C_TEXT}On AC power      ${ac_label}${RESET}"
+        fi
+
+        if [[ $form_cursor -eq 2 ]]; then
+            echo -e "    ${SELECTED_BG}> On battery       ${bat_label}${RESET}"
+        else
+            [[ $form_enabled -eq 1 ]] && echo -e "      ${DIM}On battery       ${bat_label}${RESET}" || echo -e "      ${C_TEXT}On battery       ${bat_label}${RESET}"
+        fi
+
+        echo
+        if [[ $form_cursor -eq 3 ]]; then
+            echo -e "    ${SELECTED_BG}> Confirm${RESET}"
+        else
+            echo -e "      ${C_TEXT}Confirm${RESET}"
+        fi
+
+        echo
+        echo -e "  ${DIM}Escape: cancel${RESET}"
+
+        IFS= read -rsn1 key < /dev/tty
+        case "$key" in
+            $'\x1b')
+                read -rsn2 -t 0.1 key
+                case "$key" in
+                    '[A') (( form_cursor > 0 )) && ((form_cursor--)) ;;
+                    '[B') (( form_cursor < 3 )) && ((form_cursor++)) ;;
+                esac
+                [[ -z "$key" ]] && return
+                ;;
+            '')
+                case $form_cursor in
+                    0) (( form_enabled ^= 1 )) ;;
+                    1)
+                        if [[ $form_enabled -eq 0 ]]; then
+                            _pick_auto_switch_profile "On AC power" "$form_ac"
+                            [[ -n "$PICK_RESULT" ]] && form_ac="$PICK_RESULT"
+                        fi
+                        ;;
+                    2)
+                        if [[ $form_enabled -eq 0 ]]; then
+                            _pick_auto_switch_profile "On battery" "$form_bat"
+                            [[ -n "$PICK_RESULT" ]] && form_bat="$PICK_RESULT"
+                        fi
+                        ;;
+                    3)
+                        if [[ $form_enabled -eq 1 ]]; then
+                            SELECTED_POWER_AUTO_SWITCH="disabled"
+                            SELECTED_POWER_AC_PROFILE=""
+                            SELECTED_POWER_BATTERY_PROFILE=""
+                        else
+                            SELECTED_POWER_AUTO_SWITCH="enabled"
+                            SELECTED_POWER_AC_PROFILE="$form_ac"
+                            SELECTED_POWER_BATTERY_PROFILE="$form_bat"
+                        fi
+                        clear
+                        echo
+                        echo -e "  ${BOLD}Power Profile Auto-Switch${RESET}"
+                        echo
+                        if [[ "$SELECTED_POWER_AUTO_SWITCH" == "disabled" ]]; then
+                            echo -e "  ${CHECKED}✓${RESET}  Auto-switching disabled — queued for apply"
+                        else
+                            echo -e "  ${CHECKED}✓${RESET}  Auto-switching enabled — queued for apply"
+                            echo -e "  ${DIM}     AC power: ${ac_label}${RESET}"
+                            echo -e "  ${DIM}     Battery:  ${bat_label}${RESET}"
+                        fi
+                        echo
+                        echo -e "  ${DIM}Press any key to return...${RESET}"
+                        read -rsn1 < /dev/tty
+                        return
+                        ;;
+                esac
+                ;;
+        esac
+    done
+}
+
+apply_power_auto_switch() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Power Profile Auto-Switch${RESET}"
+    echo
+
+    if [[ "$SELECTED_POWER_AUTO_SWITCH" == "disabled" ]]; then
+        if [[ -f "$POWER_AUTO_SWITCH_UDEV_RULE" ]]; then
+            if sudo rm -f "$POWER_AUTO_SWITCH_UDEV_RULE" 2>/dev/null; then
+                sudo udevadm control --reload-rules 2>/dev/null
+                echo -e "    ${CHECKED}✓${RESET}  Udev rule removed — auto-switching disabled"
+            else
+                echo -e "    ${DIM}✗${RESET}  Failed to remove udev rule"
+                SUMMARY_LOG+=("✗  Power auto-switch -- failed to disable")
+                return 1
+            fi
+        else
+            echo -e "    ${CHECKED}✓${RESET}  Auto-switching already disabled"
+        fi
+        SUMMARY_LOG+=("✓  Power auto-switch disabled")
+    else
+        # Create the auto-switch script
+        mkdir -p "$(dirname "$POWER_AUTO_SWITCH_SCRIPT")"
+        {
+            echo '#!/bin/bash'
+            echo "# Managed by A La Carchy - power profile auto-switch"
+            echo "PROFILE_AC=\"$SELECTED_POWER_AC_PROFILE\""
+            echo "PROFILE_BATTERY=\"$SELECTED_POWER_BATTERY_PROFILE\""
+            echo ""
+            echo 'case "$1" in'
+            echo '    ac)      /usr/bin/powerprofilesctl set "$PROFILE_AC" ;;'
+            echo '    battery) /usr/bin/powerprofilesctl set "$PROFILE_BATTERY" ;;'
+            echo 'esac'
+        } > "$POWER_AUTO_SWITCH_SCRIPT"
+        chmod +x "$POWER_AUTO_SWITCH_SCRIPT"
+        echo -e "    ${CHECKED}✓${RESET}  Auto-switch script created: $POWER_AUTO_SWITCH_SCRIPT"
+
+        # Write udev rule pointing to our script
+        if {
+            echo "# Managed by A La Carchy - power profile auto-switch"
+            echo "ACTION==\"change\", SUBSYSTEM==\"power_supply\", KERNEL==\"AC*\", ATTR{online}==\"1\", RUN+=\"${POWER_AUTO_SWITCH_SCRIPT} ac\""
+            echo "ACTION==\"change\", SUBSYSTEM==\"power_supply\", KERNEL==\"AC*\", ATTR{online}==\"0\", RUN+=\"${POWER_AUTO_SWITCH_SCRIPT} battery\""
+        } | sudo tee "$POWER_AUTO_SWITCH_UDEV_RULE" > /dev/null 2>&1; then
+            sudo udevadm control --reload-rules 2>/dev/null
+            echo -e "    ${CHECKED}✓${RESET}  Udev rule installed: $POWER_AUTO_SWITCH_UDEV_RULE"
+        else
+            echo -e "    ${DIM}✗${RESET}  Failed to write udev rule (sudo required)"
+            SUMMARY_LOG+=("✗  Power auto-switch -- failed to write udev rule")
+            return 1
+        fi
+
+        SUMMARY_LOG+=("✓  Power auto-switch: AC=$SELECTED_POWER_AC_PROFILE, battery=$SELECTED_POWER_BATTERY_PROFILE")
+    fi
     echo
     echo
 }
@@ -7272,6 +7541,7 @@ declare -a SYSTEM_ITEMS=(
     "fingerprint|Fingerprint|Enable|Disable|toggle|Enable fingerprint authentication for login"
     "fido2|FIDO2|Enable|Disable|toggle|Enable FIDO2 security key authentication"
     "power_profile|Power profile|[Open]||action|Set default power profile for startup"
+    "power_auto_switch|Auto-switch profiles|[Open]||action|Configure profiles used when AC power is connected or disconnected"
     "battery_limit|Battery limit|[Open]||action|Set maximum battery charge level for longer lifespan"
 )
 
@@ -8127,6 +8397,16 @@ draw_interface() {
                         local sys_suffix=""
                         if [[ "$TOGGLE_ID" == "power_profile" && -n "$SELECTED_POWER_PROFILE" ]]; then
                             sys_suffix="$SELECTED_POWER_PROFILE"
+                        elif [[ "$TOGGLE_ID" == "power_auto_switch" && -n "$SELECTED_POWER_AUTO_SWITCH" ]]; then
+                            if [[ "$SELECTED_POWER_AUTO_SWITCH" == "disabled" ]]; then
+                                sys_suffix="off"
+                            else
+                                local _as="${SELECTED_POWER_AC_PROFILE/power-saver/saver}"
+                                _as="${_as/performance/perf}"
+                                local _bs="${SELECTED_POWER_BATTERY_PROFILE/power-saver/saver}"
+                                _bs="${_bs/performance/perf}"
+                                sys_suffix="${_as} / ${_bs}"
+                            fi
                         elif [[ "$TOGGLE_ID" == "battery_limit" && -n "$SELECTED_BATTERY_LIMIT" ]]; then
                             sys_suffix="${SELECTED_BATTERY_LIMIT}%"
                         fi
@@ -8601,8 +8881,9 @@ toggle_current_item() {
                 stty echo 2>/dev/null
                 tput cnorm
                 case "$TOGGLE_ID" in
-                    power_profile) show_power_profile_dialog ;;
-                    battery_limit) show_battery_limit_dialog ;;
+                    power_profile)    show_power_profile_dialog ;;
+                    power_auto_switch) show_power_auto_switch_dialog ;;
+                    battery_limit)    show_battery_limit_dialog ;;
                 esac
                 tput civis
                 stty -echo 2>/dev/null
@@ -9067,6 +9348,9 @@ fi
 if [[ -n "$SELECTED_POWER_PROFILE" ]]; then
     has_selection=true
 fi
+if [[ -n "$SELECTED_POWER_AUTO_SWITCH" ]]; then
+    has_selection=true
+fi
 if [[ -n "$SELECTED_BATTERY_LIMIT" ]]; then
     has_selection=true
 fi
@@ -9189,6 +9473,11 @@ declare -a ACTION_SUMMARY=()
 [ "$LAPTOP_AUTO_OFF" = true ] && ACTION_SUMMARY+=("Enable laptop display auto-off")
 [ "$LAPTOP_AUTO_NORMAL" = true ] && ACTION_SUMMARY+=("Disable laptop display auto-off")
 [[ -n "$SELECTED_POWER_PROFILE" ]] && ACTION_SUMMARY+=("Set power profile: $SELECTED_POWER_PROFILE")
+if [[ "$SELECTED_POWER_AUTO_SWITCH" == "disabled" ]]; then
+    ACTION_SUMMARY+=("Disable power profile auto-switching")
+elif [[ "$SELECTED_POWER_AUTO_SWITCH" == "enabled" ]]; then
+    ACTION_SUMMARY+=("Set power auto-switch: AC=$SELECTED_POWER_AC_PROFILE, battery=$SELECTED_POWER_BATTERY_PROFILE")
+fi
 [[ -n "$SELECTED_BATTERY_LIMIT" ]] && ACTION_SUMMARY+=("Set battery limit: ${SELECTED_BATTERY_LIMIT}%")
 [[ -n "$SELECTED_PRIMARY_MONITOR" ]] && ACTION_SUMMARY+=("Set primary monitor: $SELECTED_PRIMARY_MONITOR")
 [[ -n "$SELECTED_ROG_PROFILE" ]] && ACTION_SUMMARY+=("Set ROG profile: $SELECTED_ROG_PROFILE")
@@ -9320,6 +9609,10 @@ fi
 
 if [[ -n "$SELECTED_POWER_PROFILE" ]]; then
     apply_power_profile
+fi
+
+if [[ -n "$SELECTED_POWER_AUTO_SWITCH" ]]; then
+    apply_power_auto_switch
 fi
 
 if [[ -n "$SELECTED_BATTERY_LIMIT" ]]; then
