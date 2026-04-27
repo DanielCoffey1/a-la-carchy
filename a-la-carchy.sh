@@ -7723,6 +7723,398 @@ remove_from_omarchy_menu() {
 }
 
 # =============================================================================
+# THEMARCHY — WALLPAPER COLOR THEME GENERATION
+# =============================================================================
+
+THEMARCHY_SCRIPT="$HOME/.config/hypr/scripts/themarchy.sh"
+APPLY_THEMARCHY=false
+
+write_themarchy_script() {
+    mkdir -p "$(dirname "$THEMARCHY_SCRIPT")"
+    cat > "$THEMARCHY_SCRIPT" << 'THEMARCHY_EOF'
+#!/bin/bash
+# Themarchy — Generate and apply Omarchy theme from current wallpaper colors
+
+THEMARCHY_DIR="$HOME/.config/omarchy/themes/themarchy"
+
+WALLPAPER=$(readlink -f "$HOME/.config/omarchy/current/background" 2>/dev/null)
+if [[ -z "$WALLPAPER" || ! -f "$WALLPAPER" ]]; then
+    WALLPAPER=$(pgrep -a swaybg 2>/dev/null | grep -oP '(?<=-i )\S+' | head -1)
+fi
+if [[ -z "$WALLPAPER" || ! -f "$WALLPAPER" ]]; then
+    notify-send "Themarchy" "Could not detect current wallpaper" -u critical 2>/dev/null
+    exit 1
+fi
+
+if ! command -v magick &>/dev/null; then
+    notify-send "Themarchy" "ImageMagick required (magick not found)" -u critical 2>/dev/null
+    exit 1
+fi
+
+_THEMARCHY_COLORS=$(magick "$WALLPAPER" -resize 200x200^ +dither -colors 16 -format "%c" histogram:info:- 2>/dev/null | sort -rn | awk '{print substr($3,1,7)}')
+if [[ -z "$_THEMARCHY_COLORS" ]]; then
+    notify-send "Themarchy" "Failed to extract colors from wallpaper" -u critical 2>/dev/null
+    exit 1
+fi
+
+export _THEMARCHY_COLORS
+mkdir -p "$THEMARCHY_DIR"
+
+python3 << 'PYEOF' > "$THEMARCHY_DIR/colors.toml"
+import os, colorsys, sys
+
+colors = [c.lower() for c in os.environ.get('_THEMARCHY_COLORS','').split('\n') if c.startswith('#')]
+if not colors:
+    sys.exit(1)
+
+def hex_to_rgb(h):
+    h = h.lstrip('#')
+    return [int(h[i:i+2], 16) for i in (0, 2, 4)]
+
+def rgb_to_hex(r, g, b):
+    return '#{:02x}{:02x}{:02x}'.format(max(0,min(255,int(r))),max(0,min(255,int(g))),max(0,min(255,int(b))))
+
+def hex_to_hls(h):
+    r, g, b = [x/255 for x in hex_to_rgb(h)]
+    return colorsys.rgb_to_hls(r, g, b)
+
+def hls_to_hex(h, l, s):
+    h, l, s = h % 1.0, max(0.0,min(1.0,l)), max(0.0,min(1.0,s))
+    r, g, b = colorsys.hls_to_rgb(h, l, s)
+    return rgb_to_hex(r*255, g*255, b*255)
+
+def chroma(h):
+    r, g, b = [x/255 for x in hex_to_rgb(h)]
+    return max(r,g,b) - min(r,g,b)
+
+def luminance(h):
+    r, g, b = [x/255 for x in hex_to_rgb(h)]
+    lin = lambda c: c/12.92 if c <= 0.04045 else ((c+0.055)/1.055)**2.4
+    return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
+
+sorted_lum = sorted(colors, key=luminance)
+n = len(colors)
+
+# Group by hue sector weighted by chroma x frequency to find dominant hue family,
+# then pick the most vivid color from that family as the accent.
+HUE_SECTORS = 12
+bucket_w   = {}
+bucket_chr = {}
+for i, c in enumerate(colors):
+    lum = luminance(c)
+    chr_ = chroma(c)
+    if lum < 0.07 or lum > 0.82 or chr_ < 0.08:
+        continue
+    h, l, s = hex_to_hls(c)
+    bkt = int(h * HUE_SECTORS) % HUE_SECTORS
+    bucket_w[bkt] = bucket_w.get(bkt, 0) + chr_ * (n - i) / n
+    if bkt not in bucket_chr or chr_ > bucket_chr[bkt][0]:
+        bucket_chr[bkt] = (chr_, c)
+
+if bucket_w:
+    dom_bkt = max(bucket_w, key=bucket_w.get)
+    most_chr = bucket_chr[dom_bkt][1]
+else:
+    most_chr = max(colors, key=chroma)
+
+dom_h, dom_l, dom_s = hex_to_hls(most_chr)
+
+bg = sorted_lum[0]
+bg_h, bg_l, bg_s = hex_to_hls(bg)
+dark = luminance(bg) < 0.5
+
+if dark:
+    fg     = hls_to_hex(dom_h, 0.82, 0.28)
+    cursor = hls_to_hex(dom_h, 0.90, 0.18)
+    accent = hls_to_hex(dom_h, 0.58, min(max(dom_s*1.1, 0.75), 1.0))
+    sel_bg = accent
+    sel_fg = hls_to_hex(bg_h,  min(bg_l+0.05, 0.30), bg_s)
+    c0     = hls_to_hex(bg_h,  min(bg_l+0.08, 0.25), max(bg_s, 0.10))
+    c8     = hls_to_hex(bg_h,  min(bg_l+0.16, 0.35), max(bg_s, 0.10))
+    c7     = hls_to_hex(dom_h, 0.65, 0.18)
+    c15    = hls_to_hex(dom_h, 0.88, 0.12)
+    ln, sn = 0.55, 0.65
+    lb, sb = 0.65, 0.75
+else:
+    bg     = sorted_lum[-1]
+    bg_h, bg_l, bg_s = hex_to_hls(bg)
+    fg     = hls_to_hex(dom_h, 0.20, 0.28)
+    cursor = hls_to_hex(dom_h, 0.12, 0.18)
+    accent = hls_to_hex(dom_h, 0.45, min(max(dom_s*1.1, 0.70), 1.0))
+    sel_bg = accent
+    sel_fg = hls_to_hex(bg_h,  max(bg_l-0.05, 0.70), bg_s)
+    c0     = hls_to_hex(bg_h,  max(bg_l-0.08, 0.75), max(bg_s, 0.05))
+    c8     = hls_to_hex(bg_h,  max(bg_l-0.16, 0.60), max(bg_s, 0.05))
+    c7     = hls_to_hex(dom_h, 0.35, 0.15)
+    c15    = hls_to_hex(dom_h, 0.22, 0.10)
+    ln, sn = 0.40, 0.65
+    lb, sb = 0.32, 0.70
+
+c1  = hls_to_hex(0.00,  ln,       sn)
+c2  = hls_to_hex(1/3,   ln,       sn)
+c3  = hls_to_hex(1/6,   ln+0.05,  sn)
+c4  = hls_to_hex(2/3,   ln,       sn)
+c5  = hls_to_hex(dom_h, ln,       sn)
+c6  = hls_to_hex(0.50,  ln,       sn)
+c9  = hls_to_hex(0.00,  lb,       sb)
+c10 = hls_to_hex(1/3,   lb,       sb)
+c11 = hls_to_hex(1/6,   lb+0.02,  sb)
+c12 = hls_to_hex(2/3,   lb,       sb)
+c13 = hls_to_hex(dom_h, lb,       sb)
+c14 = hls_to_hex(0.50,  lb,       sb)
+
+print(f'accent = "{accent}"')
+print(f'cursor = "{cursor}"')
+print(f'foreground = "{fg}"')
+print(f'background = "{bg}"')
+print(f'selection_foreground = "{sel_fg}"')
+print(f'selection_background = "{sel_bg}"')
+print()
+print(f'color0 = "{c0}"')
+print(f'color1 = "{c1}"')
+print(f'color2 = "{c2}"')
+print(f'color3 = "{c3}"')
+print(f'color4 = "{c4}"')
+print(f'color5 = "{c5}"')
+print(f'color6 = "{c6}"')
+print(f'color7 = "{c7}"')
+print(f'color8 = "{c8}"')
+print(f'color9 = "{c9}"')
+print(f'color10 = "{c10}"')
+print(f'color11 = "{c11}"')
+print(f'color12 = "{c12}"')
+print(f'color13 = "{c13}"')
+print(f'color14 = "{c14}"')
+print(f'color15 = "{c15}"')
+PYEOF
+
+if [[ $? -ne 0 || ! -s "$THEMARCHY_DIR/colors.toml" ]]; then
+    notify-send "Themarchy" "Failed to generate theme palette" -u critical 2>/dev/null
+    exit 1
+fi
+
+# Copy the current wallpaper into the themarchy theme BEFORE the theme swap,
+# so omarchy-theme-bg-next finds it after current/theme is replaced.
+WALLPAPER_REAL=$(readlink -f "$HOME/.config/omarchy/current/background" 2>/dev/null)
+[[ -z "$WALLPAPER_REAL" || ! -f "$WALLPAPER_REAL" ]] && WALLPAPER_REAL="$WALLPAPER"
+if [[ -n "$WALLPAPER_REAL" && -f "$WALLPAPER_REAL" ]]; then
+    WALLPAPER_EXT="${WALLPAPER_REAL##*.}"
+    mkdir -p "$THEMARCHY_DIR/backgrounds"
+    rm -f "$THEMARCHY_DIR/backgrounds/"*
+    cp "$WALLPAPER_REAL" "$THEMARCHY_DIR/backgrounds/0-wallpaper.$WALLPAPER_EXT"
+fi
+
+if omarchy-theme-set themarchy; then
+    notify-send "Themarchy" "Theme applied from wallpaper!" 2>/dev/null
+    exit 0
+else
+    notify-send "Themarchy" "Failed to apply theme" -u critical 2>/dev/null
+    exit 1
+fi
+THEMARCHY_EOF
+    chmod +x "$THEMARCHY_SCRIPT"
+}
+
+show_themarchy_preview_dialog() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Themarchy — Theme from Wallpaper${RESET}"
+    echo
+
+    local wallpaper
+    wallpaper=$(readlink -f "$HOME/.config/omarchy/current/background" 2>/dev/null)
+    if [[ -z "$wallpaper" || ! -f "$wallpaper" ]]; then
+        wallpaper=$(pgrep -a swaybg 2>/dev/null | grep -oP '(?<=-i )\S+' | head -1)
+    fi
+
+    if [[ -z "$wallpaper" || ! -f "$wallpaper" ]]; then
+        echo -e "  ${DIM}✗${RESET}  Could not detect current wallpaper"
+        echo
+        printf "  Press any key to continue..."
+        read -r -n1 < /dev/tty
+        return 1
+    fi
+
+    if ! command -v magick &>/dev/null; then
+        echo -e "  ${DIM}✗${RESET}  ImageMagick not found (magick required)"
+        echo
+        printf "  Press any key to continue..."
+        read -r -n1 < /dev/tty
+        return 1
+    fi
+
+    echo -e "  ${DIM}Wallpaper: ${wallpaper##*/}${RESET}"
+    echo
+    printf "  ${DIM}Scanning colors...${RESET}"
+
+    local colors
+    colors=$(magick "$wallpaper" -resize 200x200^ +dither -colors 16 -format "%c" histogram:info:- 2>/dev/null | sort -rn | awk '{print substr($3,1,7)}')
+
+    if [[ -z "$colors" ]]; then
+        echo
+        echo -e "  ${DIM}✗${RESET}  Failed to extract colors"
+        echo
+        printf "  Press any key to continue..."
+        read -r -n1 < /dev/tty
+        return 1
+    fi
+
+    printf "\r  ${DIM}Palette preview:${RESET}              \n"
+    echo
+    printf "  "
+    while IFS= read -r hex; do
+        [[ "$hex" =~ ^#[0-9a-fA-F]{6}$ ]] || continue
+        local r=$((16#${hex:1:2})) g=$((16#${hex:3:2})) b=$((16#${hex:5:2}))
+        printf "\e[48;2;%d;%d;%dm    \e[0m" "$r" "$g" "$b"
+    done <<< "$colors"
+    echo
+    echo
+    echo -e "  ${DIM}Generates a full system theme (terminals, waybar, Walker, mako,${RESET}"
+    echo -e "  ${DIM}Hyprland borders) tuned to these colors. Previous theme survives${RESET}"
+    echo -e "  ${DIM}in Extra Themes and can be re-applied at any time.${RESET}"
+    echo
+    echo
+
+    printf "  ${BOLD}Apply theme from wallpaper?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+
+    if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        APPLY_THEMARCHY=true
+    fi
+}
+
+apply_themarchy_now() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Themarchy — Applying Theme from Wallpaper${RESET}"
+    echo
+
+    write_themarchy_script
+
+    echo -e "  ${DIM}Extracting colors and generating theme...${RESET}"
+    echo
+
+    if bash "$THEMARCHY_SCRIPT"; then
+        echo
+        echo -e "  ${CHECKED}✓${RESET}  Theme applied from wallpaper"
+        SUMMARY_LOG+=("✓  Themarchy -- applied theme from wallpaper")
+    else
+        echo -e "  ${DIM}✗${RESET}  Theme application failed"
+        SUMMARY_LOG+=("✗  Themarchy -- failed to apply theme")
+    fi
+    echo
+}
+
+setup_themarchy_keybind() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Enable Themarchy Keybind (SUPER+SHIFT+T)${RESET}"
+    echo
+    echo -e "  ${DIM}Deploys themarchy.sh and binds SUPER+SHIFT+T to apply${RESET}"
+    echo -e "  ${DIM}theme from current wallpaper instantly.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Themarchy keybind -- failed (config not found)")
+        return 1
+    fi
+
+    if grep -q "SUPER SHIFT, T, Themarchy" "$BINDINGS_CONF"; then
+        echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Themarchy keybind -- already set")
+        return 0
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Themarchy keybind -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    write_themarchy_script
+    echo -e "  ${DIM}✓${RESET}  Script deployed: $THEMARCHY_SCRIPT"
+
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    echo "" >> "$BINDINGS_CONF"
+    echo "bindd = SUPER SHIFT, T, Themarchy, exec, $THEMARCHY_SCRIPT" >> "$BINDINGS_CONF"
+
+    hyprctl reload 2>/dev/null || true
+    echo -e "  ${DIM}✓${RESET}  Bound SUPER+SHIFT+T to Themarchy"
+    SUMMARY_LOG+=("✓  Themarchy keybind -- bound SUPER+SHIFT+T")
+    echo
+}
+
+remove_themarchy_keybind() {
+    clear
+    echo
+    echo
+    echo -e "${BOLD}  Disable Themarchy Keybind (SUPER+SHIFT+T)${RESET}"
+    echo
+    echo -e "  ${DIM}Removes the SUPER+SHIFT+T Themarchy keybinding.${RESET}"
+    echo
+    echo
+
+    if [[ ! -f "$BINDINGS_CONF" ]]; then
+        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo
+        SUMMARY_LOG+=("✗  Themarchy keybind -- failed (config not found)")
+        return 1
+    fi
+
+    if ! grep -q "SUPER SHIFT, T, Themarchy" "$BINDINGS_CONF"; then
+        echo -e "  ${DIM}Not bound. Nothing to do.${RESET}"
+        echo
+        SUMMARY_LOG+=("--  Themarchy keybind -- not bound")
+        return 0
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]]; then
+        printf "  ${BOLD}Continue?${RESET} ${DIM}(yes/no)${RESET} "
+        read -r < /dev/tty
+    fi
+
+    if [[ "$CONFIRM_ALL" != true ]] && [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo
+        echo "  Cancelled."
+        echo
+        SUMMARY_LOG+=("--  Themarchy keybind -- cancelled")
+        return 0
+    fi
+
+    echo
+
+    local backup_file="${BINDINGS_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$BINDINGS_CONF" "$backup_file"
+    echo -e "  ${DIM}Backup: $backup_file${RESET}"
+
+    sed -i '/SUPER SHIFT, T, Themarchy/d' "$BINDINGS_CONF"
+    hyprctl reload 2>/dev/null || true
+
+    echo -e "  ${DIM}✓${RESET}  Removed SUPER+SHIFT+T Themarchy keybind"
+    SUMMARY_LOG+=("✓  Themarchy keybind -- removed")
+    echo
+}
+
+# =============================================================================
 # TWO-PANEL TUI DATA STRUCTURES
 # =============================================================================
 
@@ -7749,6 +8141,8 @@ declare -a CATEGORIES=(
     "  Lighting"
     "--- Install ---"
     "  Extra Themes"
+    "--- Themarchy ---"
+    "  Themarchy"
 )
 
 # Check if a category index is a section header
@@ -7843,6 +8237,11 @@ declare -a ROG_LIGHTING_ITEMS=(
     "rog_slash_extra|Slash options|[Open]||action|Set interval and conditional show settings"
     "rog_anime|AniMe Matrix|Enable|Disable|toggle|Enable or disable the AniMe Matrix display"
     "rog_anime_extra|AniMe options|[Open]||action|Brightness, powersave, and builtin animations"
+)
+
+declare -a THEMARCHY_ITEMS=(
+    "themarchy_apply|Apply from wallpaper|[Apply]||action|Extract colors from current wallpaper and apply as system theme"
+    "themarchy_keybind|Keybind SUPER+SHIFT+T|Enable|Disable|toggle|Bind SUPER+SHIFT+T to instantly retheme from wallpaper"
 )
 
 # Extra themes: each entry is "Display Name|github_url"
@@ -8340,6 +8739,7 @@ get_category_items() {
         17) echo "ROG_HARDWARE" ;;
         18) echo "ROG_LIGHTING" ;;
         20) echo "EXTRA_THEMES" ;;
+        22) echo "THEMARCHY" ;;
     esac
 }
 
@@ -8347,7 +8747,7 @@ get_category_items() {
 get_current_item_count() {
     # Section headers (0, 3, 11, 15) return 0
     case $CATEGORY_CURSOR in
-        0|3|11|16|19) echo 0 ;;
+        0|3|11|16|19|21) echo 0 ;;
         1) echo ${#INSTALLED_PACKAGES[@]} ;;
         2) echo ${#INSTALLED_WEBAPPS[@]} ;;
         4) echo ${#KEYBINDINGS_ITEMS[@]} ;;
@@ -8364,6 +8764,7 @@ get_current_item_count() {
         17) echo ${#ROG_HARDWARE_ITEMS[@]} ;;
         18) echo ${#ROG_LIGHTING_ITEMS[@]} ;;
         20) echo ${#EXTRA_THEMES[@]} ;;
+        22) echo ${#THEMARCHY_ITEMS[@]} ;;
     esac
 }
 
@@ -8454,6 +8855,10 @@ get_current_description() {
             local repo_name="${theme_url##*/}"
             repo_name="${repo_name%/}"
             echo "Install from $repo_name"
+            ;;
+        22) # Themarchy
+            parse_toggle_item "${THEMARCHY_ITEMS[$ITEM_CURSOR]}"
+            echo "$TOGGLE_DESC"
             ;;
         *)
             echo ""
@@ -8808,6 +9213,18 @@ draw_interface() {
                         R="  ● ${tname}${installed_suffix}"; Rchecked=1
                     else
                         R="  ○ ${tname}${installed_suffix}"
+                    fi ;;
+                22) parse_toggle_item "${THEMARCHY_ITEMS[$idx]}"
+                    if [ "$TOGGLE_TYPE" = "action" ]; then
+                        local th_suffix=""
+                        [[ "$TOGGLE_ID" == "themarchy_apply" && "$APPLY_THEMARCHY" == "true" ]] && th_suffix="[queued]"
+                        if [[ -n "$th_suffix" ]]; then
+                            R=$(printf "  %-24s %s" "$TOGGLE_NAME" "$th_suffix")
+                        else
+                            R="  $TOGGLE_NAME"
+                        fi
+                    else
+                        R=$(format_toggle_item "$TOGGLE_NAME" "$TOGGLE_OPT1" "$TOGGLE_OPT2" "${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}")
                     fi ;;
             esac
         fi
@@ -9291,6 +9708,26 @@ toggle_current_item() {
                 THEME_SELECTIONS[$tname]=0
             fi
             ;;
+        22) # Themarchy (mixed: action + toggle)
+            local item="${THEMARCHY_ITEMS[$ITEM_CURSOR]}"
+            parse_toggle_item "$item"
+            local cur="${TOGGLE_SELECTIONS[$TOGGLE_ID]:-0}"
+            if [ "$TOGGLE_TYPE" = "action" ]; then
+                stty echo 2>/dev/null
+                tput cnorm
+                show_themarchy_preview_dialog
+                tput civis
+                stty -echo 2>/dev/null
+            else
+                if [ "$cur" -eq 0 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=1
+                elif [ "$cur" -eq 1 ]; then
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=2
+                else
+                    TOGGLE_SELECTIONS[$TOGGLE_ID]=0
+                fi
+            fi
+            ;;
     esac
 }
 
@@ -9550,6 +9987,14 @@ case "${TOGGLE_SELECTIONS[menu_shortcut]:-0}" in
     2) REMOVE_MENU_SHORTCUT=true ;;
 esac
 
+# themarchy_keybind: 1=Enable, 2=Disable
+BIND_THEMARCHY=false
+UNBIND_THEMARCHY=false
+case "${TOGGLE_SELECTIONS[themarchy_keybind]:-0}" in
+    1) BIND_THEMARCHY=true ;;
+    2) UNBIND_THEMARCHY=true ;;
+esac
+
 # rog_fan_curves: 1=Enable, 2=Disable
 ROG_ENABLE_FAN_CURVES=false
 ROG_DISABLE_FAN_CURVES=false
@@ -9658,6 +10103,9 @@ if [[ -n "$SELECTED_ROG_ANIME_BRIGHTNESS$ROG_ANIME_POWERSAVE$ROG_ANIME_OFF_UNPLU
     has_selection=true
 fi
 if [[ -n "$SELECTED_ROG_FAN_CURVE_DATA" || "$ROG_FAN_CURVE_DEFAULT" == "true" ]]; then
+    has_selection=true
+fi
+if [ "$APPLY_THEMARCHY" = true ] || [ "$BIND_THEMARCHY" = true ] || [ "$UNBIND_THEMARCHY" = true ]; then
     has_selection=true
 fi
 
@@ -9822,6 +10270,9 @@ fi
 [ "$ADD_MENU_SHORTCUT" = true ] && ACTION_SUMMARY+=("Add menu shortcut")
 [ "$REMOVE_MENU_SHORTCUT" = true ] && ACTION_SUMMARY+=("Remove menu shortcut")
 [ ${#SELECTED_THEMES_FINAL[@]} -gt 0 ] && ACTION_SUMMARY+=("Install ${#SELECTED_THEMES_FINAL[@]} theme(s)")
+[ "$APPLY_THEMARCHY" = true ] && ACTION_SUMMARY+=("Apply Themarchy theme from wallpaper")
+[ "$BIND_THEMARCHY" = true ] && ACTION_SUMMARY+=("Enable Themarchy keybind (SUPER+SHIFT+T)")
+[ "$UNBIND_THEMARCHY" = true ] && ACTION_SUMMARY+=("Disable Themarchy keybind (SUPER+SHIFT+T)")
 [ "$BACKUP_BEFORE" = true ] && ACTION_SUMMARY+=("Backup config (before changes)")
 [ "$BACKUP_AFTER" = true ] && ACTION_SUMMARY+=("Backup config (after changes)")
 
@@ -10096,6 +10547,18 @@ fi
 
 if [ "$REMOVE_MENU_SHORTCUT" = true ]; then
     remove_from_omarchy_menu
+fi
+
+if [ "$APPLY_THEMARCHY" = true ]; then
+    apply_themarchy_now
+fi
+
+if [ "$BIND_THEMARCHY" = true ]; then
+    setup_themarchy_keybind
+fi
+
+if [ "$UNBIND_THEMARCHY" = true ]; then
+    remove_themarchy_keybind
 fi
 
 # Run backup after changes if requested

@@ -12,6 +12,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - **Description bar** showing context for the currently highlighted item
 - Interactive checklist of preinstalled packages and webapps
 - Only shows packages and webapps that are currently installed
+- **Themarchy** — generate and apply a cohesive theme from your current wallpaper with one keybind (SUPER+SHIFT+T)
 - **103 extra community themes** browseable and installable with one click
 - **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
 - **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
@@ -640,6 +641,36 @@ The builtin animations dialog walks through four phases, each with preset option
 
 Applied via `asusctl anime` with `--brightness`, `--enable-powersave-anim`, `--off-when-unplugged`, `--off-when-suspended`, `--off-when-lid-closed`, and `asusctl anime set-builtins`.
 
+### Themarchy
+
+Generate and apply a full Omarchy theme from your current wallpaper's colors.
+
+| Item | Description |
+|------|-------------|
+| Apply from wallpaper | Extracts colors, generates a palette, and applies it as the active theme |
+| Keybind SUPER+SHIFT+T | Toggle the keybind that triggers Themarchy instantly from anywhere |
+
+#### How It Works
+
+1. **Color extraction** — ImageMagick samples the current wallpaper at 200×200 and quantizes it to 16 representative colors, sorted by pixel frequency (most prominent first)
+2. **Dominant hue detection** — colors are grouped into 12 hue sectors, each weighted by chroma × frequency. The sector with the highest total weight becomes the dominant hue family, and its most vivid color is used as the accent
+3. **Palette generation** — a Python algorithm using WCAG luminance and HLS color math builds a full 16-color terminal palette plus `accent`, `foreground`, `background`, `cursor`, `selection_foreground`, and `selection_background` values, written to `~/.config/omarchy/themes/themarchy/colors.toml`
+4. **Theme application** — the current wallpaper is copied into the theme's `backgrounds/` folder, then `omarchy-theme-set themarchy` applies the palette to all Omarchy components (kitty, waybar, Walker, mako, hyprlock, Hyprland borders, SwayOSD)
+
+#### Wallpaper detection
+
+Themarchy reads `~/.config/omarchy/current/background` (the Omarchy symlink) as the primary wallpaper source, with a fallback to the running `swaybg` process.
+
+#### Files created
+
+| File | Purpose |
+|------|---------|
+| `~/.config/hypr/scripts/themarchy.sh` | Deployed standalone script (run directly or via keybind) |
+| `~/.config/omarchy/themes/themarchy/colors.toml` | Generated color palette consumed by `omarchy-theme-set-templates` |
+| `~/.config/omarchy/themes/themarchy/backgrounds/` | Wallpaper copy so the background persists after the theme swap |
+
+Requires `imagemagick` (`magick`) and `python3` (both included with Omarchy).
+
 ### Extra Themes
 
 Browse and install 252 community-made themes directly from the TUI. Themes are sourced from the [Omarchy Extra Themes](https://learn.omacom.io/2/the-omarchy-manual/90/extra-themes) directory and installed via `omarchy-theme-install`.
@@ -1037,6 +1068,7 @@ The script modifies the following Omarchy configuration files (with automatic ba
 | `~/.config/hypr/looknfeel.conf` | Rounded corners, window gaps, Hyprland General/Decoration/Gestures settings |
 | `~/.config/hypr/hyprlock.conf` | Rounded corners on lock screen password input |
 | `~/.config/hypr/input.conf` | Compose key, Alt/Super swapping, Hyprland Input settings |
+| `~/.config/hypr/scripts/themarchy.sh` | Themarchy standalone script (created by Themarchy section) |
 | `~/.config/hypr/scripts/laptop-display-auto.sh` | Laptop auto-off watcher script (created/removed by toggle) |
 | `~/.config/hypr/scripts/power-profile-default.sh` | Power profile startup script (sets default profile on login) |
 | `~/.config/hypr/scripts/omarchy-battery-limit.sh` | Battery limit helper for walker power menu (uses pkexec, created/removed by battery limit) |
