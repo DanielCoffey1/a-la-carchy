@@ -2450,6 +2450,30 @@ SCRIPTEOF
     } >> "$MONITORS_CONF"
     echo -e "    ${CHECKED}✓${RESET}  Added exec-once to monitors.conf"
 
+    # Sync asusd platform profile if asusd is present (prevents it overriding powerprofilesctl)
+    local asusd_config="/etc/asusd/asusd.ron"
+    if [[ -f "$asusd_config" ]]; then
+        local asus_profile=""
+        case "$SELECTED_POWER_PROFILE" in
+            power-saver)  asus_profile="Quiet" ;;
+            balanced)     asus_profile="Balanced" ;;
+            performance)  asus_profile="Performance" ;;
+        esac
+
+        if [[ -n "$asus_profile" ]]; then
+            if sudo sed -i \
+                -e "s/^\([[:space:]]*\)platform_profile_on_ac: [^,]*/\1platform_profile_on_ac: $asus_profile/" \
+                -e "s/^\([[:space:]]*\)platform_profile_on_battery: [^,]*/\1platform_profile_on_battery: $asus_profile/" \
+                "$asusd_config" 2>/dev/null; then
+                sudo systemctl restart asusd 2>/dev/null
+                echo -e "    ${CHECKED}✓${RESET}  Updated asusd to enforce $asus_profile profile"
+            else
+                echo -e "    ${DIM}✗${RESET}  Could not update asusd config (sudo required)"
+                SUMMARY_LOG+=("✗  Power profile -- failed to update asusd config")
+            fi
+        fi
+    fi
+
     SUMMARY_LOG+=("✓  Power profile set to $SELECTED_POWER_PROFILE")
     echo
     echo
@@ -2710,6 +2734,35 @@ apply_power_auto_switch() {
             echo -e "    ${DIM}✗${RESET}  Failed to write udev rule (sudo required)"
             SUMMARY_LOG+=("✗  Power auto-switch -- failed to write udev rule")
             return 1
+        fi
+
+        # Sync asusd platform profiles if asusd is present (prevents it overriding powerprofilesctl)
+        local asusd_config="/etc/asusd/asusd.ron"
+        if [[ -f "$asusd_config" ]]; then
+            local asus_ac="" asus_bat=""
+            case "$SELECTED_POWER_AC_PROFILE" in
+                power-saver)  asus_ac="Quiet" ;;
+                balanced)     asus_ac="Balanced" ;;
+                performance)  asus_ac="Performance" ;;
+            esac
+            case "$SELECTED_POWER_BATTERY_PROFILE" in
+                power-saver)  asus_bat="Quiet" ;;
+                balanced)     asus_bat="Balanced" ;;
+                performance)  asus_bat="Performance" ;;
+            esac
+
+            if [[ -n "$asus_ac" && -n "$asus_bat" ]]; then
+                if sudo sed -i \
+                    -e "s/^\([[:space:]]*\)platform_profile_on_ac: [^,]*/\1platform_profile_on_ac: $asus_ac/" \
+                    -e "s/^\([[:space:]]*\)platform_profile_on_battery: [^,]*/\1platform_profile_on_battery: $asus_bat/" \
+                    "$asusd_config" 2>/dev/null; then
+                    sudo systemctl restart asusd 2>/dev/null
+                    echo -e "    ${CHECKED}✓${RESET}  Updated asusd: AC=$asus_ac, battery=$asus_bat"
+                else
+                    echo -e "    ${DIM}✗${RESET}  Could not update asusd config (sudo required)"
+                    SUMMARY_LOG+=("✗  Power auto-switch -- failed to update asusd config")
+                fi
+            fi
         fi
 
         SUMMARY_LOG+=("✓  Power auto-switch: AC=$SELECTED_POWER_AC_PROFILE, battery=$SELECTED_POWER_BATTERY_PROFILE")
