@@ -7893,6 +7893,69 @@ if [[ $? -ne 0 || ! -s "$THEMARCHY_DIR/colors.toml" ]]; then
     exit 1
 fi
 
+# Generate themed fastfetch config from wallpaper palette
+python3 << 'FASTFETCH_EOF'
+import os, re, json
+
+colors_file = os.path.expanduser("~/.config/omarchy/themes/themarchy/colors.toml")
+colors = {}
+try:
+    with open(colors_file) as f:
+        for line in f:
+            m = re.match(r'^(\w+)\s*=\s*"(#[0-9a-fA-F]{6})"', line)
+            if m:
+                colors[m.group(1)] = m.group(2)
+except OSError:
+    pass
+
+if not colors:
+    exit(0)
+
+accent  = colors.get('accent', None)
+hw      = colors.get('color2', None)
+sw      = colors.get('color4', None)
+sys_col = colors.get('color5', None)
+
+if not all([accent, hw, sw, sys_col]):
+    exit(0)
+
+config_path = os.path.expanduser("~/.config/fastfetch/config.jsonc")
+try:
+    with open(config_path) as f:
+        config = json.loads(f.read())
+except (OSError, json.JSONDecodeError):
+    exit(0)
+
+# Update logo accent color
+if "logo" in config and isinstance(config["logo"].get("color"), dict):
+    config["logo"]["color"]["1"] = accent
+
+# Update keyColors by section: scan for custom separator headers to determine
+# which color role to apply to the modules that follow.
+section_colors = {"hardware": hw, "software": sw, "system": sys_col}
+current_section = None
+
+for module in config.get("modules", []):
+    if not isinstance(module, dict):
+        continue
+    if module.get("type") == "custom":
+        fmt = module.get("format", "")
+        if "Hardware" in fmt:
+            current_section = "hardware"
+        elif "Software" in fmt:
+            current_section = "software"
+        elif "Age" in fmt:
+            current_section = "system"
+        continue
+    if current_section and "keyColor" in module:
+        module["keyColor"] = section_colors[current_section]
+
+with open(config_path, 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+FASTFETCH_EOF
+
+
 # Copy the current wallpaper into the themarchy theme BEFORE the theme swap,
 # so omarchy-theme-bg-next finds it after current/theme is replaced.
 WALLPAPER_REAL=$(readlink -f "$HOME/.config/omarchy/current/background" 2>/dev/null)
