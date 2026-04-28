@@ -7746,122 +7746,37 @@ if [[ -z "$WALLPAPER" || ! -f "$WALLPAPER" ]]; then
     exit 1
 fi
 
-if ! command -v magick &>/dev/null; then
-    notify-send "Themarchy" "ImageMagick required (magick not found)" -u critical 2>/dev/null
+if ! command -v wal &>/dev/null; then
+    notify-send "Themarchy" "pywal required (wal not found — install python-pywal)" -u critical 2>/dev/null
     exit 1
 fi
 
-_THEMARCHY_COLORS=$(magick "$WALLPAPER" -resize 200x200^ +dither -colors 16 -format "%c" histogram:info:- 2>/dev/null | sort -rn | awk '{print substr($3,1,7)}')
-if [[ -z "$_THEMARCHY_COLORS" ]]; then
-    notify-send "Themarchy" "Failed to extract colors from wallpaper" -u critical 2>/dev/null
-    exit 1
-fi
-
-export _THEMARCHY_COLORS
 mkdir -p "$THEMARCHY_DIR"
 
-python3 << 'PYEOF' > "$THEMARCHY_DIR/colors.toml"
-import os, colorsys, sys
+if ! wal -i "$WALLPAPER" -n -q 2>/dev/null; then
+    notify-send "Themarchy" "pywal failed to generate palette" -u critical 2>/dev/null
+    exit 1
+fi
 
-colors = [c.lower() for c in os.environ.get('_THEMARCHY_COLORS','').split('\n') if c.startswith('#')]
-if not colors:
+python3 << 'PYEOF' > "$THEMARCHY_DIR/colors.toml"
+import json, sys, os
+
+wal_json = os.path.expanduser("~/.cache/wal/colors.json")
+try:
+    with open(wal_json) as f:
+        data = json.load(f)
+except (OSError, json.JSONDecodeError):
     sys.exit(1)
 
-def hex_to_rgb(h):
-    h = h.lstrip('#')
-    return [int(h[i:i+2], 16) for i in (0, 2, 4)]
+special = data.get("special", {})
+colors  = data.get("colors", {})
 
-def rgb_to_hex(r, g, b):
-    return '#{:02x}{:02x}{:02x}'.format(max(0,min(255,int(r))),max(0,min(255,int(g))),max(0,min(255,int(b))))
-
-def hex_to_hls(h):
-    r, g, b = [x/255 for x in hex_to_rgb(h)]
-    return colorsys.rgb_to_hls(r, g, b)
-
-def hls_to_hex(h, l, s):
-    h, l, s = h % 1.0, max(0.0,min(1.0,l)), max(0.0,min(1.0,s))
-    r, g, b = colorsys.hls_to_rgb(h, l, s)
-    return rgb_to_hex(r*255, g*255, b*255)
-
-def chroma(h):
-    r, g, b = [x/255 for x in hex_to_rgb(h)]
-    return max(r,g,b) - min(r,g,b)
-
-def luminance(h):
-    r, g, b = [x/255 for x in hex_to_rgb(h)]
-    lin = lambda c: c/12.92 if c <= 0.04045 else ((c+0.055)/1.055)**2.4
-    return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
-
-sorted_lum = sorted(colors, key=luminance)
-n = len(colors)
-
-# Group by hue sector weighted by chroma x frequency to find dominant hue family,
-# then pick the most vivid color from that family as the accent.
-HUE_SECTORS = 12
-bucket_w   = {}
-bucket_chr = {}
-for i, c in enumerate(colors):
-    lum = luminance(c)
-    chr_ = chroma(c)
-    if lum < 0.07 or lum > 0.82 or chr_ < 0.08:
-        continue
-    h, l, s = hex_to_hls(c)
-    bkt = int(h * HUE_SECTORS) % HUE_SECTORS
-    bucket_w[bkt] = bucket_w.get(bkt, 0) + chr_ * (n - i) / n
-    if bkt not in bucket_chr or chr_ > bucket_chr[bkt][0]:
-        bucket_chr[bkt] = (chr_, c)
-
-if bucket_w:
-    dom_bkt = max(bucket_w, key=bucket_w.get)
-    most_chr = bucket_chr[dom_bkt][1]
-else:
-    most_chr = max(colors, key=chroma)
-
-dom_h, dom_l, dom_s = hex_to_hls(most_chr)
-
-bg = sorted_lum[0]
-bg_h, bg_l, bg_s = hex_to_hls(bg)
-dark = luminance(bg) < 0.5
-
-if dark:
-    fg     = hls_to_hex(dom_h, 0.82, 0.28)
-    cursor = hls_to_hex(dom_h, 0.90, 0.18)
-    accent = hls_to_hex(dom_h, 0.58, min(max(dom_s*1.1, 0.75), 1.0))
-    sel_bg = accent
-    sel_fg = hls_to_hex(bg_h,  min(bg_l+0.05, 0.30), bg_s)
-    c0     = hls_to_hex(bg_h,  min(bg_l+0.08, 0.25), max(bg_s, 0.10))
-    c8     = hls_to_hex(bg_h,  min(bg_l+0.16, 0.35), max(bg_s, 0.10))
-    c7     = hls_to_hex(dom_h, 0.65, 0.18)
-    c15    = hls_to_hex(dom_h, 0.88, 0.12)
-    ln, sn = 0.55, 0.65
-    lb, sb = 0.65, 0.75
-else:
-    bg     = sorted_lum[-1]
-    bg_h, bg_l, bg_s = hex_to_hls(bg)
-    fg     = hls_to_hex(dom_h, 0.20, 0.28)
-    cursor = hls_to_hex(dom_h, 0.12, 0.18)
-    accent = hls_to_hex(dom_h, 0.45, min(max(dom_s*1.1, 0.70), 1.0))
-    sel_bg = accent
-    sel_fg = hls_to_hex(bg_h,  max(bg_l-0.05, 0.70), bg_s)
-    c0     = hls_to_hex(bg_h,  max(bg_l-0.08, 0.75), max(bg_s, 0.05))
-    c8     = hls_to_hex(bg_h,  max(bg_l-0.16, 0.60), max(bg_s, 0.05))
-    c7     = hls_to_hex(dom_h, 0.35, 0.15)
-    c15    = hls_to_hex(dom_h, 0.22, 0.10)
-    ln, sn = 0.40, 0.65
-    lb, sb = 0.32, 0.70
-
-c1  = hls_to_hex(0.00,  ln,       sn)
-c2  = hls_to_hex(1/3,   ln,       sn)
-c3  = hls_to_hex(1/6,   ln+0.05,  sn)
-c4  = hls_to_hex(2/3,   ln,       sn)
-c5  = hls_to_hex(dom_h, ln,       sn)
-c6  = hls_to_hex(0.50,  ln,       sn)
-c9  = hls_to_hex(0.00,  lb,       sb)
-c10 = hls_to_hex(1/3,   lb,       sb)
-c11 = hls_to_hex(1/6,   lb+0.02,  sb)
-c12 = hls_to_hex(2/3,   lb,       sb)
-c13 = hls_to_hex(dom_h, lb,       sb)
-c14 = hls_to_hex(0.50,  lb,       sb)
+bg     = special.get("background", colors.get("color0", "#000000"))
+fg     = special.get("foreground", colors.get("color7", "#ffffff"))
+cursor = special.get("cursor", fg)
+accent = colors.get("color5", colors.get("color1", fg))
+sel_bg = accent
+sel_fg = colors.get("color0", bg)
 
 print(f'accent = "{accent}"')
 print(f'cursor = "{cursor}"')
@@ -7870,22 +7785,10 @@ print(f'background = "{bg}"')
 print(f'selection_foreground = "{sel_fg}"')
 print(f'selection_background = "{sel_bg}"')
 print()
-print(f'color0 = "{c0}"')
-print(f'color1 = "{c1}"')
-print(f'color2 = "{c2}"')
-print(f'color3 = "{c3}"')
-print(f'color4 = "{c4}"')
-print(f'color5 = "{c5}"')
-print(f'color6 = "{c6}"')
-print(f'color7 = "{c7}"')
-print(f'color8 = "{c8}"')
-print(f'color9 = "{c9}"')
-print(f'color10 = "{c10}"')
-print(f'color11 = "{c11}"')
-print(f'color12 = "{c12}"')
-print(f'color13 = "{c13}"')
-print(f'color14 = "{c14}"')
-print(f'color15 = "{c15}"')
+for i in range(16):
+    key = f"color{i}"
+    val = colors.get(key, "#000000")
+    print(f'{key} = "{val}"')
 PYEOF
 
 if [[ $? -ne 0 || ! -s "$THEMARCHY_DIR/colors.toml" ]]; then
@@ -7978,6 +7881,51 @@ THEMARCHY_EOF
     chmod +x "$THEMARCHY_SCRIPT"
 }
 
+ensure_pywal_installed() {
+    command -v wal &>/dev/null && return 0
+
+    echo -e "  Themarchy requires ${BOLD}python-pywal${RESET}${DIM}, which is not installed.${RESET}"
+    echo
+
+    local aur_helper=""
+    if command -v yay &>/dev/null; then
+        aur_helper="yay"
+    elif command -v paru &>/dev/null; then
+        aur_helper="paru"
+    fi
+
+    if [[ -z "$aur_helper" ]]; then
+        echo -e "  ${DIM}✗${RESET}  No AUR helper found (yay or paru required)"
+        echo -e "  ${DIM}    Install manually: yay -S python-pywal${RESET}"
+        echo
+        return 1
+    fi
+
+    printf "  ${BOLD}Install python-pywal via $aur_helper?${RESET} ${DIM}(yes/no)${RESET} "
+    read -r < /dev/tty
+    echo
+
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo -e "  Cancelled."
+        echo
+        return 1
+    fi
+
+    echo -e "  ${DIM}Installing python-pywal...${RESET}"
+    echo
+    if "$aur_helper" -S --noconfirm python-pywal; then
+        echo
+        echo -e "  ${CHECKED}✓${RESET}  python-pywal installed"
+        echo
+        return 0
+    else
+        echo
+        echo -e "  ${DIM}✗${RESET}  Installation failed"
+        echo
+        return 1
+    fi
+}
+
 show_themarchy_preview_dialog() {
     clear
     echo
@@ -7999,9 +7947,7 @@ show_themarchy_preview_dialog() {
         return 1
     fi
 
-    if ! command -v magick &>/dev/null; then
-        echo -e "  ${DIM}✗${RESET}  ImageMagick not found (magick required)"
-        echo
+    if ! ensure_pywal_installed; then
         printf "  Press any key to continue..."
         read -r -n1 < /dev/tty
         return 1
@@ -8012,11 +7958,19 @@ show_themarchy_preview_dialog() {
     printf "  ${DIM}Scanning colors...${RESET}"
 
     local colors
-    colors=$(magick "$wallpaper" -resize 200x200^ +dither -colors 16 -format "%c" histogram:info:- 2>/dev/null | sort -rn | awk '{print substr($3,1,7)}')
+    if ! wal -i "$wallpaper" -n -q 2>/dev/null; then
+        echo
+        echo -e "  ${DIM}✗${RESET}  pywal failed to extract colors"
+        echo
+        printf "  Press any key to continue..."
+        read -r -n1 < /dev/tty
+        return 1
+    fi
+    colors=$(cat "$HOME/.cache/wal/colors" 2>/dev/null)
 
     if [[ -z "$colors" ]]; then
         echo
-        echo -e "  ${DIM}✗${RESET}  Failed to extract colors"
+        echo -e "  ${DIM}✗${RESET}  Failed to read pywal palette"
         echo
         printf "  Press any key to continue..."
         read -r -n1 < /dev/tty
@@ -8093,6 +8047,11 @@ setup_themarchy_keybind() {
         echo
         SUMMARY_LOG+=("--  Themarchy keybind -- already set")
         return 0
+    fi
+
+    if ! ensure_pywal_installed; then
+        SUMMARY_LOG+=("✗  Themarchy keybind -- failed (python-pywal not installed)")
+        return 1
     fi
 
     if [[ "$CONFIRM_ALL" != true ]]; then

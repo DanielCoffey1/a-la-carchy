@@ -13,7 +13,7 @@ A two-panel TUI (Terminal User Interface) debloater and optimizer for Omarchy Li
 - Interactive checklist of preinstalled packages and webapps
 - Only shows packages and webapps that are currently installed
 - **Themarchy** — generate and apply a cohesive theme from your current wallpaper with one keybind (SUPER+SHIFT+T)
-- **103 extra community themes** browseable and installable with one click
+- **252 extra community themes** browseable and installable with one click
 - **Keybind Editor** to view and rebind all Hyprland keybindings via guided dialog
 - **Hyprland Configurator** with 69 settings across 4 categories (General, Decoration, Input, Gestures)
 - **Multi-monitor management** with detection, positioning, primary monitor, and laptop auto-off
@@ -56,6 +56,7 @@ chmod +x a-la-carchy.sh
 - `power-profiles-daemon` for power profile management (optional, shows error if unavailable)
 - Battery with kernel `charge_control_end_threshold` support for battery charge limit (optional, shows error if unavailable)
 - `asusctl` for ASUS ROG hardware control (optional, shows error if unavailable)
+- `python-pywal` (AUR) for Themarchy wallpaper-based theming (optional, offered for install automatically)
 - No other external dependencies - works out of the box!
 
 ## How to Use
@@ -652,10 +653,9 @@ Generate and apply a full Omarchy theme from your current wallpaper's colors.
 
 #### How It Works
 
-1. **Color extraction** — ImageMagick samples the current wallpaper at 200×200 and quantizes it to 16 representative colors, sorted by pixel frequency (most prominent first)
-2. **Dominant hue detection** — colors are grouped into 12 hue sectors, each weighted by chroma × frequency. The sector with the highest total weight becomes the dominant hue family, and its most vivid color is used as the accent
-3. **Palette generation** — a Python algorithm using WCAG luminance and HLS color math builds a full 16-color terminal palette plus `accent`, `foreground`, `background`, `cursor`, `selection_foreground`, and `selection_background` values, written to `~/.config/omarchy/themes/themarchy/colors.toml`
-4. **Theme application** — the current wallpaper is copied into the theme's `backgrounds/` folder, then `omarchy-theme-set themarchy` applies the palette to all Omarchy components (kitty, waybar, Walker, mako, hyprlock, Hyprland borders, SwayOSD)
+1. **Color extraction** — [pywal](https://github.com/dylanaraps/pywal) (`wal -i "$WALLPAPER" -n -q`) generates a 16-color palette from the wallpaper and writes it to `~/.cache/wal/colors.json`
+2. **Palette mapping** — a Python script reads the pywal JSON and maps `special.background`, `special.foreground`, `special.cursor`, and `colors.color0–color15` into `colors.toml`, with `color5` used as the `accent`
+3. **Theme application** — the current wallpaper is copied into the theme's `backgrounds/` folder, then `omarchy-theme-set themarchy` applies the palette to all Omarchy components (kitty, waybar, Walker, mako, hyprlock, Hyprland borders, SwayOSD)
 
 #### Wallpaper detection
 
@@ -669,7 +669,7 @@ Themarchy reads `~/.config/omarchy/current/background` (the Omarchy symlink) as 
 | `~/.config/omarchy/themes/themarchy/colors.toml` | Generated color palette consumed by `omarchy-theme-set-templates` |
 | `~/.config/omarchy/themes/themarchy/backgrounds/` | Wallpaper copy so the background persists after the theme swap |
 
-Requires `imagemagick` (`magick`) and `python3` (both included with Omarchy).
+Requires `python-pywal` (AUR) and `python3`. If pywal is not installed, A La Carchy will offer to install it automatically via yay or paru.
 
 ### Extra Themes
 
