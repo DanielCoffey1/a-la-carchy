@@ -73,19 +73,19 @@ declare -a SUMMARY_LOG=()
 CONFIRM_ALL=false
 
 # Hyprland tiling config path
-TILING_CONF="$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf"
+TILING_CONF="$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.lua"
 
 # Hyprland monitors config path
-MONITORS_CONF="$HOME/.config/hypr/monitors.conf"
+MONITORS_CONF="$HOME/.config/hypr/monitors.lua"
 
 # Hyprland bindings config path
-BINDINGS_CONF="$HOME/.config/hypr/bindings.conf"
+BINDINGS_CONF="$HOME/.config/hypr/bindings.lua"
 
 # XCompose config path
 XCOMPOSE_CONF="$HOME/.XCompose"
 
 # Hyprland input config path
-INPUT_CONF="$HOME/.config/hypr/input.conf"
+INPUT_CONF="$HOME/.config/hypr/input.lua"
 
 # Suspend state file path
 SUSPEND_STATE="$HOME/.local/state/omarchy/toggles/suspend-on"
@@ -95,25 +95,25 @@ WAYBAR_CONF="$HOME/.config/waybar/config.jsonc"
 WAYBAR_CONF_STYLE="$HOME/.config/waybar/style.css"
 
 # Hyprland looknfeel config path
-LOOKNFEEL_CONF="$HOME/.config/hypr/looknfeel.conf"
+LOOKNFEEL_CONF="$HOME/.config/hypr/looknfeel.lua"
 
 # UWSM defaults config path
 UWSM_DEFAULT="$HOME/.config/uwsm/default"
 
 # Managed-block markers for laptop auto-off
-LAPTOP_AUTO_MARKER_START="# >>> managed by a-la-carchy laptop-display"
-LAPTOP_AUTO_MARKER_END="# <<< managed by a-la-carchy laptop-display"
+LAPTOP_AUTO_MARKER_START="-- >>> managed by a-la-carchy laptop-display"
+LAPTOP_AUTO_MARKER_END="-- <<< managed by a-la-carchy laptop-display"
 
 # Laptop auto-off script path
 LAPTOP_AUTO_SCRIPT="$HOME/.config/hypr/scripts/laptop-display-auto.sh"
 
 # Managed-block markers for power profile
-POWER_PROFILE_MARKER_START="# >>> managed by a-la-carchy power-profile"
-POWER_PROFILE_MARKER_END="# <<< managed by a-la-carchy power-profile"
+POWER_PROFILE_MARKER_START="-- >>> managed by a-la-carchy power-profile"
+POWER_PROFILE_MARKER_END="-- <<< managed by a-la-carchy power-profile"
 
 # Managed-block markers for primary monitor
-PRIMARY_MONITOR_MARKER_START="# >>> managed by a-la-carchy primary-monitor"
-PRIMARY_MONITOR_MARKER_END="# <<< managed by a-la-carchy primary-monitor"
+PRIMARY_MONITOR_MARKER_START="-- >>> managed by a-la-carchy primary-monitor"
+PRIMARY_MONITOR_MARKER_END="-- <<< managed by a-la-carchy primary-monitor"
 
 # Power profile startup script path
 POWER_PROFILE_SCRIPT="$HOME/.config/hypr/scripts/power-profile-default.sh"
@@ -126,15 +126,15 @@ POWER_AUTO_SWITCH_UDEV_RULE="/etc/udev/rules.d/99-power-profile.rules"
 POWER_AUTO_SWITCH_SCRIPT="$HOME/.config/hypr/scripts/power-profile-auto-switch.sh"
 
 # Managed-block markers for power menu charge limit override
-POWER_MENU_MARKER_START="# === a-la-carchy power-menu charge-limit ==="
-POWER_MENU_MARKER_END="# === end a-la-carchy power-menu charge-limit ==="
+POWER_MENU_MARKER_START="-- === a-la-carchy power-menu charge-limit ==="
+POWER_MENU_MARKER_END="-- === end a-la-carchy power-menu charge-limit ==="
 
 # Battery limit helper script path (called from walker menu, uses pkexec)
 BATTERY_LIMIT_HELPER="$HOME/.config/hypr/scripts/omarchy-battery-limit.sh"
 
 # Omarchy default window/browser config paths (for transparency toggle)
-WINDOWS_CONF="$HOME/.local/share/omarchy/default/hypr/windows.conf"
-BROWSER_CONF="$HOME/.local/share/omarchy/default/hypr/apps/browser.conf"
+WINDOWS_CONF="$HOME/.local/share/omarchy/default/hypr/windows.lua"
+BROWSER_CONF="$HOME/.local/share/omarchy/default/hypr/apps/browser.lua"
 
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
@@ -143,7 +143,7 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
-# Extract managed blocks from monitors.conf so they survive full rewrites
+# Extract managed blocks from monitors.lua so they survive full rewrites
 # Stores result in MONITORS_MANAGED_BLOCKS variable
 save_managed_blocks() {
     MONITORS_MANAGED_BLOCKS=""
@@ -164,7 +164,7 @@ save_managed_blocks() {
     done
 }
 
-# Re-append saved managed blocks to monitors.conf after a rewrite
+# Re-append saved managed blocks to monitors.lua after a rewrite
 restore_managed_blocks() {
     if [[ -n "${MONITORS_MANAGED_BLOCKS:-}" ]]; then
         echo "$MONITORS_MANAGED_BLOCKS" >> "$MONITORS_CONF"
@@ -182,16 +182,161 @@ is_webapp_installed() {
 }
 
 # Function to load all keybindings from config files for the Keybind Editor
-# Applies unbind/rebind overrides from bindings.conf so entries show current state
+# Applies unbind/rebind overrides from bindings.lua so entries show current state
+# Parse an o.bind(...) Lua call line into its components
+# Sets: parsed_mods, parsed_key, parsed_desc, parsed_disp, parsed_args
+_parse_o_bind() {
+    local line="$1"
+    parsed_mods=""
+    parsed_key=""
+    parsed_desc=""
+    parsed_disp=""
+    parsed_args=""
+
+    # Match: o.bind("MODS + KEY", "DESC", ...)
+    if [[ "$line" =~ ^[[:space:]]*o\.bind\(\"([^\"]+)\"[[:space:]]*,[[:space:]]*\"([^\"]*)\"[[:space:]]*,[[:space:]]*(.*)\)[[:space:]]*$ ]]; then
+        local keys_str="${BASH_REMATCH[1]}"
+        parsed_desc="${BASH_REMATCH[2]}"
+        local disp_str="${BASH_REMATCH[3]}"
+
+        # Split keys_str on ' + ' to get mods and key
+        local keys_parts=()
+        IFS='+' read -ra keys_parts <<< "$keys_str"
+        local last_idx=$(( ${#keys_parts[@]} - 1 ))
+
+        # Trim spaces from each part
+        local mods_parts=()
+        for ((p=0; p<last_idx; p++)); do
+            local trimmed="${keys_parts[$p]}"
+            trimmed="${trimmed## }"
+            trimmed="${trimmed%% }"
+            [[ -n "$trimmed" ]] && mods_parts+=("$trimmed")
+        done
+        parsed_mods="${mods_parts[*]}"
+        local raw_key="${keys_parts[$last_idx]}"
+        parsed_key="${raw_key## }"
+        parsed_key="${parsed_key%% }"
+
+        # Convert dispatcher calls to short names
+        # hl.dsp.window.close() -> killactive
+        # hl.dsp.exec_cmd("foo") -> exec, foo
+        # hl.dsp.layout("x") -> layout x
+        # hl.dsp.focus({...}) -> focus ...
+        # hl.dsp.window.*(...) -> window.* ...
+        # "string command" -> exec, string command
+        # { omarchy = "x" } -> exec, omarchy-launch-x
+        # { tui = "x" } -> exec, omarchy-launch-tui x
+        # { launch = "x", focus = "y" } -> exec, omarchy-launch-or-focus y x
+        # { webapp = "url" } -> exec, omarchy-launch-webapp url
+
+        if [[ "$disp_str" == hl.dsp.window.close\(\) ]]; then
+            parsed_disp="killactive"
+            parsed_args=""
+        elif [[ "$disp_str" =~ ^hl\.dsp\.exec_cmd\(\"([^\"]*)\"\)$ ]]; then
+            parsed_disp="exec"
+            parsed_args="${BASH_REMATCH[1]}"
+        elif [[ "$disp_str" =~ ^hl\.dsp\.layout\(\"([^\"]*)\"\)$ ]]; then
+            parsed_disp="layout"
+            parsed_args="${BASH_REMATCH[1]}"
+        elif [[ "$disp_str" =~ ^hl\.dsp\.window\.([a-z_]+)\(\)$ ]]; then
+            parsed_disp="window.${BASH_REMATCH[1]}"
+            parsed_args=""
+        elif [[ "$disp_str" =~ ^hl\.dsp\.window\.([a-z_]+)\((.*)\)$ ]]; then
+            parsed_disp="window.${BASH_REMATCH[1]}"
+            parsed_args="${BASH_REMATCH[2]}"
+        elif [[ "$disp_str" =~ ^hl\.dsp\.([a-z_]+)\((.*)\)$ ]]; then
+            parsed_disp="${BASH_REMATCH[1]}"
+            parsed_args="${BASH_REMATCH[2]}"
+        elif [[ "$disp_str" =~ ^\"([^\"]+)\"$ ]]; then
+            parsed_disp="exec"
+            parsed_args="${BASH_REMATCH[1]}"
+        elif [[ "$disp_str" =~ \{\ *omarchy\ *=\ *\"([^\"]+)\"\ *\} ]]; then
+            parsed_disp="exec"
+            parsed_args="omarchy-launch-${BASH_REMATCH[1]}"
+        elif [[ "$disp_str" =~ \{\ *tui\ *=\ *\"([^\"]+)\"\ *\} ]]; then
+            parsed_disp="exec"
+            parsed_args="omarchy-launch-tui ${BASH_REMATCH[1]}"
+        elif [[ "$disp_str" =~ \{\ *launch\ *=\ *\"([^\"]+)\"\ *\} ]]; then
+            parsed_disp="exec"
+            parsed_args="uwsm-app -- ${BASH_REMATCH[1]}"
+        elif [[ "$disp_str" =~ \{\ *omarchy\ *=\ *\"([^\"]+)\"\ *,\ *focus\ *=\ *true\ *\} ]] || \
+             [[ "$disp_str" =~ \{\ *focus\ *=\ *true\ *,\ *omarchy\ *=\ *\"([^\"]+)\"\ *\} ]]; then
+            parsed_disp="exec"
+            parsed_args="omarchy-launch-or-focus-webapp ${BASH_REMATCH[1]}"
+        elif [[ "$disp_str" =~ \{\ *tui\ *=\ *\"([^\"]+)\"\ *,\ *focus\ *=\ *true\ *\} ]] || \
+             [[ "$disp_str" =~ \{\ *focus\ *=\ *true\ *,\ *tui\ *=\ *\"([^\"]+)\"\ *\} ]]; then
+            parsed_disp="exec"
+            parsed_args="omarchy-launch-or-focus-tui ${BASH_REMATCH[1]}"
+        elif [[ "$disp_str" =~ function\ *\(\) ]]; then
+            parsed_disp="lua-function"
+            parsed_args=""
+        else
+            # fallback: use raw dispatcher string
+            disp_str="${disp_str## }"
+            disp_str="${disp_str%% }"
+            # Remove trailing comma if any
+            disp_str="${disp_str%,}"
+            parsed_disp="${disp_str:0:40}"
+            parsed_args=""
+        fi
+    fi
+}
+
+# Parse a Lua o.bind(...) line, extracting just the keys string (MODS + KEY)
+# Stores result in parsed_keys_str
+_parse_o_bind_keys() {
+    local line="$1"
+    parsed_keys_str=""
+    if [[ "$line" =~ ^[[:space:]]*o\.bind\(\"([^\"]+)\" ]]; then
+        parsed_keys_str="${BASH_REMATCH[1]}"
+    fi
+}
+
+# Convert a "MODS + KEY" string to "MODS, KEY" (old-format compatible)
+_keys_to_mods_key() {
+    local keys_str="$1"
+    local parts=()
+    IFS='+' read -ra parts <<< "$keys_str"
+    local last_idx=$(( ${#parts[@]} - 1 ))
+    local mods_parts=()
+    for ((p=0; p<last_idx; p++)); do
+        local trimmed="${parts[$p]}"
+        trimmed="${trimmed## }"
+        trimmed="${trimmed%% }"
+        [[ -n "$trimmed" ]] && mods_parts+=("$trimmed")
+    done
+    local mods="${mods_parts[*]}"
+    local raw_key="${parts[$last_idx]}"
+    local key="${raw_key## }"
+    key="${key%% }"
+    _parsed_mods_key="${mods}|${key}"
+}
+
+# Convert "MODS|KEY" back to "MODS + KEY" format
+_mods_key_to_keys() {
+    local mods="$1"
+    local key="$2"
+    local parts=()
+    IFS=' ' read -ra parts <<< "$mods"
+    local result=""
+    for p in "${parts[@]}"; do
+        [[ -n "$p" ]] && result+="${p} + "
+    done
+    result+="$key"
+    _parsed_keys_str="$result"
+}
+
+# Function to load all keybindings from Lua config files for the Keybind Editor
+# Applies unbind/rebind overrides from bindings.lua so entries show current state
 load_all_bindings() {
     EDIT_BINDINGS_ITEMS=()
 
-    # Phase 1: Load default config files (not bindings.conf)
+    # Phase 1: Load default config files (not bindings.lua)
     local default_files=(
-        "$HOME/.local/share/omarchy/default/hypr/bindings/clipboard.conf"
-        "$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.conf"
-        "$HOME/.local/share/omarchy/default/hypr/bindings/utilities.conf"
-        "$HOME/.local/share/omarchy/default/hypr/bindings/media.conf"
+        "$HOME/.local/share/omarchy/default/hypr/bindings/clipboard.lua"
+        "$HOME/.local/share/omarchy/default/hypr/bindings/tiling-v2.lua"
+        "$HOME/.local/share/omarchy/default/hypr/bindings/utilities.lua"
+        "$HOME/.local/share/omarchy/default/hypr/bindings/media.lua"
     )
     local file_labels=("Clipboard" "Tiling" "Utilities" "Media")
 
@@ -205,36 +350,18 @@ load_all_bindings() {
 
         while IFS= read -r line; do
             [[ -z "$line" ]] && continue
-            [[ "$line" =~ ^bindd[[:space:]]*= ]] || continue
+            [[ "$line" =~ o\.bind\( ]] || continue
 
-            local content="${line#bindd = }"
-            content="${content#bindd=}"
+            _parse_o_bind "$line"
+            [[ -z "$parsed_mods" ]] && continue
 
-            IFS=',' read -ra parts <<< "$content"
-            [[ ${#parts[@]} -lt 4 ]] && continue
-
-            local mods="${parts[0]## }"
-            mods="${mods%% }"
-            local bkey="${parts[1]## }"
-            bkey="${bkey%% }"
-            local desc="${parts[2]## }"
-            desc="${desc%% }"
-            local dispatcher="${parts[3]## }"
-            dispatcher="${dispatcher%% }"
-            local args=""
-            if [[ ${#parts[@]} -gt 4 ]]; then
-                args="${parts[*]:4}"
-                args="${args## }"
-                args="${args%% }"
-            fi
-
-            EDIT_BINDINGS_ITEMS+=("bindd|$mods|$bkey|$desc|$dispatcher|$args|$file")
+            EDIT_BINDINGS_ITEMS+=("bindd|$parsed_mods|$parsed_key|$parsed_desc|$parsed_disp|$parsed_args|$file")
         done < "$file"
     done
 
-    # Phase 2: Process bindings.conf overrides
-    # For each unbind+bindd pair, update the matching default entry in-place
-    # Non-override bindd entries are collected as user bindings
+    # Phase 2: Process bindings.lua overrides
+    # For each hl.unbind() + o.bind() pair, update the matching default entry in-place
+    # Non-override o.bind() entries are collected as user bindings
     if [[ -f "$BINDINGS_CONF" ]]; then
         # Build lookup: "MODS|KEY" -> EDIT_BINDINGS_ITEMS index
         local -A binding_lookup=()
@@ -252,58 +379,37 @@ load_all_bindings() {
         while IFS= read -r line; do
             [[ -z "$line" ]] && continue
 
-            # Process unbind lines
-            if [[ "$line" =~ ^unbind[[:space:]]*=[[:space:]]*(.*) ]]; then
-                local ucontent="${BASH_REMATCH[1]}"
-                IFS=',' read -ra uparts <<< "$ucontent"
-                [[ ${#uparts[@]} -lt 2 ]] && continue
-                local u_mods="${uparts[0]## }"
-                u_mods="${u_mods%% }"
-                local u_key="${uparts[1]## }"
-                u_key="${u_key%% }"
-                local u_lookup="$u_mods|$u_key"
+            # Process hl.unbind("MODS + KEY") lines
+            if [[ "$line" =~ ^[[:space:]]*hl\.unbind\(\"([^\"]+)\"\) ]]; then
+                local ukeys="${BASH_REMATCH[1]}"
+                _keys_to_mods_key "$ukeys"
+                local u_lookup="$_parsed_mods_key"
                 if [[ -n "${binding_lookup[$u_lookup]:-}" ]]; then
                     pending_unbinds["$u_lookup"]=1
                 fi
                 continue
             fi
 
-            # Process bindd lines
-            [[ "$line" =~ ^bindd[[:space:]]*= ]] || continue
+            # Process o.bind lines
+            [[ "$line" =~ o\.bind\( ]] || continue
 
-            local content="${line#bindd = }"
-            content="${content#bindd=}"
-            IFS=',' read -ra parts <<< "$content"
-            [[ ${#parts[@]} -lt 4 ]] && continue
+            _parse_o_bind "$line"
+            [[ -z "$parsed_mods" ]] && continue
 
-            local b_mods="${parts[0]## }"
-            b_mods="${b_mods%% }"
-            local b_key="${parts[1]## }"
-            b_key="${b_key%% }"
-            local b_desc="${parts[2]## }"
-            b_desc="${b_desc%% }"
-            local b_disp="${parts[3]## }"
-            b_disp="${b_disp%% }"
-            local b_args=""
-            if [[ ${#parts[@]} -gt 4 ]]; then
-                b_args="${parts[*]:4}"
-                b_args="${b_args## }"
-                b_args="${b_args%% }"
-            fi
-
-            # Check if this bindd matches a pending unbind (override)
+            # Check if this bind matches a pending unbind (override)
+            local bind_lookup="$parsed_mods|$parsed_key"
             local was_override=false
             for u_lookup in "${!pending_unbinds[@]}"; do
                 local orig_idx="${binding_lookup[$u_lookup]}"
                 local orig_entry="${EDIT_BINDINGS_ITEMS[$orig_idx]}"
                 IFS='|' read -r _t _m _k orig_desc _rest <<< "$orig_entry"
-                if [[ "$orig_desc" == "$b_desc" ]]; then
+                if [[ "$orig_desc" == "$parsed_desc" ]]; then
                     # Update the default entry with overridden mods/key
                     IFS='|' read -r _t _m _k _d orig_disp orig_args orig_file <<< "$orig_entry"
-                    EDIT_BINDINGS_ITEMS[$orig_idx]="bindd|$b_mods|$b_key|$b_desc|$b_disp|$b_args|$orig_file"
+                    EDIT_BINDINGS_ITEMS[$orig_idx]="bindd|$parsed_mods|$parsed_key|$parsed_desc|$parsed_disp|$parsed_args|$orig_file"
                     # Update lookup for chained overrides
                     unset "binding_lookup[$u_lookup]"
-                    binding_lookup["$b_mods|$b_key"]=$orig_idx
+                    binding_lookup["$bind_lookup"]=$orig_idx
                     unset "pending_unbinds[$u_lookup]"
                     was_override=true
                     break
@@ -311,7 +417,7 @@ load_all_bindings() {
             done
 
             if [[ "$was_override" == false ]]; then
-                user_entries+=("bindd|$b_mods|$b_key|$b_desc|$b_disp|$b_args|$BINDINGS_CONF")
+                user_entries+=("bindd|$parsed_mods|$parsed_key|$parsed_desc|$parsed_disp|$parsed_args|$BINDINGS_CONF")
             fi
         done < "$BINDINGS_CONF"
 
@@ -333,19 +439,23 @@ parse_hypr_item() {
 # Load current values from managed blocks in config files
 load_hypr_settings() {
     HYPR_CURRENT=()
-    local marker_start="# === a-la-carchy hyprland settings ==="
-    local marker_end="# === end a-la-carchy hyprland settings ==="
+    local marker_start="-- === a-la-carchy hyprland settings ==="
+    local marker_end="-- === end a-la-carchy hyprland settings ==="
 
     local config_files=("$LOOKNFEEL_CONF" "$INPUT_CONF")
     for conf in "${config_files[@]}"; do
         [[ -f "$conf" ]] || continue
 
         local in_block=false
+        local in_hl_config=false
+        local brace_depth=0
         local section_stack=()
         while IFS= read -r line; do
             if [[ "$line" == "$marker_start" ]]; then
                 in_block=true
                 section_stack=()
+                brace_depth=0
+                in_hl_config=false
                 continue
             fi
             if [[ "$line" == "$marker_end" ]]; then
@@ -354,30 +464,58 @@ load_hypr_settings() {
             fi
             $in_block || continue
 
-            # Skip empty lines and comments
+            # Skip empty lines and Lua comments
             local trimmed="${line#"${line%%[![:space:]]*}"}"
             [[ -z "$trimmed" ]] && continue
-            [[ "$trimmed" == \#* ]] && continue
+            [[ "$trimmed" =~ ^-- ]] && continue
 
-            # Opening brace: push section
-            if [[ "$trimmed" =~ ^([a-zA-Z_][a-zA-Z0-9_.-]*)[[:space:]]*\{$ ]]; then
-                section_stack+=("${BASH_REMATCH[1]}")
+            # Track hl.config({ ... }) wrapper
+            if [[ "$trimmed" == "hl.config({" ]]; then
+                in_hl_config=true
+                brace_depth=1
                 continue
             fi
 
-            # Closing brace: pop section
-            if [[ "$trimmed" == "}" ]]; then
-                if [[ ${#section_stack[@]} -gt 0 ]]; then
-                    unset 'section_stack[${#section_stack[@]}-1]'
-                fi
-                continue
+            # Count braces for nesting depth
+            local open_braces=0 close_braces=0
+            local temp="$trimmed"
+            while [[ "$temp" =~ \{ ]]; do
+                ((open_braces++))
+                temp="${temp#*{}"
+            done
+            temp="$trimmed"
+            while [[ "$temp" =~ \} ]]; do
+                ((close_braces++))
+                temp="${temp#*\}}"
+            done
+
+            if (( close_braces > 0 )); then
+                # Pop sections for each closing brace (except final hl.config closing)
+                for ((c=0; c<close_braces; c++)); do
+                    if [[ ${#section_stack[@]} -gt 0 ]]; then
+                        unset 'section_stack[${#section_stack[@]}-1]'
+                    fi
+                done
             fi
 
-            # Key = value assignment
-            if [[ "$trimmed" =~ ^([a-zA-Z_][a-zA-Z0-9_.-]*)[[:space:]]*=[[:space:]]*(.+)$ ]]; then
+            # Opening brace: push section name (if present before brace)
+            if [[ "$trimmed" =~ ^([a-zA-Z_][a-zA-Z0-9_.-]*)[[:space:]]*=[[:space:]]*\{ ]]; then
+                local sec_name="${BASH_REMATCH[1]}"
+                # Remove quotes around key names if present (Lua style)
+                sec_name="${sec_name#\"}"
+                sec_name="${sec_name%\"}"
+                section_stack+=("$sec_name")
+            fi
+
+            # Key = value assignment (not section headers)
+            if [[ "$trimmed" =~ ^([a-zA-Z_][a-zA-Z0-9_.-]*)[[:space:]]*=[[:space:]]*(.+)$ ]] && \
+               ! [[ "$trimmed" =~ \{[[:space:]]*$ ]] && \
+               ! [[ "$trimmed" =~ ^[[:space:]]*\}$ ]]; then
                 local k="${BASH_REMATCH[1]}"
                 local v="${BASH_REMATCH[2]}"
-                # Trim trailing whitespace from value
+                # Trim trailing whitespace and comma (Lua uses trailing commas)
+                v="${v%"${v##*[![:space:]]}"}"
+                v="${v%,}"
                 v="${v%"${v##*[![:space:]]}"}"
 
                 # Build full section path
@@ -389,6 +527,11 @@ load_hypr_settings() {
 
                 local full_key="${section_path}.${k}"
                 HYPR_CURRENT["$full_key"]="$v"
+            fi
+
+            # Track opening braces for depth (after processing)
+            if (( open_braces > close_braces && open_braces > 0 )); then
+                brace_depth=$(( brace_depth + open_braces - close_braces ))
             fi
         done < "$conf"
     done
@@ -800,8 +943,8 @@ apply_hypr_edits() {
 
     echo
 
-    local marker_start="# === a-la-carchy hyprland settings ==="
-    local marker_end="# === end a-la-carchy hyprland settings ==="
+    local marker_start="-- === a-la-carchy hyprland settings ==="
+    local marker_end="-- === end a-la-carchy hyprland settings ==="
 
     # Group edits by config file, then by section_path
     for target_file in "looknfeel" "input"; do
@@ -837,9 +980,10 @@ apply_hypr_edits() {
             sections_content["$section"]+="    ${key} = ${val}"$'\n'
         done
 
-        # Build the block with proper nesting
+        # Build the block with proper nesting in Lua format
         local block=""
         block+="$marker_start"$'\n'
+        block+="hl.config({"$'\n'
 
         # Sort sections and build nested structure
         local -A top_sections=()
@@ -860,23 +1004,28 @@ apply_hypr_edits() {
                 fi
             done
 
-            block+="${top} {"$'\n'
+            block+="    ${top} = {"$'\n'
             if [[ -n "$direct_content" ]]; then
-                block+="$direct_content"
+                local formatted_content=""
+                while IFS= read -r sline; do
+                    [[ -z "$sline" ]] && continue
+                    formatted_content+="        ${sline},"$'\n'
+                done <<< "$direct_content"
+                block+="$formatted_content"
             fi
             for sub in "${!sub_sections[@]}"; do
-                block+="    ${sub} {"$'\n'
-                # Indent sub-section content further
+                block+="        ${sub} = {"$'\n'
                 local sub_content="${sub_sections[$sub]}"
                 while IFS= read -r sline; do
                     [[ -z "$sline" ]] && continue
-                    block+="    ${sline}"$'\n'
+                    block+="            ${sline},"$'\n'
                 done <<< "$sub_content"
-                block+="    }"$'\n'
+                block+="        },"$'\n'
             done
-            block+="}"$'\n'
+            block+="    },"$'\n'
         done
 
+        block+="})"$'\n'
         block+="$marker_end"
 
         # Remove existing managed block if present, then append new one
@@ -908,7 +1057,21 @@ apply_hypr_edits() {
     echo
 }
 
-# Apply all pending keybinding edits to bindings.conf
+# Helper: convert MODS|KEY to "MODS + KEY" Lua bind string
+_mods_key_to_lua_keys() {
+    local mods="$1"
+    local key="$2"
+    local parts=()
+    IFS=' ' read -ra parts <<< "$mods"
+    local result=""
+    for p in "${parts[@]}"; do
+        [[ -n "$p" ]] && result+="${p} + "
+    done
+    result+="$key"
+    _parsed_lua_keys="$result"
+}
+
+# Apply all pending keybinding edits to bindings.lua
 apply_binding_edits() {
     if [[ ${#BINDING_EDITS[@]} -eq 0 ]]; then
         return
@@ -947,7 +1110,7 @@ apply_binding_edits() {
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         SUMMARY_LOG+=("✗  Keybinding edits -- failed (config not found)")
         return 1
     fi
@@ -963,14 +1126,33 @@ apply_binding_edits() {
         IFS='|' read -r _type orig_mods orig_key desc dispatcher args source <<< "$entry"
         IFS='|' read -r new_mods new_key <<< "${BINDING_EDITS[$idx]}"
 
-        # Append unbind + rebind to bindings.conf
-        echo "" >> "$BINDINGS_CONF"
-        echo "unbind = $orig_mods, $orig_key" >> "$BINDINGS_CONF"
-        if [[ -n "$args" ]]; then
-            echo "bindd = $new_mods, $new_key, $desc, $dispatcher,$args" >> "$BINDINGS_CONF"
+        # Build the Lua key strings
+        _mods_key_to_lua_keys "$orig_mods" "$orig_key"
+        local orig_lua_keys="$_parsed_lua_keys"
+        _mods_key_to_lua_keys "$new_mods" "$new_key"
+        local new_lua_keys="$_parsed_lua_keys"
+
+        # Reconstruct the o.bind() dispatcher argument
+        local lua_dispatcher=""
+        if [[ "$dispatcher" == "killactive" ]]; then
+            lua_dispatcher="hl.dsp.window.close()"
+        elif [[ "$dispatcher" == "exec" ]]; then
+            lua_dispatcher="\"$args\""
+        elif [[ "$dispatcher" =~ ^window\. ]]; then
+            lua_dispatcher="hl.dsp.${dispatcher}()"
+        elif [[ "$dispatcher" == "layout" ]]; then
+            lua_dispatcher="hl.dsp.layout(\"$args\")"
         else
-            echo "bindd = $new_mods, $new_key, $desc, $dispatcher," >> "$BINDINGS_CONF"
+            lua_dispatcher="\"$dispatcher $args\""
+            lua_dispatcher="${lua_dispatcher%% }"
+            lua_dispatcher="${lua_dispatcher%\"}"
+            lua_dispatcher="${lua_dispatcher% }\""
         fi
+
+        # Append unbind + rebind to bindings.lua
+        echo "" >> "$BINDINGS_CONF"
+        echo "hl.unbind(\"$orig_lua_keys\")" >> "$BINDINGS_CONF"
+        echo "o.bind(\"$new_lua_keys\", \"$desc\", $lua_dispatcher)" >> "$BINDINGS_CONF"
 
         echo -e "    ${CHECKED}✓${RESET}  $desc: $orig_mods+$orig_key -> $new_mods+$new_key"
         SUMMARY_LOG+=("✓  Rebound $desc: $new_mods+$new_key")
@@ -992,14 +1174,14 @@ rebind_close_window() {
     echo
 
     if [[ ! -f "$TILING_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  tiling-v2.conf not found at $TILING_CONF"
+        echo -e "  ${DIM}✗${RESET}  tiling-v2.lua not found at $TILING_CONF"
         echo
         SUMMARY_LOG+=("✗  Rebind close window -- failed (config not found)")
         return 1
     fi
 
     # Check if already changed
-    if grep -q "SUPER, Q, Close window, killactive" "$TILING_CONF"; then
+    if grep -q 'SUPER + Q", "Close window' "$TILING_CONF"; then
         echo -e "  ${DIM}Already set to SUPER+Q. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Rebind close window -- already set")
@@ -1026,8 +1208,8 @@ rebind_close_window() {
     cp "$TILING_CONF" "$backup_file"
     echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
 
-    # Replace SUPER, W with SUPER, Q for killactive
-    sed -i 's/bindd = SUPER, W, Close window, killactive,/bindd = SUPER, Q, Close window, killactive,/' "$TILING_CONF"
+    # Replace SUPER + W with SUPER + Q for close window
+    sed -i 's/o\.bind("SUPER + W", "Close window",/o.bind("SUPER + Q", "Close window",/' "$TILING_CONF"
 
     echo -e "    ${CHECKED}✓${RESET}  Close window rebound to SUPER+Q"
     SUMMARY_LOG+=("✓  Rebind close window to SUPER+Q")
@@ -1049,14 +1231,14 @@ restore_close_window() {
     echo
 
     if [[ ! -f "$TILING_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  tiling-v2.conf not found at $TILING_CONF"
+        echo -e "  ${DIM}✗${RESET}  tiling-v2.lua not found at $TILING_CONF"
         echo
         SUMMARY_LOG+=("✗  Restore close window -- failed (config not found)")
         return 1
     fi
 
     # Check if already set to SUPER+W
-    if grep -q "SUPER, W, Close window, killactive" "$TILING_CONF"; then
+    if grep -q 'SUPER + W", "Close window' "$TILING_CONF"; then
         echo -e "  ${DIM}Already set to SUPER+W. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Restore close window -- already set")
@@ -1083,8 +1265,8 @@ restore_close_window() {
     cp "$TILING_CONF" "$backup_file"
     echo -e "    ${DIM}Backup saved: $backup_file${RESET}"
 
-    # Replace SUPER, Q with SUPER, W for killactive
-    sed -i 's/bindd = SUPER, Q, Close window, killactive,/bindd = SUPER, W, Close window, killactive,/' "$TILING_CONF"
+    # Replace SUPER + Q with SUPER + W for close window
+    sed -i 's/o\.bind("SUPER + Q", "Close window",/o.bind("SUPER + W", "Close window",/' "$TILING_CONF"
 
     echo -e "    ${CHECKED}✓${RESET}  Close window restored to SUPER+W"
     SUMMARY_LOG+=("✓  Restore close window to SUPER+W")
@@ -1251,13 +1433,13 @@ set_monitor_4k() {
     echo
 
     if [[ ! -f "$MONITORS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  monitors.conf not found at $MONITORS_CONF"
+        echo -e "  ${DIM}✗${RESET}  monitors.lua not found at $MONITORS_CONF"
         echo
         SUMMARY_LOG+=("✗  Monitor scaling 4K -- failed (config not found)")
         return 1
     fi
 
-    if grep -q "^monitor=[A-Za-z]" "$MONITORS_CONF" 2>/dev/null; then
+    if grep -q 'hl.monitor({ output = "[A-Za-z]' "$MONITORS_CONF" 2>/dev/null || grep -q "^monitor=[A-Za-z]" "$MONITORS_CONF" 2>/dev/null; then
         echo -e "  ${DIM}Note: Per-monitor layout detected. This will replace it with generic scaling.${RESET}"
         echo
     fi
@@ -1287,13 +1469,12 @@ set_monitor_4k() {
 
     # Write new config
     cat > "$MONITORS_CONF" << 'EOF'
-# See https://wiki.hyprland.org/Configuring/Monitors/
-# List current monitors and resolutions possible: hyprctl monitors
-# Format: monitor = [port], resolution, position, scale
+-- See https://wiki.hypr.land/Configuring/Basics/Monitors/
+-- List current monitors and resolutions possible: hyprctl monitors all
 
-# Optimized for 27" or 32" 4K monitors
-env = GDK_SCALE,1.75
-monitor=,preferred,auto,1.666667
+-- Optimized for 27" or 32" 4K monitors
+hl.env("GDK_SCALE", "1.75")
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1.666667 })
 EOF
 
     # Restore managed blocks (power-profile, laptop-auto-off, etc.)
@@ -1320,13 +1501,13 @@ set_monitor_1080_1440() {
     echo
 
     if [[ ! -f "$MONITORS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  monitors.conf not found at $MONITORS_CONF"
+        echo -e "  ${DIM}✗${RESET}  monitors.lua not found at $MONITORS_CONF"
         echo
         SUMMARY_LOG+=("✗  Monitor scaling 1080p/1440p -- failed (config not found)")
         return 1
     fi
 
-    if grep -q "^monitor=[A-Za-z]" "$MONITORS_CONF" 2>/dev/null; then
+    if grep -q 'hl.monitor({ output = "[A-Za-z]' "$MONITORS_CONF" 2>/dev/null || grep -q "^monitor=[A-Za-z]" "$MONITORS_CONF" 2>/dev/null; then
         echo -e "  ${DIM}Note: Per-monitor layout detected. This will replace it with generic scaling.${RESET}"
         echo
     fi
@@ -1356,13 +1537,12 @@ set_monitor_1080_1440() {
 
     # Write new config
     cat > "$MONITORS_CONF" << 'EOF'
-# See https://wiki.hyprland.org/Configuring/Monitors/
-# List current monitors and resolutions possible: hyprctl monitors
-# Format: monitor = [port], resolution, position, scale
+-- See https://wiki.hypr.land/Configuring/Basics/Monitors/
+-- List current monitors and resolutions possible: hyprctl monitors all
 
-# Straight 1x setup for 1080p or 1440p displays
-env = GDK_SCALE,1
-monitor=,preferred,auto,1
+-- Straight 1x setup for 1080p or 1440p displays
+hl.env("GDK_SCALE", "1")
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 EOF
 
     # Restore managed blocks (power-profile, laptop-auto-off, etc.)
@@ -1874,7 +2054,7 @@ show_position_editor_dialog() {
     read -rsn1 < /dev/tty
 }
 
-# Apply monitor positions to monitors.conf
+# Apply monitor positions to monitors.lua
 apply_monitor_positions() {
     clear
     echo
@@ -1883,7 +2063,7 @@ apply_monitor_positions() {
     echo
 
     if [[ ! -f "$MONITORS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  monitors.conf not found at $MONITORS_CONF"
+        echo -e "  ${DIM}✗${RESET}  monitors.lua not found at $MONITORS_CONF"
         echo
         SUMMARY_LOG+=("✗  Monitor positions -- failed (config not found)")
         return 1
@@ -1926,11 +2106,10 @@ apply_monitor_positions() {
 
     # Save to config file for persistence
     {
-        echo "# See https://wiki.hyprland.org/Configuring/Monitors/"
-        echo "# Configured by A La Carchy - multi-monitor layout"
-        echo "# Format: monitor = name, resolution, position, scale"
+        echo "-- See https://wiki.hypr.land/Configuring/Basics/Monitors/"
+        echo "-- Configured by A La Carchy - multi-monitor layout"
         echo ""
-        echo "env = GDK_SCALE,$gdk_scale"
+        echo "hl.env(\"GDK_SCALE\", \"$gdk_scale\")"
         echo ""
         for entry in "${DETECTED_MONITORS[@]}"; do
             IFS='|' read -r m_name _mk _mo _w _h _x _y m_scale _d _t <<< "$entry"
@@ -1939,20 +2118,20 @@ apply_monitor_positions() {
             if [[ "$pos" != "auto" ]]; then
                 local px="${pos%,*}"
                 local py="${pos#*,}"
-                echo "monitor=${m_name},preferred,${px}x${py},${m_scale},transform,${transform}"
+                echo "hl.monitor({ output = \"$m_name\", mode = \"preferred\", position = \"${px}x${py}\", scale = $m_scale, transform = $transform })"
             else
-                echo "monitor=${m_name},preferred,auto,${m_scale},transform,${transform}"
+                echo "hl.monitor({ output = \"$m_name\", mode = \"preferred\", position = \"auto\", scale = $m_scale, transform = $transform })"
             fi
         done
         echo ""
-        echo "# Fallback for hot-plugged displays"
-        echo "monitor=,preferred,auto,1"
+        echo "-- Fallback for hot-plugged displays"
+        echo "hl.monitor({ output = \"\", mode = \"preferred\", position = \"auto\", scale = 1 })"
     } > "$MONITORS_CONF"
 
     # Restore managed blocks (power-profile, laptop-auto-off, etc.)
     restore_managed_blocks
 
-    echo -e "    ${CHECKED}✓${RESET}  Config saved to monitors.conf"
+    echo -e "    ${CHECKED}✓${RESET}  Config saved to monitors.lua"
     SUMMARY_LOG+=("✓  Monitor layout configured")
     echo
     echo
@@ -2081,17 +2260,17 @@ SCRIPTEOF
     chmod +x "$LAPTOP_AUTO_SCRIPT"
     echo -e "    ${CHECKED}✓${RESET}  Watcher script created: $LAPTOP_AUTO_SCRIPT"
 
-    # Add exec-once to monitors.conf using managed block
+    # Add hl.exec_cmd to monitors.lua using managed block
     if ! grep -q "$LAPTOP_AUTO_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
         {
             echo ""
             echo "$LAPTOP_AUTO_MARKER_START"
-            echo "exec-once = $LAPTOP_AUTO_SCRIPT"
+            echo "hl.exec_cmd(\"$LAPTOP_AUTO_SCRIPT\")"
             echo "$LAPTOP_AUTO_MARKER_END"
         } >> "$MONITORS_CONF"
-        echo -e "    ${CHECKED}✓${RESET}  Added exec-once to monitors.conf"
+        echo -e "    ${CHECKED}✓${RESET}  Added hl.exec_cmd to monitors.lua"
     else
-        echo -e "    ${DIM}exec-once already present in monitors.conf${RESET}"
+        echo -e "    ${DIM}hl.exec_cmd already present in monitors.lua${RESET}"
     fi
 
     # Start the script now (exec-once only runs at Hyprland startup)
@@ -2112,12 +2291,12 @@ remove_laptop_auto_off() {
     echo -e "${BOLD}  Disable Laptop Display Auto-Off${RESET}"
     echo
 
-    # Remove managed block from monitors.conf
+    # Remove managed block from monitors.lua
     if [[ -f "$MONITORS_CONF" ]] && grep -q "$LAPTOP_AUTO_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
         sed -i "/$LAPTOP_AUTO_MARKER_START/,/$LAPTOP_AUTO_MARKER_END/d" "$MONITORS_CONF"
         # Remove trailing blank lines
         sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$MONITORS_CONF"
-        echo -e "    ${CHECKED}✓${RESET}  Removed exec-once from monitors.conf"
+        echo -e "    ${CHECKED}✓${RESET}  Removed hl.exec_cmd from monitors.lua"
     fi
 
     # Remove script
@@ -2173,12 +2352,12 @@ show_primary_monitor_dialog() {
         return
     fi
 
-    # Check if a primary monitor is already configured in monitors.conf
+    # Check if a primary monitor is already configured in monitors.lua
     local configured_primary=""
     if [[ -f "$MONITORS_CONF" ]] && grep -q "$PRIMARY_MONITOR_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
         configured_primary=$(awk -v s="$PRIMARY_MONITOR_MARKER_START" -v e="$PRIMARY_MONITOR_MARKER_END" \
-            '$0==s{f=1;next} $0==e{f=0} f && /workspace = 1,/' "$MONITORS_CONF" | \
-            grep -oP 'monitor:\K[^,]+')
+            '$0==s{f=1;next} $0==e{f=0} f && /workspace.*=.*"1,/' "$MONITORS_CONF" | \
+            grep -oP 'monitor:\K[^",]+')
     fi
 
     local opt_cursor=0
@@ -2276,7 +2455,7 @@ apply_primary_monitor() {
         fi
     done
 
-    # Write managed block to monitors.conf
+    # Write managed block to monitors.lua
     if grep -q "$PRIMARY_MONITOR_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
         sed -i "/$PRIMARY_MONITOR_MARKER_START/,/$PRIMARY_MONITOR_MARKER_END/d" "$MONITORS_CONF"
         # Remove trailing blank lines
@@ -2286,19 +2465,19 @@ apply_primary_monitor() {
     {
         echo ""
         echo "$PRIMARY_MONITOR_MARKER_START"
-        echo "workspace = 1, monitor:$SELECTED_PRIMARY_MONITOR, default:true"
+        echo "hl.config({ workspace = \"1, monitor:$SELECTED_PRIMARY_MONITOR, default:true\" })"
         # Assign incrementing workspaces to non-primary monitors
         local ws=2
         for entry in "${DETECTED_MONITORS[@]}"; do
             IFS='|' read -r m_name _ <<< "$entry"
             if [[ "$m_name" != "$SELECTED_PRIMARY_MONITOR" ]]; then
-                echo "workspace = $ws, monitor:$m_name, default:true"
+                echo "hl.config({ workspace = \"$ws, monitor:$m_name, default:true\" })"
                 ((ws++))
             fi
         done
         echo "$PRIMARY_MONITOR_MARKER_END"
     } >> "$MONITORS_CONF"
-    echo -e "    ${CHECKED}✓${RESET}  Workspace rules written to monitors.conf"
+    echo -e "    ${CHECKED}✓${RESET}  Workspace rules written to monitors.lua"
 
     # Restart wallpaper daemon to fix layer positioning after workspace moves
     if pgrep -x swaybg &>/dev/null; then
@@ -2435,7 +2614,7 @@ SCRIPTEOF
     chmod +x "$POWER_PROFILE_SCRIPT"
     echo -e "    ${CHECKED}✓${RESET}  Startup script created: $POWER_PROFILE_SCRIPT"
 
-    # Add/replace managed block in monitors.conf
+    # Add/replace managed block in monitors.lua
     if grep -q "$POWER_PROFILE_MARKER_START" "$MONITORS_CONF" 2>/dev/null; then
         sed -i "/$POWER_PROFILE_MARKER_START/,/$POWER_PROFILE_MARKER_END/d" "$MONITORS_CONF"
         # Remove trailing blank lines
@@ -2445,10 +2624,10 @@ SCRIPTEOF
     {
         echo ""
         echo "$POWER_PROFILE_MARKER_START"
-        echo "exec-once = $POWER_PROFILE_SCRIPT"
+        echo "hl.exec_cmd(\"$POWER_PROFILE_SCRIPT\")"
         echo "$POWER_PROFILE_MARKER_END"
     } >> "$MONITORS_CONF"
-    echo -e "    ${CHECKED}✓${RESET}  Added exec-once to monitors.conf"
+    echo -e "    ${CHECKED}✓${RESET}  Added hl.exec_cmd to monitors.lua"
 
     # Sync asusd platform profile if asusd is present (prevents it overriding powerprofilesctl)
     local asusd_config="/etc/asusd/asusd.ron"
@@ -5314,13 +5493,13 @@ bind_shutdown() {
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         echo
         SUMMARY_LOG+=("✗  Bind shutdown -- failed (config not found)")
         return 1
     fi
 
-    if grep -q "SUPER ALT, S, Shutdown" "$BINDINGS_CONF"; then
+    if grep -q 'SUPER + ALT + S", "Shutdown' "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Bind shutdown -- already set")
@@ -5347,7 +5526,7 @@ bind_shutdown() {
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
     echo "" >> "$BINDINGS_CONF"
-    echo "bindd = SUPER ALT, S, Shutdown, exec, systemctl poweroff" >> "$BINDINGS_CONF"
+    echo "o.bind(\"SUPER + ALT + S\", \"Shutdown\", \"systemctl poweroff\")" >> "$BINDINGS_CONF"
 
     echo -e "  ${DIM}✓${RESET}  Bound SUPER+ALT+S to shutdown"
     SUMMARY_LOG+=("✓  Bound shutdown to SUPER+ALT+S")
@@ -5365,13 +5544,13 @@ bind_restart() {
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         echo
         SUMMARY_LOG+=("✗  Bind restart -- failed (config not found)")
         return 1
     fi
 
-    if grep -q "SUPER ALT, R, Restart" "$BINDINGS_CONF"; then
+    if grep -q 'SUPER + ALT + R", "Restart' "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Bind restart -- already set")
@@ -5398,7 +5577,7 @@ bind_restart() {
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
     echo "" >> "$BINDINGS_CONF"
-    echo "bindd = SUPER ALT, R, Restart, exec, systemctl reboot" >> "$BINDINGS_CONF"
+    echo "o.bind(\"SUPER + ALT + R\", \"Restart\", \"systemctl reboot\")" >> "$BINDINGS_CONF"
 
     echo -e "  ${DIM}✓${RESET}  Bound SUPER+ALT+R to restart"
     SUMMARY_LOG+=("✓  Bound restart to SUPER+ALT+R")
@@ -5411,18 +5590,18 @@ unbind_shutdown() {
     echo
     echo -e "${BOLD}  Unbind Shutdown (SUPER+ALT+S)${RESET}"
     echo
-    echo -e "  ${DIM}Removes the shutdown keybinding from bindings.conf.${RESET}"
+    echo -e "  ${DIM}Removes the shutdown keybinding from bindings.lua.${RESET}"
     echo
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         echo
         SUMMARY_LOG+=("✗  Unbind shutdown -- failed (config not found)")
         return 1
     fi
 
-    if ! grep -q "SUPER ALT, S, Shutdown" "$BINDINGS_CONF"; then
+    if ! grep -q 'SUPER + ALT + S", "Shutdown' "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Not bound. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Unbind shutdown -- not bound")
@@ -5448,7 +5627,7 @@ unbind_shutdown() {
     cp "$BINDINGS_CONF" "$backup_file"
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
-    sed -i '/SUPER ALT, S, Shutdown/d' "$BINDINGS_CONF"
+    sed -i '/SUPER + ALT + S\", \"Shutdown/d' "$BINDINGS_CONF"
 
     echo -e "  ${DIM}✓${RESET}  Unbound SUPER+ALT+S (shutdown)"
     SUMMARY_LOG+=("✓  Unbound shutdown (SUPER+ALT+S)")
@@ -5461,18 +5640,18 @@ unbind_restart() {
     echo
     echo -e "${BOLD}  Unbind Restart (SUPER+ALT+R)${RESET}"
     echo
-    echo -e "  ${DIM}Removes the restart keybinding from bindings.conf.${RESET}"
+    echo -e "  ${DIM}Removes the restart keybinding from bindings.lua.${RESET}"
     echo
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         echo
         SUMMARY_LOG+=("✗  Unbind restart -- failed (config not found)")
         return 1
     fi
 
-    if ! grep -q "SUPER ALT, R, Restart" "$BINDINGS_CONF"; then
+    if ! grep -q 'SUPER + ALT + R", "Restart' "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Not bound. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Unbind restart -- not bound")
@@ -5498,7 +5677,7 @@ unbind_restart() {
     cp "$BINDINGS_CONF" "$backup_file"
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
-    sed -i '/SUPER ALT, R, Restart/d' "$BINDINGS_CONF"
+    sed -i '/SUPER + ALT + R\", \"Restart/d' "$BINDINGS_CONF"
 
     echo -e "  ${DIM}✓${RESET}  Unbound SUPER+ALT+R (restart)"
     SUMMARY_LOG+=("✓  Unbound restart (SUPER+ALT+R)")
@@ -5516,13 +5695,13 @@ bind_theme_menu() {
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         echo
         SUMMARY_LOG+=("✗  Bind theme menu -- failed (config not found)")
         return 1
     fi
 
-    if grep -q "ALT, T, Theme menu" "$BINDINGS_CONF"; then
+    if grep -q 'ALT + T\", \"Theme menu' "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Bind theme menu -- already set")
@@ -5549,7 +5728,7 @@ bind_theme_menu() {
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
     echo "" >> "$BINDINGS_CONF"
-    echo "bindd = ALT, T, Theme menu, exec, omarchy-launch-walker -m menus:omarchythemes --width 800 --minheight 400" >> "$BINDINGS_CONF"
+    echo "o.bind(\"ALT + T\", \"Theme menu\", \"omarchy-launch-walker -m menus:omarchythemes --width 800 --minheight 400\")" >> "$BINDINGS_CONF"
 
     echo -e "  ${DIM}✓${RESET}  Bound ALT+T to theme menu"
     SUMMARY_LOG+=("✓  Bound theme menu to ALT+T")
@@ -5562,18 +5741,18 @@ unbind_theme_menu() {
     echo
     echo -e "${BOLD}  Unbind Theme Menu (ALT+T)${RESET}"
     echo
-    echo -e "  ${DIM}Removes the theme menu keybinding from bindings.conf.${RESET}"
+    echo -e "  ${DIM}Removes the theme menu keybinding from bindings.lua.${RESET}"
     echo
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         echo
         SUMMARY_LOG+=("✗  Unbind theme menu -- failed (config not found)")
         return 1
     fi
 
-    if ! grep -q "ALT, T, Theme menu" "$BINDINGS_CONF"; then
+    if ! grep -q 'ALT + T\", \"Theme menu' "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Not bound. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Unbind theme menu -- not bound")
@@ -5599,7 +5778,7 @@ unbind_theme_menu() {
     cp "$BINDINGS_CONF" "$backup_file"
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
-    sed -i '/ALT, T, Theme menu/d' "$BINDINGS_CONF"
+    sed -i '/ALT + T\", \"Theme menu/d' "$BINDINGS_CONF"
 
     echo -e "  ${DIM}✓${RESET}  Unbound ALT+T (theme menu)"
     SUMMARY_LOG+=("✓  Unbound theme menu (ALT+T)")
@@ -5622,14 +5801,14 @@ restore_capslock() {
     echo
 
     if [[ ! -f "$INPUT_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  input.conf not found at $INPUT_CONF"
+        echo -e "  ${DIM}✗${RESET}  input.lua not found at $INPUT_CONF"
         echo
         SUMMARY_LOG+=("✗  Restore Caps Lock -- failed (config not found)")
         return 1
     fi
 
     # Check if already using ralt
-    if grep -q "kb_options = compose:ralt" "$INPUT_CONF"; then
+    if grep -q 'compose:ralt' "$INPUT_CONF"; then
         echo -e "  ${DIM}Caps Lock already restored. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Restore Caps Lock -- already set")
@@ -5637,7 +5816,7 @@ restore_capslock() {
     fi
 
     # Check if compose:caps exists
-    if ! grep -q "kb_options = compose:caps" "$INPUT_CONF"; then
+    if ! grep -q 'compose:caps' "$INPUT_CONF"; then
         echo -e "  ${DIM}compose:caps not found in config. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Restore Caps Lock -- compose:caps not found")
@@ -5664,8 +5843,8 @@ restore_capslock() {
     cp "$INPUT_CONF" "$backup_file"
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
-    # Replace compose:caps with compose:ralt
-    sed -i 's/kb_options = compose:caps/kb_options = compose:ralt/' "$INPUT_CONF"
+    # Replace compose:caps with compose:ralt within the Lua string
+    sed -i 's/compose:caps/compose:ralt/' "$INPUT_CONF"
 
     echo -e "  ${CHECKED}✓${RESET}  Caps Lock restored (compose moved to Right Alt)"
     SUMMARY_LOG+=("✓  Restored Caps Lock (compose on Right Alt)")
@@ -5688,14 +5867,14 @@ use_capslock_compose() {
     echo
 
     if [[ ! -f "$INPUT_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  input.conf not found at $INPUT_CONF"
+        echo -e "  ${DIM}✗${RESET}  input.lua not found at $INPUT_CONF"
         echo
         SUMMARY_LOG+=("✗  Use Caps Lock compose -- failed (config not found)")
         return 1
     fi
 
     # Check if already using caps
-    if grep -q "kb_options = compose:caps" "$INPUT_CONF"; then
+    if grep -q 'compose:caps' "$INPUT_CONF"; then
         echo -e "  ${DIM}Already using Caps Lock for compose. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Use Caps Lock compose -- already set")
@@ -5703,7 +5882,7 @@ use_capslock_compose() {
     fi
 
     # Check if compose:ralt exists
-    if ! grep -q "kb_options = compose:ralt" "$INPUT_CONF"; then
+    if ! grep -q 'compose:ralt' "$INPUT_CONF"; then
         echo -e "  ${DIM}compose:ralt not found in config. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Use Caps Lock compose -- compose:ralt not found")
@@ -5730,8 +5909,8 @@ use_capslock_compose() {
     cp "$INPUT_CONF" "$backup_file"
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
-    # Replace compose:ralt with compose:caps
-    sed -i 's/kb_options = compose:ralt/kb_options = compose:caps/' "$INPUT_CONF"
+    # Replace compose:ralt with compose:caps within the Lua string
+    sed -i 's/compose:ralt/compose:caps/' "$INPUT_CONF"
 
     echo -e "  ${CHECKED}✓${RESET}  Caps Lock now used for compose (Omarchy default)"
     SUMMARY_LOG+=("✓  Caps Lock used for compose")
@@ -5757,7 +5936,7 @@ swap_alt_super() {
     echo
 
     if [[ ! -f "$INPUT_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  input.conf not found at $INPUT_CONF"
+        echo -e "  ${DIM}✗${RESET}  input.lua not found at $INPUT_CONF"
         echo
         SUMMARY_LOG+=("✗  Swap Alt/Super -- failed (config not found)")
         return 1
@@ -5771,8 +5950,8 @@ swap_alt_super() {
         return 0
     fi
 
-    # Check if kb_options line exists
-    if ! grep -q "kb_options = " "$INPUT_CONF"; then
+    # Check if kb_options line exists (in Lua: kb_options = "...")
+    if ! grep -q 'kb_options = "' "$INPUT_CONF"; then
         echo -e "  ${DIM}kb_options not found in config. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Swap Alt/Super -- kb_options not found")
@@ -5799,8 +5978,8 @@ swap_alt_super() {
     cp "$INPUT_CONF" "$backup_file"
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
-    # Append altwin:swap_alt_win to kb_options (handles both compose:caps and compose:ralt)
-    sed -i 's/\(kb_options = [^#]*\)/\1,altwin:swap_alt_win/' "$INPUT_CONF"
+    # Append altwin:swap_alt_win to kb_options within the Lua string value
+    sed -i 's/\("kb_options = "[^"]*\)"/\1,altwin:swap_alt_win"/' "$INPUT_CONF"
 
     echo -e "  ${CHECKED}✓${RESET}  Alt and Super keys swapped"
     SUMMARY_LOG+=("✓  Swapped Alt and Super keys")
@@ -5821,7 +6000,7 @@ restore_alt_super() {
     echo
 
     if [[ ! -f "$INPUT_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  input.conf not found at $INPUT_CONF"
+        echo -e "  ${DIM}✗${RESET}  input.lua not found at $INPUT_CONF"
         echo
         SUMMARY_LOG+=("✗  Restore Alt/Super -- failed (config not found)")
         return 1
@@ -5855,7 +6034,7 @@ restore_alt_super() {
     cp "$INPUT_CONF" "$backup_file"
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
-    # Remove altwin:swap_alt_win from kb_options
+    # Remove altwin:swap_alt_win from kb_options within the Lua string value
     sed -i 's/,altwin:swap_alt_win//' "$INPUT_CONF"
 
     echo -e "  ${CHECKED}✓${RESET}  Alt and Super keys restored to normal"
@@ -6592,7 +6771,7 @@ enable_rounded_corners() {
     echo
 
     if [[ ! -f "$LOOKNFEEL_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  looknfeel.conf not found at $LOOKNFEEL_CONF"
+        echo -e "  ${DIM}✗${RESET}  looknfeel.lua not found at $LOOKNFEEL_CONF"
         echo
         SUMMARY_LOG+=("✗  Enable rounded corners -- failed (config not found)")
         return 1
@@ -6718,7 +6897,7 @@ disable_rounded_corners() {
     echo
 
     if [[ ! -f "$LOOKNFEEL_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  looknfeel.conf not found at $LOOKNFEEL_CONF"
+        echo -e "  ${DIM}✗${RESET}  looknfeel.lua not found at $LOOKNFEEL_CONF"
         echo
         SUMMARY_LOG+=("✗  Disable rounded corners -- failed (config not found)")
         return 1
@@ -6827,7 +7006,7 @@ remove_window_gaps() {
     echo
 
     if [[ ! -f "$LOOKNFEEL_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  looknfeel.conf not found at $LOOKNFEEL_CONF"
+        echo -e "  ${DIM}✗${RESET}  looknfeel.lua not found at $LOOKNFEEL_CONF"
         echo
         SUMMARY_LOG+=("✗  Remove window gaps -- failed (config not found)")
         return 1
@@ -6892,7 +7071,7 @@ restore_window_gaps() {
     echo
 
     if [[ ! -f "$LOOKNFEEL_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  looknfeel.conf not found at $LOOKNFEEL_CONF"
+        echo -e "  ${DIM}✗${RESET}  looknfeel.lua not found at $LOOKNFEEL_CONF"
         echo
         SUMMARY_LOG+=("✗  Restore window gaps -- failed (config not found)")
         return 1
@@ -6951,11 +7130,11 @@ remove_transparency() {
 
     local missing=false
     if [[ ! -f "$WINDOWS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  windows.conf not found at $WINDOWS_CONF"
+        echo -e "  ${DIM}✗${RESET}  windows.lua not found at $WINDOWS_CONF"
         missing=true
     fi
     if [[ ! -f "$BROWSER_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  browser.conf not found at $BROWSER_CONF"
+        echo -e "  ${DIM}✗${RESET}  browser.lua not found at $BROWSER_CONF"
         missing=true
     fi
     if [[ "$missing" = true ]]; then
@@ -6966,8 +7145,8 @@ remove_transparency() {
 
     # Check if already removed (commented out)
     local walker_css="$HOME/.local/share/omarchy/default/walker/themes/omarchy-default/style.css"
-    if ! grep -q "^windowrule = opacity 0.97 0.9, match:class \.\*" "$WINDOWS_CONF" && \
-       ! grep -q "^windowrule = opacity 1 0.97, match:tag chromium-based-browser" "$BROWSER_CONF"; then
+    if ! grep -q 'opacity.*=.*"0.97 0.9"' "$WINDOWS_CONF" && \
+       ! grep -q 'opacity.*=.*"1.0 0.97"' "$BROWSER_CONF"; then
         echo -e "  ${DIM}Transparency already removed. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Remove transparency -- already removed")
@@ -6999,9 +7178,9 @@ remove_transparency() {
     echo -e "  ${DIM}Backup: $backup_browser${RESET}"
 
     # Comment out opacity window rules
-    sed -i 's/^windowrule = opacity 0.97 0.9, match:class \.\*/# &/' "$WINDOWS_CONF"
-    sed -i 's/^windowrule = opacity 1 0.97, match:tag chromium-based-browser/# &/' "$BROWSER_CONF"
-    sed -i 's/^windowrule = opacity 1 0.97, match:tag firefox-based-browser/# &/' "$BROWSER_CONF"
+    sed -i 's/^o\.window({ tag = "default-opacity" }, { opacity = "0.97 0.9" })/-- &/' "$WINDOWS_CONF"
+    sed -i 's/^o\.window({ tag = "chromium-based-browser" }, { tag = "-default-opacity", tile = true, opacity = "1.0 0.97" })/-- &/' "$BROWSER_CONF"
+    sed -i 's/^o\.window({ tag = "firefox-based-browser" }, { tag = "-default-opacity", opacity = "1.0 0.97" })/-- &/' "$BROWSER_CONF"
 
     echo -e "  ${CHECKED}✓${RESET}  Hyprland windows — opaque"
 
@@ -7041,11 +7220,11 @@ restore_transparency() {
 
     local missing=false
     if [[ ! -f "$WINDOWS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  windows.conf not found at $WINDOWS_CONF"
+        echo -e "  ${DIM}✗${RESET}  windows.lua not found at $WINDOWS_CONF"
         missing=true
     fi
     if [[ ! -f "$BROWSER_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  browser.conf not found at $BROWSER_CONF"
+        echo -e "  ${DIM}✗${RESET}  browser.lua not found at $BROWSER_CONF"
         missing=true
     fi
     if [[ "$missing" = true ]]; then
@@ -7056,8 +7235,8 @@ restore_transparency() {
 
     # Check if transparency is already active (uncommented)
     local walker_css="$HOME/.local/share/omarchy/default/walker/themes/omarchy-default/style.css"
-    if grep -q "^windowrule = opacity 0.97 0.9, match:class \.\*" "$WINDOWS_CONF" && \
-       grep -q "^windowrule = opacity 1 0.97, match:tag chromium-based-browser" "$BROWSER_CONF"; then
+    if grep -q 'opacity.*=.*"0.97 0.9"' "$WINDOWS_CONF" && \
+       grep -q 'opacity.*=.*"1.0 0.97"' "$BROWSER_CONF"; then
         echo -e "  ${DIM}Transparency already restored. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Restore transparency -- already restored")
@@ -7089,9 +7268,9 @@ restore_transparency() {
     echo -e "  ${DIM}Backup: $backup_browser${RESET}"
 
     # Uncomment opacity window rules
-    sed -i 's/^# \(windowrule = opacity 0.97 0.9, match:class \.\*\)/\1/' "$WINDOWS_CONF"
-    sed -i 's/^# \(windowrule = opacity 1 0.97, match:tag chromium-based-browser\)/\1/' "$BROWSER_CONF"
-    sed -i 's/^# \(windowrule = opacity 1 0.97, match:tag firefox-based-browser\)/\1/' "$BROWSER_CONF"
+    sed -i 's/^-- \(o\.window({ tag = "default-opacity" }, { opacity = "0.97 0.9" })\)/\1/' "$WINDOWS_CONF"
+    sed -i 's/^-- \(o\.window({ tag = "chromium-based-browser" }, { tag = "-default-opacity", tile = true, opacity = "1.0 0.97" })\)/\1/' "$BROWSER_CONF"
+    sed -i 's/^-- \(o\.window({ tag = "firefox-based-browser" }, { tag = "-default-opacity", opacity = "1.0 0.97" })\)/\1/' "$BROWSER_CONF"
 
     echo -e "  ${CHECKED}✓${RESET}  Hyprland windows — transparent"
 
@@ -8036,13 +8215,13 @@ setup_themarchy_keybind() {
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         echo
         SUMMARY_LOG+=("✗  Themarchy keybind -- failed (config not found)")
         return 1
     fi
 
-    if grep -q "SUPER SHIFT, T, Themarchy" "$BINDINGS_CONF"; then
+    if grep -q 'SUPER SHIFT + T", "Themarchy' "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Already bound. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Themarchy keybind -- already set")
@@ -8077,7 +8256,7 @@ setup_themarchy_keybind() {
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
     echo "" >> "$BINDINGS_CONF"
-    echo "bindd = SUPER SHIFT, T, Themarchy, exec, $THEMARCHY_SCRIPT" >> "$BINDINGS_CONF"
+    echo "o.bind(\"SUPER SHIFT + T\", \"Themarchy\", \"$THEMARCHY_SCRIPT\")" >> "$BINDINGS_CONF"
 
     hyprctl reload 2>/dev/null || true
     echo -e "  ${DIM}✓${RESET}  Bound SUPER+SHIFT+T to Themarchy"
@@ -8096,13 +8275,13 @@ remove_themarchy_keybind() {
     echo
 
     if [[ ! -f "$BINDINGS_CONF" ]]; then
-        echo -e "  ${DIM}✗${RESET}  bindings.conf not found at $BINDINGS_CONF"
+        echo -e "  ${DIM}✗${RESET}  bindings.lua not found at $BINDINGS_CONF"
         echo
         SUMMARY_LOG+=("✗  Themarchy keybind -- failed (config not found)")
         return 1
     fi
 
-    if ! grep -q "SUPER SHIFT, T, Themarchy" "$BINDINGS_CONF"; then
+    if ! grep -q 'SUPER SHIFT + T", "Themarchy' "$BINDINGS_CONF"; then
         echo -e "  ${DIM}Not bound. Nothing to do.${RESET}"
         echo
         SUMMARY_LOG+=("--  Themarchy keybind -- not bound")
@@ -8128,7 +8307,7 @@ remove_themarchy_keybind() {
     cp "$BINDINGS_CONF" "$backup_file"
     echo -e "  ${DIM}Backup: $backup_file${RESET}"
 
-    sed -i '/SUPER SHIFT, T, Themarchy/d' "$BINDINGS_CONF"
+    sed -i '/SUPER SHIFT + T\", \"Themarchy/d' "$BINDINGS_CONF"
     hyprctl reload 2>/dev/null || true
 
     echo -e "  ${DIM}✓${RESET}  Removed SUPER+SHIFT+T Themarchy keybind"
@@ -8525,7 +8704,7 @@ declare -a EXTRA_THEMES=(
 # Selection state for themes (by display name): 0=not selected, 1=selected
 declare -A THEME_SELECTIONS=()
 
-# Hyprland General settings (write to looknfeel.conf)
+# Hyprland General settings (write to looknfeel.lua)
 declare -a HYPR_GENERAL_ITEMS=(
     "gaps_in|Gap between windows|int:0:100|general|gaps_in|5|looknfeel|Gap size between tiled windows"
     "gaps_out|Gap from edges|int:0:100|general|gaps_out|10|looknfeel|Gap size from screen edges"
@@ -8555,7 +8734,7 @@ declare -a HYPR_GENERAL_ITEMS=(
     "mouse_dpms|Mouse wakes display|bool|misc|mouse_move_enables_dpms|true|looknfeel|Mouse movement wakes display from DPMS off"
 )
 
-# Hyprland Decoration settings (write to looknfeel.conf)
+# Hyprland Decoration settings (write to looknfeel.lua)
 declare -a HYPR_DECORATION_ITEMS=(
     "rounding|Corner radius|int:0:30|decoration|rounding|0|looknfeel|Window corner rounding in pixels. See also: Appearance"
     "shadow_enabled|Shadows|bool|decoration.shadow|enabled|true|looknfeel|Enable window drop shadows"
@@ -8581,7 +8760,7 @@ declare -a HYPR_DECORATION_ITEMS=(
     "fullscreen_opacity|Fullscreen opacity|float:0.0:1.0|decoration|fullscreen_opacity|1.0|looknfeel|Opacity of fullscreen windows (1.0=opaque)"
 )
 
-# Hyprland Input settings (write to input.conf)
+# Hyprland Input settings (write to input.lua)
 declare -a HYPR_INPUT_ITEMS=(
     "sensitivity|Mouse sensitivity|float:-1.0:1.0|input|sensitivity|0|input|Mouse sensitivity (-1.0 to 1.0)"
     "follow_mouse|Focus follows mouse|enum:0:1:2:3|input|follow_mouse|1|input|0=off 1=always 2=click-unfocus 3=lock-unfocus"
@@ -8601,7 +8780,7 @@ declare -a HYPR_INPUT_ITEMS=(
     "scroll_method|Scroll method|enum:2fg:edge:on_button_down:no_scroll|input|scroll_method|2fg|input|Touchpad scroll method"
 )
 
-# Hyprland Gestures settings (write to looknfeel.conf)
+# Hyprland Gestures settings (write to looknfeel.lua)
 declare -a HYPR_GESTURES_ITEMS=(
     "ws_swipe|Workspace swipe|bool|gestures|workspace_swipe|false|looknfeel|Swipe between workspaces on touchpad"
     "ws_swipe_fingers|Swipe fingers|int:2:5|gestures|workspace_swipe_fingers|3|looknfeel|Number of fingers for workspace swipe"
